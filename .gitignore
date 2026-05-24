@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment files
+.env
+*.env
+
+# PostgreSQL / local data
+*.sqlite3
+*.db
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Alembic cache
+alembic/__pycache__/
+backend/alembic/__pycache__/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / frontend later
+node_modules/
+dist/
+build/
