@@ -8,6 +8,7 @@ from app.modules.accounting.models.user import User
 from app.modules.accounting.schemas.account import (
     AccountCreate,
     AccountRead,
+    AccountSeedResult,
     AccountUpdate,
 )
 from app.modules.accounting.services.account_service import (
@@ -17,6 +18,9 @@ from app.modules.accounting.services.account_service import (
     get_company_or_none,
     list_accounts,
     update_account,
+)
+from app.modules.accounting.services.default_accounts_service import (
+    seed_default_accounts,
 )
 
 
@@ -103,6 +107,28 @@ def list_accounts_endpoint(
         company_id=company_id,
         skip=skip,
         limit=limit,
+    )
+
+
+@router.post(
+    "/seed-defaults",
+    response_model=AccountSeedResult,
+)
+def seed_default_accounts_endpoint(
+    company_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_id,
+        allowed_roles={"admin", "accountant"},
+    )
+
+    return seed_default_accounts(
+        db=db,
+        company_id=company_id,
     )
 
 

@@ -109,3 +109,46 @@ class JournalEntryReverseCreate(BaseModel):
     entry_date: date
 
     description: str | None = None
+class OpeningBalanceLineCreate(BaseModel):
+    account_id: int = Field(..., ge=1)
+
+    debit: Decimal = Field(default=Decimal("0.00"), ge=0)
+    credit: Decimal = Field(default=Decimal("0.00"), ge=0)
+
+    description: str | None = None
+
+    @model_validator(mode="after")
+    def validate_debit_or_credit_only(self):
+        if self.debit > 0 and self.credit > 0:
+            raise ValueError("An opening balance line cannot have both debit and credit")
+
+        if self.debit == 0 and self.credit == 0:
+            raise ValueError("An opening balance line must have either debit or credit")
+
+        return self
+
+
+class OpeningBalanceCreate(BaseModel):
+    company_id: int = Field(..., ge=1)
+
+    entry_no: str = Field(..., min_length=1, max_length=50)
+    entry_date: date
+
+    description: str | None = "Opening balances"
+
+    lines: list[OpeningBalanceLineCreate] = Field(..., min_length=2)
+
+    @model_validator(mode="after")
+    def validate_balanced_opening_balance(self):
+        total_debit = sum(line.debit for line in self.lines)
+        total_credit = sum(line.credit for line in self.lines)
+
+        if total_debit <= 0:
+            raise ValueError("Total debit must be greater than zero")
+
+        if total_debit != total_credit:
+            raise ValueError(
+                "Opening balance must be balanced: total debit must equal total credit"
+            )
+
+        return self

@@ -7,6 +7,7 @@ from app.modules.accounting.schemas.account import (
     AccountCreate,
     AccountRead,
     AccountUpdate,
+    AccountSeedResult,
 )
 from app.modules.accounting.schemas.fiscal import (
     FiscalYearCreate,
@@ -23,6 +24,8 @@ from app.modules.accounting.schemas.journal import (
     JournalLineCreate,
     JournalLineRead,
     JournalEntryReverseCreate,
+    OpeningBalanceLineCreate,
+    OpeningBalanceCreate,
 )
 from app.modules.accounting.schemas.report import (
     TrialBalanceLine,
@@ -85,4 +88,7 @@ __all__ = [
     "CompanyUserCreate",
     "CompanyUserRead",
     "CompanyUserUpdate",
+    "AccountSeedResult",
+    "OpeningBalanceLineCreate",
+    "OpeningBalanceCreate",
 ]

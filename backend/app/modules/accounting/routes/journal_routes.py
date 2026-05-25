@@ -10,11 +10,13 @@ from app.modules.accounting.schemas.journal import (
     JournalEntryRead,
     JournalEntryReverseCreate,
     JournalEntryUpdate,
+    OpeningBalanceCreate,
 )
 from app.modules.accounting.services.audit_service import create_audit_log
 from app.modules.accounting.services.journal_service import (
     calculate_journal_totals,
     create_journal_entry,
+    create_opening_balance_entry,
     find_fiscal_period_for_date,
     find_fiscal_year_for_date,
     get_account,
@@ -39,7 +41,7 @@ router = APIRouter(
 def validate_journal_accounts(
     db: Session,
     company_id: int,
-    payload: JournalEntryCreate,
+    payload: JournalEntryCreate | OpeningBalanceCreate,
 ):
     for line in payload.lines:
         account = get_account(db=db, account_id=line.account_id)
@@ -166,6 +168,111 @@ def create_journal_entry_endpoint(
     )
 
     return journal_entry
+
+
+@router.post(
+    "/opening-balance",
+    response_model=JournalEntryRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_opening_balance_endpoint(
+    payload: OpeningBalanceCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    company = get_company_or_none(db=db, company_id=payload.company_id)
+
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found",
+        )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=payload.company_id,
+        allowed_roles={"admin", "accountant"},
+    )
+
+    existing_entry = get_journal_entry_by_no(
+        db=db,
+        company_id=payload.company_id,
+        entry_no=payload.entry_no,
+    )
+
+    if existing_entry:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Journal entry number already exists for this company",
+        )
+
+    fiscal_year = find_fiscal_year_for_date(
+        db=db,
+        company_id=payload.company_id,
+        entry_date=payload.entry_date,
+    )
+
+    if not fiscal_year:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No fiscal year found for this opening balance date",
+        )
+
+    if fiscal_year.status != "open":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Fiscal year is not open",
+        )
+
+    fiscal_period = find_fiscal_period_for_date(
+        db=db,
+        company_id=payload.company_id,
+        entry_date=payload.entry_date,
+    )
+
+    if not fiscal_period:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No fiscal period found for this opening balance date",
+        )
+
+    if fiscal_period.status != "open":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Fiscal period is not open",
+        )
+
+    if fiscal_period.fiscal_year_id != fiscal_year.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Fiscal period does not belong to the fiscal year",
+        )
+
+    validate_journal_accounts(
+        db=db,
+        company_id=payload.company_id,
+        payload=payload,
+    )
+
+    opening_entry = create_opening_balance_entry(
+        db=db,
+        payload=payload,
+        fiscal_year=fiscal_year,
+        fiscal_period=fiscal_period,
+    )
+
+    create_audit_log(
+        db=db,
+        company_id=opening_entry.company_id,
+        actor=current_user.email,
+        action="create_opening_balance",
+        entity_type="journal_entry",
+        entity_id=opening_entry.id,
+        description=f"Created opening balance entry {opening_entry.entry_no}",
+    )
+
+    return opening_entry
 
 
 @router.get(

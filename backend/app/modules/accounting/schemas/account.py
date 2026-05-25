@@ -51,3 +51,9 @@ class AccountRead(AccountBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+class AccountSeedResult(BaseModel):
+    company_id: int
+    created_count: int
+    skipped_count: int
+    message: str
+    accounts: list[AccountRead]

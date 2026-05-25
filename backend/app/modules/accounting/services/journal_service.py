@@ -13,6 +13,7 @@ from app.modules.accounting.schemas.journal import (
     JournalEntryCreate,
     JournalEntryUpdate,
     JournalEntryReverseCreate,
+    OpeningBalanceCreate,
 )
 
 def get_company_or_none(db: Session, company_id: int) -> Company | None:
@@ -250,6 +251,41 @@ def void_journal_entry(
     journal_entry: JournalEntry,
 ) -> JournalEntry:
     journal_entry.status = "void"
+
+    db.add(journal_entry)
+    db.commit()
+    db.refresh(journal_entry)
+
+    return get_journal_entry(db=db, journal_entry_id=journal_entry.id)
+def create_opening_balance_entry(
+    db: Session,
+    payload: OpeningBalanceCreate,
+    fiscal_year: FiscalYear,
+    fiscal_period: FiscalPeriod,
+) -> JournalEntry:
+    journal_entry = JournalEntry(
+        company_id=payload.company_id,
+        fiscal_year_id=fiscal_year.id,
+        fiscal_period_id=fiscal_period.id,
+        entry_no=payload.entry_no.strip(),
+        entry_date=payload.entry_date,
+        description=payload.description,
+        status="draft",
+        source_type="opening_balance",
+        source_id=None,
+    )
+
+    journal_entry.lines = [
+        JournalLine(
+            company_id=payload.company_id,
+            account_id=line.account_id,
+            line_no=index + 1,
+            debit=line.debit,
+            credit=line.credit,
+            description=line.description,
+        )
+        for index, line in enumerate(payload.lines)
+    ]
 
     db.add(journal_entry)
     db.commit()
