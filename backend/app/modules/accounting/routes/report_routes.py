@@ -3,6 +3,11 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+
+from app.core.auth_dependencies import get_current_user
+from app.core.company_access import ensure_company_access
+from app.modules.accounting.models.user import User
+
 from app.core.database import get_db
 from app.modules.accounting.schemas.report import (
     TrialBalanceRead,
@@ -34,12 +39,20 @@ def trial_balance_endpoint(
     company_id: int = Query(..., ge=1),
     as_of_date: date | None = Query(default=None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_id,
+    )
+
     return get_trial_balance(
         db=db,
         company_id=company_id,
         as_of_date=as_of_date,
     )
+ 
 @router.get(
     "/profit-and-loss",
     response_model=ProfitAndLossRead,
@@ -49,7 +62,14 @@ def profit_and_loss_endpoint(
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_id,
+    )
+
     return get_profit_and_loss(
         db=db,
         company_id=company_id,
@@ -64,7 +84,14 @@ def balance_sheet_endpoint(
     company_id: int = Query(..., ge=1),
     as_of_date: date | None = Query(default=None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_id,
+    )
+
     return get_balance_sheet(
         db=db,
         company_id=company_id,
@@ -80,7 +107,14 @@ def account_ledger_endpoint(
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_id,
+    )
+
     result = get_account_ledger(
         db=db,
         company_id=company_id,
@@ -96,6 +130,8 @@ def account_ledger_endpoint(
         )
 
     return result
+
+   
 @router.get(
     "/general-ledger",
     response_model=GeneralLedgerRead,
@@ -105,7 +141,14 @@ def general_ledger_endpoint(
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_id,
+    )
+
     return get_general_ledger(
         db=db,
         company_id=company_id,

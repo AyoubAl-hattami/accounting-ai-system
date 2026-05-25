@@ -1,7 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependencies import get_current_user
+from app.core.company_access import ensure_company_access
 from app.core.database import get_db
+from app.modules.accounting.models.user import User
 from app.modules.accounting.schemas.company_user import (
     CompanyUserCreate,
     CompanyUserRead,
@@ -32,7 +35,15 @@ router = APIRouter(
 def create_company_user_endpoint(
     payload: CompanyUserCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=payload.company_id,
+        allowed_roles={"admin"},
+    )
+
     company = get_company(db=db, company_id=payload.company_id)
 
     if not company:
@@ -72,12 +83,20 @@ def create_company_user_endpoint(
     response_model=list[CompanyUserRead],
 )
 def list_company_users_endpoint(
-    company_id: int | None = Query(default=None, ge=1),
+    company_id: int = Query(..., ge=1),
     user_id: int | None = Query(default=None, ge=1),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_id,
+        allowed_roles={"admin", "auditor"},
+    )
+
     return list_company_users(
         db=db,
         company_id=company_id,
@@ -94,6 +113,7 @@ def list_company_users_endpoint(
 def get_company_user_endpoint(
     company_user_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     company_user = get_company_user(
         db=db,
@@ -105,6 +125,13 @@ def get_company_user_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Company user not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_user.company_id,
+        allowed_roles={"admin", "auditor"},
+    )
 
     return company_user
 
@@ -117,6 +144,7 @@ def update_company_user_endpoint(
     company_user_id: int,
     payload: CompanyUserUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     company_user = get_company_user(
         db=db,
@@ -128,6 +156,13 @@ def update_company_user_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Company user not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_user.company_id,
+        allowed_roles={"admin"},
+    )
 
     return update_company_user(
         db=db,

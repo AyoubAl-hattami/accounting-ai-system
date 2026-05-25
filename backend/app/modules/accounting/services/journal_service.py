@@ -189,13 +189,19 @@ def mark_journal_entry_reviewed(
 
     return get_journal_entry(db=db, journal_entry_id=journal_entry.id)
 
-
 def post_journal_entry(
     db: Session,
     journal_entry: JournalEntry,
 ) -> JournalEntry:
     journal_entry.status = "posted"
     journal_entry.posted_at = datetime.now(timezone.utc)
+
+    if journal_entry.reversal_of_id is not None:
+        original_entry = db.get(JournalEntry, journal_entry.reversal_of_id)
+
+        if original_entry is not None:
+            original_entry.status = "reversed"
+            db.add(original_entry)
 
     db.add(journal_entry)
     db.commit()

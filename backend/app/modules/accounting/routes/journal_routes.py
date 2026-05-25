@@ -1,15 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependencies import get_current_user
+from app.core.company_access import ensure_company_access
 from app.core.database import get_db
+from app.modules.accounting.models.user import User
 from app.modules.accounting.schemas.journal import (
     JournalEntryCreate,
     JournalEntryRead,
-    JournalEntryUpdate,
     JournalEntryReverseCreate,
-    
+    JournalEntryUpdate,
 )
+from app.modules.accounting.services.audit_service import create_audit_log
 from app.modules.accounting.services.journal_service import (
+    calculate_journal_totals,
     create_journal_entry,
     find_fiscal_period_for_date,
     find_fiscal_year_for_date,
@@ -18,14 +22,12 @@ from app.modules.accounting.services.journal_service import (
     get_journal_entry,
     get_journal_entry_by_no,
     list_journal_entries,
-    update_journal_entry,
-    calculate_journal_totals,
     mark_journal_entry_reviewed,
     post_journal_entry,
     reverse_journal_entry,
+    update_journal_entry,
     void_journal_entry,
 )
-from app.modules.accounting.services.audit_service import create_audit_log
 
 
 router = APIRouter(
@@ -69,6 +71,7 @@ def validate_journal_accounts(
 def create_journal_entry_endpoint(
     payload: JournalEntryCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     company = get_company_or_none(db=db, company_id=payload.company_id)
 
@@ -77,6 +80,13 @@ def create_journal_entry_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Company not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=payload.company_id,
+        allowed_roles={"admin", "accountant"},
+    )
 
     existing_entry = get_journal_entry_by_no(
         db=db,
@@ -137,6 +147,7 @@ def create_journal_entry_endpoint(
         company_id=payload.company_id,
         payload=payload,
     )
+
     journal_entry = create_journal_entry(
         db=db,
         payload=payload,
@@ -147,6 +158,7 @@ def create_journal_entry_endpoint(
     create_audit_log(
         db=db,
         company_id=journal_entry.company_id,
+        actor=current_user.email,
         action="create_journal_entry",
         entity_type="journal_entry",
         entity_id=journal_entry.id,
@@ -155,19 +167,25 @@ def create_journal_entry_endpoint(
 
     return journal_entry
 
-    
 
 @router.get(
     "",
     response_model=list[JournalEntryRead],
 )
 def list_journal_entries_endpoint(
-    company_id: int | None = Query(default=None, ge=1),
+    company_id: int = Query(..., ge=1),
     status_filter: str | None = Query(default=None, alias="status"),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_id,
+    )
+
     allowed_statuses = {"draft", "reviewed", "posted", "void", "reversed"}
 
     if status_filter is not None and status_filter not in allowed_statuses:
@@ -192,6 +210,7 @@ def list_journal_entries_endpoint(
 def get_journal_entry_endpoint(
     journal_entry_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     journal_entry = get_journal_entry(
         db=db,
@@ -203,6 +222,12 @@ def get_journal_entry_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Journal entry not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=journal_entry.company_id,
+    )
 
     return journal_entry
 
@@ -215,6 +240,7 @@ def update_journal_entry_endpoint(
     journal_entry_id: int,
     payload: JournalEntryUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     journal_entry = get_journal_entry(
         db=db,
@@ -226,6 +252,13 @@ def update_journal_entry_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Journal entry not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=journal_entry.company_id,
+        allowed_roles={"admin", "accountant"},
+    )
 
     if journal_entry.status != "draft":
         raise HTTPException(
@@ -290,6 +323,7 @@ def update_journal_entry_endpoint(
     create_audit_log(
         db=db,
         company_id=updated_entry.company_id,
+        actor=current_user.email,
         action="update_journal_entry",
         entity_type="journal_entry",
         entity_id=updated_entry.id,
@@ -297,6 +331,8 @@ def update_journal_entry_endpoint(
     )
 
     return updated_entry
+
+
 @router.post(
     "/{journal_entry_id}/review",
     response_model=JournalEntryRead,
@@ -304,6 +340,7 @@ def update_journal_entry_endpoint(
 def review_journal_entry_endpoint(
     journal_entry_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     journal_entry = get_journal_entry(
         db=db,
@@ -315,6 +352,13 @@ def review_journal_entry_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Journal entry not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=journal_entry.company_id,
+        allowed_roles={"admin", "accountant", "reviewer"},
+    )
 
     if journal_entry.status != "draft":
         raise HTTPException(
@@ -344,6 +388,7 @@ def review_journal_entry_endpoint(
     create_audit_log(
         db=db,
         company_id=reviewed_entry.company_id,
+        actor=current_user.email,
         action="review_journal_entry",
         entity_type="journal_entry",
         entity_id=reviewed_entry.id,
@@ -352,6 +397,7 @@ def review_journal_entry_endpoint(
 
     return reviewed_entry
 
+
 @router.post(
     "/{journal_entry_id}/post",
     response_model=JournalEntryRead,
@@ -359,6 +405,7 @@ def review_journal_entry_endpoint(
 def post_journal_entry_endpoint(
     journal_entry_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     journal_entry = get_journal_entry(
         db=db,
@@ -370,6 +417,13 @@ def post_journal_entry_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Journal entry not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=journal_entry.company_id,
+        allowed_roles={"admin", "approver"},
+    )
 
     if journal_entry.status not in {"draft", "reviewed"}:
         raise HTTPException(
@@ -423,6 +477,7 @@ def post_journal_entry_endpoint(
     create_audit_log(
         db=db,
         company_id=posted_entry.company_id,
+        actor=current_user.email,
         action="post_journal_entry",
         entity_type="journal_entry",
         entity_id=posted_entry.id,
@@ -430,6 +485,8 @@ def post_journal_entry_endpoint(
     )
 
     return posted_entry
+
+
 @router.post(
     "/{journal_entry_id}/reverse",
     response_model=JournalEntryRead,
@@ -439,6 +496,7 @@ def reverse_journal_entry_endpoint(
     journal_entry_id: int,
     payload: JournalEntryReverseCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     original_entry = get_journal_entry(
         db=db,
@@ -450,6 +508,13 @@ def reverse_journal_entry_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Journal entry not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=original_entry.company_id,
+        allowed_roles={"admin", "accountant", "approver"},
+    )
 
     if original_entry.status != "posted":
         raise HTTPException(
@@ -517,19 +582,24 @@ def reverse_journal_entry_endpoint(
         payload=payload,
         fiscal_year=fiscal_year,
         fiscal_period=fiscal_period,
-
     )
 
     create_audit_log(
         db=db,
         company_id=reversal_entry.company_id,
+        actor=current_user.email,
         action="reverse_journal_entry",
         entity_type="journal_entry",
         entity_id=reversal_entry.id,
-        description=f"Created reversal journal entry {reversal_entry.entry_no} for {original_entry.entry_no}",
+        description=(
+            f"Created reversal journal entry "
+            f"{reversal_entry.entry_no} for {original_entry.entry_no}"
+        ),
     )
 
     return reversal_entry
+
+
 @router.post(
     "/{journal_entry_id}/void",
     response_model=JournalEntryRead,
@@ -537,6 +607,7 @@ def reverse_journal_entry_endpoint(
 def void_journal_entry_endpoint(
     journal_entry_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     journal_entry = get_journal_entry(
         db=db,
@@ -548,6 +619,13 @@ def void_journal_entry_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Journal entry not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=journal_entry.company_id,
+        allowed_roles={"admin", "accountant"},
+    )
 
     if journal_entry.status != "draft":
         raise HTTPException(
@@ -563,6 +641,7 @@ def void_journal_entry_endpoint(
     create_audit_log(
         db=db,
         company_id=voided_entry.company_id,
+        actor=current_user.email,
         action="void_journal_entry",
         entity_type="journal_entry",
         entity_id=voided_entry.id,

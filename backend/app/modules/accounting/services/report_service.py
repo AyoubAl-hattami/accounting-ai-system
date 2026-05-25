@@ -25,7 +25,7 @@ def get_trial_balance(
     company_id: int,
     as_of_date: date | None = None,
 ) -> TrialBalanceRead:
-    posted_filter = JournalEntry.status == "posted"
+    posted_filter = JournalEntry.status.in_(["posted", "reversed"])
 
     if as_of_date is not None:
         posted_filter = posted_filter & (JournalEntry.entry_date <= as_of_date)
@@ -136,7 +136,7 @@ def get_profit_and_loss(
     start_date: date | None = None,
     end_date: date | None = None,
 ) -> ProfitAndLossRead:
-    posted_filter = JournalEntry.status == "posted"
+    posted_filter = JournalEntry.status.in_(["posted", "reversed"])
 
     if start_date is not None:
         posted_filter = posted_filter & (JournalEntry.entry_date >= start_date)
@@ -254,7 +254,7 @@ def get_balance_sheet(
     company_id: int,
     as_of_date: date | None = None,
 ) -> BalanceSheetRead:
-    posted_filter = JournalEntry.status == "posted"
+    posted_filter = JournalEntry.status.in_(["posted", "reversed"])
 
     if as_of_date is not None:
         posted_filter = posted_filter & (JournalEntry.entry_date <= as_of_date)
@@ -440,7 +440,7 @@ def get_account_ledger(
             .where(
                 JournalLine.company_id == company_id,
                 JournalLine.account_id == account_id,
-                JournalEntry.status == "posted",
+                JournalEntry.status.in_(["posted", "reversed"]),
                 JournalEntry.entry_date < start_date,
             )
         )
@@ -474,7 +474,7 @@ def get_account_ledger(
         .where(
             JournalLine.company_id == company_id,
             JournalLine.account_id == account_id,
-            JournalEntry.status == "posted",
+            JournalEntry.status.in_(["posted", "reversed"]),
         )
         .order_by(
             JournalEntry.entry_date.asc(),

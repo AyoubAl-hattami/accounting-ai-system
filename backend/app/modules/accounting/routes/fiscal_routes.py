@@ -1,28 +1,31 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependencies import get_current_user
+from app.core.company_access import ensure_company_access
 from app.core.database import get_db
+from app.modules.accounting.models.user import User
 from app.modules.accounting.schemas.fiscal import (
-    FiscalYearCreate,
-    FiscalYearRead,
-    FiscalYearUpdate,
     FiscalPeriodCreate,
     FiscalPeriodRead,
     FiscalPeriodUpdate,
+    FiscalYearCreate,
+    FiscalYearRead,
+    FiscalYearUpdate,
 )
 from app.modules.accounting.services.fiscal_service import (
+    create_fiscal_period,
     create_fiscal_year,
     get_company_or_none,
-    get_fiscal_year,
-    get_fiscal_year_by_name,
-    list_fiscal_years,
-    update_fiscal_year,
-    create_fiscal_period,
     get_fiscal_period,
     get_fiscal_period_by_name,
     get_fiscal_period_by_no,
+    get_fiscal_year,
+    get_fiscal_year_by_name,
     list_fiscal_periods,
+    list_fiscal_years,
     update_fiscal_period,
+    update_fiscal_year,
 )
 
 
@@ -41,6 +44,7 @@ router = APIRouter(tags=["Fiscal"])
 def create_fiscal_year_endpoint(
     payload: FiscalYearCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     company = get_company_or_none(db=db, company_id=payload.company_id)
 
@@ -49,6 +53,13 @@ def create_fiscal_year_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Company not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=payload.company_id,
+        allowed_roles={"admin"},
+    )
 
     existing_year = get_fiscal_year_by_name(
         db=db,
@@ -70,11 +81,18 @@ def create_fiscal_year_endpoint(
     response_model=list[FiscalYearRead],
 )
 def list_fiscal_years_endpoint(
-    company_id: int | None = Query(default=None, ge=1),
+    company_id: int = Query(..., ge=1),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_id,
+    )
+
     return list_fiscal_years(
         db=db,
         company_id=company_id,
@@ -90,6 +108,7 @@ def list_fiscal_years_endpoint(
 def get_fiscal_year_endpoint(
     fiscal_year_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     fiscal_year = get_fiscal_year(db=db, fiscal_year_id=fiscal_year_id)
 
@@ -98,6 +117,12 @@ def get_fiscal_year_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Fiscal year not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=fiscal_year.company_id,
+    )
 
     return fiscal_year
 
@@ -110,6 +135,7 @@ def update_fiscal_year_endpoint(
     fiscal_year_id: int,
     payload: FiscalYearUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     fiscal_year = get_fiscal_year(db=db, fiscal_year_id=fiscal_year_id)
 
@@ -118,6 +144,13 @@ def update_fiscal_year_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Fiscal year not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=fiscal_year.company_id,
+        allowed_roles={"admin"},
+    )
 
     if payload.name is not None:
         existing_year = get_fiscal_year_by_name(
@@ -151,6 +184,7 @@ def update_fiscal_year_endpoint(
 def create_fiscal_period_endpoint(
     payload: FiscalPeriodCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     company = get_company_or_none(db=db, company_id=payload.company_id)
 
@@ -159,6 +193,13 @@ def create_fiscal_period_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Company not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=payload.company_id,
+        allowed_roles={"admin"},
+    )
 
     fiscal_year = get_fiscal_year(db=db, fiscal_year_id=payload.fiscal_year_id)
 
@@ -212,12 +253,19 @@ def create_fiscal_period_endpoint(
     response_model=list[FiscalPeriodRead],
 )
 def list_fiscal_periods_endpoint(
-    company_id: int | None = Query(default=None, ge=1),
+    company_id: int = Query(..., ge=1),
     fiscal_year_id: int | None = Query(default=None, ge=1),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_id,
+    )
+
     return list_fiscal_periods(
         db=db,
         company_id=company_id,
@@ -234,6 +282,7 @@ def list_fiscal_periods_endpoint(
 def get_fiscal_period_endpoint(
     fiscal_period_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     fiscal_period = get_fiscal_period(
         db=db,
@@ -245,6 +294,12 @@ def get_fiscal_period_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Fiscal period not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=fiscal_period.company_id,
+    )
 
     return fiscal_period
 
@@ -257,6 +312,7 @@ def update_fiscal_period_endpoint(
     fiscal_period_id: int,
     payload: FiscalPeriodUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     fiscal_period = get_fiscal_period(
         db=db,
@@ -268,6 +324,13 @@ def update_fiscal_period_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Fiscal period not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=fiscal_period.company_id,
+        allowed_roles={"admin"},
+    )
 
     fiscal_year = get_fiscal_year(
         db=db,

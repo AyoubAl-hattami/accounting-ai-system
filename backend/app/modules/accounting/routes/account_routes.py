@@ -1,7 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_dependencies import get_current_user
+from app.core.company_access import ensure_company_access
 from app.core.database import get_db
+from app.modules.accounting.models.user import User
 from app.modules.accounting.schemas.account import (
     AccountCreate,
     AccountRead,
@@ -31,7 +34,15 @@ router = APIRouter(
 def create_account_endpoint(
     payload: AccountCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=payload.company_id,
+        allowed_roles={"admin", "accountant"},
+    )
+
     company = get_company_or_none(db=db, company_id=payload.company_id)
 
     if not company:
@@ -75,11 +86,18 @@ def create_account_endpoint(
     response_model=list[AccountRead],
 )
 def list_accounts_endpoint(
-    company_id: int | None = Query(default=None, ge=1),
+    company_id: int = Query(..., ge=1),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_id,
+    )
+
     return list_accounts(
         db=db,
         company_id=company_id,
@@ -95,6 +113,7 @@ def list_accounts_endpoint(
 def get_account_endpoint(
     account_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     account = get_account(db=db, account_id=account_id)
 
@@ -103,6 +122,12 @@ def get_account_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Account not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=account.company_id,
+    )
 
     return account
 
@@ -115,6 +140,7 @@ def update_account_endpoint(
     account_id: int,
     payload: AccountUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     account = get_account(db=db, account_id=account_id)
 
@@ -123,6 +149,13 @@ def update_account_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Account not found",
         )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=account.company_id,
+        allowed_roles={"admin", "accountant"},
+    )
 
     if payload.code is not None:
         existing_account = get_account_by_code(
