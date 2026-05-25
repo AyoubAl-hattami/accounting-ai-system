@@ -1,0 +1,109 @@
+import requests
+
+
+BASE_URL = "http://127.0.0.1:8010"
+COMPANY_ID = 3
+BANK_ACCOUNT_ID = 5
+
+
+def login_and_get_headers():
+    response = requests.post(
+        f"{BASE_URL}/auth/login",
+        json={
+            "email": "admin@example.com",
+            "password": "Password123",
+        },
+    )
+
+    assert response.status_code == 200
+
+    token = response.json()["access_token"]
+
+    return {
+        "Authorization": f"Bearer {token}",
+    }
+
+
+def test_all_reports_work_with_token():
+    headers = login_and_get_headers()
+
+    trial_balance_response = requests.get(
+        f"{BASE_URL}/reports/trial-balance?company_id={COMPANY_ID}",
+        headers=headers,
+    )
+
+    assert trial_balance_response.status_code == 200
+
+    trial_balance = trial_balance_response.json()
+
+    assert trial_balance["company_id"] == COMPANY_ID
+    assert "total_debit" in trial_balance
+    assert "total_credit" in trial_balance
+    assert "is_balanced" in trial_balance
+    assert isinstance(trial_balance["lines"], list)
+
+    profit_and_loss_response = requests.get(
+        f"{BASE_URL}/reports/profit-and-loss?company_id={COMPANY_ID}",
+        headers=headers,
+    )
+
+    assert profit_and_loss_response.status_code == 200
+
+    profit_and_loss = profit_and_loss_response.json()
+
+    assert profit_and_loss["company_id"] == COMPANY_ID
+    assert "total_income" in profit_and_loss
+    assert "total_expenses" in profit_and_loss
+    assert "net_profit" in profit_and_loss
+    assert isinstance(profit_and_loss["income_lines"], list)
+    assert isinstance(profit_and_loss["expense_lines"], list)
+
+    balance_sheet_response = requests.get(
+        f"{BASE_URL}/reports/balance-sheet?company_id={COMPANY_ID}",
+        headers=headers,
+    )
+
+    assert balance_sheet_response.status_code == 200
+
+    balance_sheet = balance_sheet_response.json()
+
+    assert balance_sheet["company_id"] == COMPANY_ID
+    assert "total_assets" in balance_sheet
+    assert "total_liabilities" in balance_sheet
+    assert "total_equity" in balance_sheet
+    assert "current_year_earnings" in balance_sheet
+    assert "is_balanced" in balance_sheet
+    assert isinstance(balance_sheet["asset_lines"], list)
+    assert isinstance(balance_sheet["liability_lines"], list)
+    assert isinstance(balance_sheet["equity_lines"], list)
+
+    account_ledger_response = requests.get(
+        (
+            f"{BASE_URL}/reports/account-ledger"
+            f"?company_id={COMPANY_ID}&account_id={BANK_ACCOUNT_ID}"
+        ),
+        headers=headers,
+    )
+
+    assert account_ledger_response.status_code == 200
+
+    account_ledger = account_ledger_response.json()
+
+    assert account_ledger["company_id"] == COMPANY_ID
+    assert account_ledger["account_id"] == BANK_ACCOUNT_ID
+    assert "opening_balance" in account_ledger
+    assert "closing_balance" in account_ledger
+    assert isinstance(account_ledger["lines"], list)
+
+    general_ledger_response = requests.get(
+        f"{BASE_URL}/reports/general-ledger?company_id={COMPANY_ID}",
+        headers=headers,
+    )
+
+    assert general_ledger_response.status_code == 200
+
+    general_ledger = general_ledger_response.json()
+
+    assert general_ledger["company_id"] == COMPANY_ID
+    assert isinstance(general_ledger["accounts"], list)
+    assert len(general_ledger["accounts"]) > 0
