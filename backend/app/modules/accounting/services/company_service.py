@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.accounting.models.company import Company
@@ -37,6 +37,11 @@ def list_companies(db: Session, skip: int = 0, limit: int = 100) -> list[Company
     )
 
     return list(db.scalars(statement).all())
+
+
+def count_companies(db: Session) -> int:
+    statement = select(func.count()).select_from(Company)
+    return int(db.scalar(statement) or 0)
 
 
 def update_company(

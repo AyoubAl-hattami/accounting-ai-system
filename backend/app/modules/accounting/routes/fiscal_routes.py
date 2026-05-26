@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.auth_dependencies import get_current_user
 from app.core.company_access import ensure_company_access
 from app.core.database import get_db
+from app.core.pagination import PaginatedResponse
 from app.modules.accounting.models.user import User
 from app.modules.accounting.schemas.fiscal import (
     FiscalPeriodCreate,
@@ -14,6 +15,8 @@ from app.modules.accounting.schemas.fiscal import (
     FiscalYearUpdate,
 )
 from app.modules.accounting.services.fiscal_service import (
+    count_fiscal_periods,
+    count_fiscal_years,
     create_fiscal_period,
     create_fiscal_year,
     get_company_or_none,
@@ -78,7 +81,7 @@ def create_fiscal_year_endpoint(
 
 @router.get(
     "/fiscal-years",
-    response_model=list[FiscalYearRead],
+    response_model=PaginatedResponse[FiscalYearRead],
 )
 def list_fiscal_years_endpoint(
     company_id: int = Query(..., ge=1),
@@ -93,9 +96,21 @@ def list_fiscal_years_endpoint(
         company_id=company_id,
     )
 
-    return list_fiscal_years(
+    fiscal_years = list_fiscal_years(
         db=db,
         company_id=company_id,
+        skip=skip,
+        limit=limit,
+    )
+
+    total = count_fiscal_years(
+        db=db,
+        company_id=company_id,
+    )
+
+    return PaginatedResponse[FiscalYearRead](
+        items=fiscal_years,
+        total=total,
         skip=skip,
         limit=limit,
     )
@@ -250,7 +265,7 @@ def create_fiscal_period_endpoint(
 
 @router.get(
     "/fiscal-periods",
-    response_model=list[FiscalPeriodRead],
+    response_model=PaginatedResponse[FiscalPeriodRead],
 )
 def list_fiscal_periods_endpoint(
     company_id: int = Query(..., ge=1),
@@ -266,10 +281,23 @@ def list_fiscal_periods_endpoint(
         company_id=company_id,
     )
 
-    return list_fiscal_periods(
+    fiscal_periods = list_fiscal_periods(
         db=db,
         company_id=company_id,
         fiscal_year_id=fiscal_year_id,
+        skip=skip,
+        limit=limit,
+    )
+
+    total = count_fiscal_periods(
+        db=db,
+        company_id=company_id,
+        fiscal_year_id=fiscal_year_id,
+    )
+
+    return PaginatedResponse[FiscalPeriodRead](
+        items=fiscal_periods,
+        total=total,
         skip=skip,
         limit=limit,
     )

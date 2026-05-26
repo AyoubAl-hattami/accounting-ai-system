@@ -42,10 +42,16 @@ def test_company_users_work_with_token():
 
     data = response.json()
 
-    assert isinstance(data, list)
-    assert len(data) > 0
+    assert "items" in data
+    assert "total" in data
+    assert "skip" in data
+    assert "limit" in data
 
-    first_link = data[0]
+    assert isinstance(data["items"], list)
+    assert data["total"] >= len(data["items"])
+    assert len(data["items"]) > 0
+
+    first_link = data["items"][0]
 
     assert "id" in first_link
     assert "company_id" in first_link
@@ -53,3 +59,21 @@ def test_company_users_work_with_token():
     assert "role" in first_link
     assert "is_active" in first_link
     assert first_link["company_id"] == 3
+
+
+def test_company_users_pagination_metadata():
+    headers = login_and_get_headers()
+
+    response = requests.get(
+        f"{BASE_URL}/company-users?company_id=3&skip=0&limit=5",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data["items"]) <= 5
+    assert data["total"] >= len(data["items"])
+    assert data["skip"] == 0
+    assert data["limit"] == 5

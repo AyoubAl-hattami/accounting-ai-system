@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.accounting.models.company import Company
@@ -58,6 +58,22 @@ def list_company_users(
     statement = statement.offset(skip).limit(limit)
 
     return list(db.scalars(statement).all())
+
+
+def count_company_users(
+    db: Session,
+    company_id: int | None = None,
+    user_id: int | None = None,
+) -> int:
+    statement = select(func.count()).select_from(CompanyUser)
+
+    if company_id is not None:
+        statement = statement.where(CompanyUser.company_id == company_id)
+
+    if user_id is not None:
+        statement = statement.where(CompanyUser.user_id == user_id)
+
+    return int(db.scalar(statement) or 0)
 
 
 def create_company_user(

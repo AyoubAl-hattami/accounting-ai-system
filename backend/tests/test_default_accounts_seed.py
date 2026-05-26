@@ -52,9 +52,6 @@ def test_seed_default_accounts_with_token():
     assert data["created_count"] >= 0
     assert data["skipped_count"] >= 0
 
-    # Because the seed is idempotent, after earlier runs many or all
-    # default accounts may already exist. The important check is that it
-    # does not fail or duplicate codes.
     accounts_response = requests.get(
         f"{BASE_URL}/accounts?company_id={COMPANY_ID}",
         headers=headers,
@@ -62,7 +59,14 @@ def test_seed_default_accounts_with_token():
 
     assert accounts_response.status_code == 200
 
-    accounts = accounts_response.json()
+    accounts_data = accounts_response.json()
+
+    assert "items" in accounts_data
+    assert "total" in accounts_data
+    assert "skip" in accounts_data
+    assert "limit" in accounts_data
+
+    accounts = accounts_data["items"]
     account_codes = [account["code"] for account in accounts]
 
     assert "1000" in account_codes

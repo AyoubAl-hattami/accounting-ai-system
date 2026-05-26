@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.accounting.models.audit_log import AuditLog
@@ -51,3 +51,23 @@ def list_audit_logs(
     statement = statement.offset(skip).limit(limit)
 
     return list(db.scalars(statement).all())
+
+
+def count_audit_logs(
+    db: Session,
+    company_id: int | None = None,
+    entity_type: str | None = None,
+    entity_id: int | None = None,
+) -> int:
+    statement = select(func.count()).select_from(AuditLog)
+
+    if company_id is not None:
+        statement = statement.where(AuditLog.company_id == company_id)
+
+    if entity_type is not None:
+        statement = statement.where(AuditLog.entity_type == entity_type)
+
+    if entity_id is not None:
+        statement = statement.where(AuditLog.entity_id == entity_id)
+
+    return int(db.scalar(statement) or 0)

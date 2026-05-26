@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
-from sqlalchemy import select
+
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.modules.accounting.models.account import Account
@@ -11,10 +12,11 @@ from app.modules.accounting.models.journal_entry import JournalEntry
 from app.modules.accounting.models.journal_line import JournalLine
 from app.modules.accounting.schemas.journal import (
     JournalEntryCreate,
-    JournalEntryUpdate,
     JournalEntryReverseCreate,
+    JournalEntryUpdate,
     OpeningBalanceCreate,
 )
+
 
 def get_company_or_none(db: Session, company_id: int) -> Company | None:
     statement = select(Company).where(Company.id == company_id)
@@ -74,6 +76,22 @@ def list_journal_entries(
     statement = statement.offset(skip).limit(limit)
 
     return list(db.scalars(statement).all())
+
+
+def count_journal_entries(
+    db: Session,
+    company_id: int | None = None,
+    status: str | None = None,
+) -> int:
+    statement = select(func.count()).select_from(JournalEntry)
+
+    if company_id is not None:
+        statement = statement.where(JournalEntry.company_id == company_id)
+
+    if status is not None:
+        statement = statement.where(JournalEntry.status == status)
+
+    return int(db.scalar(statement) or 0)
 
 
 def find_fiscal_year_for_date(
@@ -141,6 +159,43 @@ def create_journal_entry(
     return get_journal_entry(db=db, journal_entry_id=journal_entry.id)
 
 
+def create_opening_balance_entry(
+    db: Session,
+    payload: OpeningBalanceCreate,
+    fiscal_year: FiscalYear,
+    fiscal_period: FiscalPeriod,
+) -> JournalEntry:
+    journal_entry = JournalEntry(
+        company_id=payload.company_id,
+        fiscal_year_id=fiscal_year.id,
+        fiscal_period_id=fiscal_period.id,
+        entry_no=payload.entry_no.strip(),
+        entry_date=payload.entry_date,
+        description=payload.description,
+        status="draft",
+        source_type="opening_balance",
+        source_id=None,
+    )
+
+    journal_entry.lines = [
+        JournalLine(
+            company_id=payload.company_id,
+            account_id=line.account_id,
+            line_no=index + 1,
+            debit=line.debit,
+            credit=line.credit,
+            description=line.description,
+        )
+        for index, line in enumerate(payload.lines)
+    ]
+
+    db.add(journal_entry)
+    db.commit()
+    db.refresh(journal_entry)
+
+    return get_journal_entry(db=db, journal_entry_id=journal_entry.id)
+
+
 def update_journal_entry(
     db: Session,
     journal_entry: JournalEntry,
@@ -164,6 +219,8 @@ def update_journal_entry(
     db.refresh(journal_entry)
 
     return get_journal_entry(db=db, journal_entry_id=journal_entry.id)
+
+
 def calculate_journal_totals(journal_entry: JournalEntry) -> tuple[Decimal, Decimal]:
     total_debit = sum(
         (line.debit for line in journal_entry.lines),
@@ -190,6 +247,7 @@ def mark_journal_entry_reviewed(
 
     return get_journal_entry(db=db, journal_entry_id=journal_entry.id)
 
+
 def post_journal_entry(
     db: Session,
     journal_entry: JournalEntry,
@@ -209,6 +267,8 @@ def post_journal_entry(
     db.refresh(journal_entry)
 
     return get_journal_entry(db=db, journal_entry_id=journal_entry.id)
+
+
 def reverse_journal_entry(
     db: Session,
     original_entry: JournalEntry,
@@ -246,46 +306,13 @@ def reverse_journal_entry(
     db.refresh(reversal_entry)
 
     return get_journal_entry(db=db, journal_entry_id=reversal_entry.id)
+
+
 def void_journal_entry(
     db: Session,
     journal_entry: JournalEntry,
 ) -> JournalEntry:
     journal_entry.status = "void"
-
-    db.add(journal_entry)
-    db.commit()
-    db.refresh(journal_entry)
-
-    return get_journal_entry(db=db, journal_entry_id=journal_entry.id)
-def create_opening_balance_entry(
-    db: Session,
-    payload: OpeningBalanceCreate,
-    fiscal_year: FiscalYear,
-    fiscal_period: FiscalPeriod,
-) -> JournalEntry:
-    journal_entry = JournalEntry(
-        company_id=payload.company_id,
-        fiscal_year_id=fiscal_year.id,
-        fiscal_period_id=fiscal_period.id,
-        entry_no=payload.entry_no.strip(),
-        entry_date=payload.entry_date,
-        description=payload.description,
-        status="draft",
-        source_type="opening_balance",
-        source_id=None,
-    )
-
-    journal_entry.lines = [
-        JournalLine(
-            company_id=payload.company_id,
-            account_id=line.account_id,
-            line_no=index + 1,
-            debit=line.debit,
-            credit=line.credit,
-            description=line.description,
-        )
-        for index, line in enumerate(payload.lines)
-    ]
 
     db.add(journal_entry)
     db.commit()

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.auth_dependencies import get_current_user
 from app.core.company_access import ensure_company_access
 from app.core.database import get_db
+from app.core.pagination import PaginatedResponse
 from app.modules.accounting.models.user import User
 from app.modules.accounting.schemas.journal import (
     JournalEntryCreate,
@@ -15,6 +16,7 @@ from app.modules.accounting.schemas.journal import (
 from app.modules.accounting.services.audit_service import create_audit_log
 from app.modules.accounting.services.journal_service import (
     calculate_journal_totals,
+    count_journal_entries,
     create_journal_entry,
     create_opening_balance_entry,
     find_fiscal_period_for_date,
@@ -277,7 +279,7 @@ def create_opening_balance_endpoint(
 
 @router.get(
     "",
-    response_model=list[JournalEntryRead],
+    response_model=PaginatedResponse[JournalEntryRead],
 )
 def list_journal_entries_endpoint(
     company_id: int = Query(..., ge=1),
@@ -301,10 +303,23 @@ def list_journal_entries_endpoint(
             detail="Invalid journal entry status",
         )
 
-    return list_journal_entries(
+    journal_entries = list_journal_entries(
         db=db,
         company_id=company_id,
         status=status_filter,
+        skip=skip,
+        limit=limit,
+    )
+
+    total = count_journal_entries(
+        db=db,
+        company_id=company_id,
+        status=status_filter,
+    )
+
+    return PaginatedResponse[JournalEntryRead](
+        items=journal_entries,
+        total=total,
         skip=skip,
         limit=limit,
     )

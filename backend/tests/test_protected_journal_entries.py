@@ -42,13 +42,37 @@ def test_journal_entries_work_with_token():
 
     data = response.json()
 
-    assert isinstance(data, list)
+    assert "items" in data
+    assert "total" in data
+    assert "skip" in data
+    assert "limit" in data
 
-    if len(data) > 0:
-        first_entry = data[0]
+    assert isinstance(data["items"], list)
+    assert data["total"] >= len(data["items"])
+
+    if len(data["items"]) > 0:
+        first_entry = data["items"][0]
 
         assert "id" in first_entry
         assert "company_id" in first_entry
         assert "entry_no" in first_entry
         assert "status" in first_entry
         assert first_entry["company_id"] == 3
+
+
+def test_journal_entries_pagination_metadata():
+    headers = login_and_get_headers()
+
+    response = requests.get(
+        f"{BASE_URL}/journal-entries?company_id=3&skip=0&limit=5",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data["items"]) <= 5
+    assert data["total"] >= len(data["items"])
+    assert data["skip"] == 0
+    assert data["limit"] == 5

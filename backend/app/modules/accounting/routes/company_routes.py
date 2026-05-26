@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.auth_dependencies import get_current_user
 from app.core.company_access import ensure_company_access
 from app.core.database import get_db
+from app.core.pagination import PaginatedResponse
 from app.modules.accounting.models.user import User
 from app.modules.accounting.schemas.company import (
     CompanyCreate,
@@ -12,12 +13,14 @@ from app.modules.accounting.schemas.company import (
 )
 from app.modules.accounting.schemas.company_user import CompanyUserCreate
 from app.modules.accounting.services.company_service import (
+    count_companies,
     create_company,
     get_company,
     list_companies,
     update_company,
 )
 from app.modules.accounting.services.company_user_service import (
+    count_company_users,
     create_company_user,
     list_company_users,
 )
@@ -56,7 +59,7 @@ def create_company_endpoint(
 
 @router.get(
     "",
-    response_model=list[CompanyRead],
+    response_model=PaginatedResponse[CompanyRead],
 )
 def list_companies_endpoint(
     skip: int = Query(default=0, ge=0),
@@ -65,8 +68,17 @@ def list_companies_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     if current_user.is_superuser:
-        return list_companies(
+        companies = list_companies(
             db=db,
+            skip=skip,
+            limit=limit,
+        )
+
+        total = count_companies(db=db)
+
+        return PaginatedResponse[CompanyRead](
+            items=companies,
+            total=total,
             skip=skip,
             limit=limit,
         )
@@ -89,7 +101,17 @@ def list_companies_endpoint(
         if company:
             companies.append(company)
 
-    return companies
+    total = count_company_users(
+        db=db,
+        user_id=current_user.id,
+    )
+
+    return PaginatedResponse[CompanyRead](
+        items=companies,
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
 
 
 @router.get(

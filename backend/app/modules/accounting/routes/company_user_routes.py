@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.auth_dependencies import get_current_user
 from app.core.company_access import ensure_company_access
 from app.core.database import get_db
+from app.core.pagination import PaginatedResponse
 from app.modules.accounting.models.user import User
 from app.modules.accounting.schemas.company_user import (
     CompanyUserCreate,
@@ -11,6 +12,7 @@ from app.modules.accounting.schemas.company_user import (
     CompanyUserUpdate,
 )
 from app.modules.accounting.services.company_user_service import (
+    count_company_users,
     create_company_user,
     get_company,
     get_company_user,
@@ -80,7 +82,7 @@ def create_company_user_endpoint(
 
 @router.get(
     "",
-    response_model=list[CompanyUserRead],
+    response_model=PaginatedResponse[CompanyUserRead],
 )
 def list_company_users_endpoint(
     company_id: int = Query(..., ge=1),
@@ -97,10 +99,23 @@ def list_company_users_endpoint(
         allowed_roles={"admin", "auditor"},
     )
 
-    return list_company_users(
+    company_users = list_company_users(
         db=db,
         company_id=company_id,
         user_id=user_id,
+        skip=skip,
+        limit=limit,
+    )
+
+    total = count_company_users(
+        db=db,
+        company_id=company_id,
+        user_id=user_id,
+    )
+
+    return PaginatedResponse[CompanyUserRead](
+        items=company_users,
+        total=total,
         skip=skip,
         limit=limit,
     )

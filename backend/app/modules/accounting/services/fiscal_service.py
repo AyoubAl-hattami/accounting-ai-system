@@ -1,16 +1,16 @@
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.accounting.models.company import Company
-from app.modules.accounting.models.fiscal_year import FiscalYear
 from app.modules.accounting.models.fiscal_period import FiscalPeriod
+from app.modules.accounting.models.fiscal_year import FiscalYear
 from app.modules.accounting.schemas.fiscal import (
-    FiscalYearCreate,
-    FiscalYearUpdate,
     FiscalPeriodCreate,
     FiscalPeriodUpdate,
+    FiscalYearCreate,
+    FiscalYearUpdate,
 )
 
 
@@ -70,6 +70,18 @@ def list_fiscal_years(
     statement = statement.offset(skip).limit(limit)
 
     return list(db.scalars(statement).all())
+
+
+def count_fiscal_years(
+    db: Session,
+    company_id: int | None = None,
+) -> int:
+    statement = select(func.count()).select_from(FiscalYear)
+
+    if company_id is not None:
+        statement = statement.where(FiscalYear.company_id == company_id)
+
+    return int(db.scalar(statement) or 0)
 
 
 def update_fiscal_year(
@@ -177,6 +189,22 @@ def list_fiscal_periods(
     statement = statement.offset(skip).limit(limit)
 
     return list(db.scalars(statement).all())
+
+
+def count_fiscal_periods(
+    db: Session,
+    company_id: int | None = None,
+    fiscal_year_id: int | None = None,
+) -> int:
+    statement = select(func.count()).select_from(FiscalPeriod)
+
+    if company_id is not None:
+        statement = statement.where(FiscalPeriod.company_id == company_id)
+
+    if fiscal_year_id is not None:
+        statement = statement.where(FiscalPeriod.fiscal_year_id == fiscal_year_id)
+
+    return int(db.scalar(statement) or 0)
 
 
 def update_fiscal_period(
