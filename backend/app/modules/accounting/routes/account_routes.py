@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.auth_dependencies import get_current_user
 from app.core.company_access import ensure_company_access
 from app.core.database import get_db
+from app.core.pagination import PaginatedResponse
 from app.modules.accounting.models.user import User
 from app.modules.accounting.schemas.account import (
     AccountCreate,
@@ -12,6 +13,7 @@ from app.modules.accounting.schemas.account import (
     AccountUpdate,
 )
 from app.modules.accounting.services.account_service import (
+    count_accounts,
     create_account,
     get_account,
     get_account_by_code,
@@ -87,7 +89,7 @@ def create_account_endpoint(
 
 @router.get(
     "",
-    response_model=list[AccountRead],
+    response_model=PaginatedResponse[AccountRead],
 )
 def list_accounts_endpoint(
     company_id: int = Query(..., ge=1),
@@ -102,9 +104,21 @@ def list_accounts_endpoint(
         company_id=company_id,
     )
 
-    return list_accounts(
+    accounts = list_accounts(
         db=db,
         company_id=company_id,
+        skip=skip,
+        limit=limit,
+    )
+
+    total = count_accounts(
+        db=db,
+        company_id=company_id,
+    )
+
+    return PaginatedResponse[AccountRead](
+        items=accounts,
+        total=total,
         skip=skip,
         limit=limit,
     )

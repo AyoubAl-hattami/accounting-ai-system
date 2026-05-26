@@ -42,10 +42,33 @@ def test_accounts_work_with_token():
 
     data = response.json()
 
-    assert isinstance(data, list)
-    assert len(data) > 0
+    assert "items" in data
+    assert "total" in data
+    assert "skip" in data
+    assert "limit" in data
 
-    account_codes = {account["code"] for account in data}
+    assert isinstance(data["items"], list)
+    assert data["total"] > 0
+
+    account_codes = {account["code"] for account in data["items"]}
 
     assert "1000" in account_codes
     assert "1110" in account_codes
+
+
+def test_accounts_pagination_metadata():
+    headers = login_and_get_headers()
+
+    response = requests.get(
+        f"{BASE_URL}/accounts?company_id=3&skip=0&limit=5",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data["items"]) <= 5
+    assert data["total"] >= len(data["items"])
+    assert data["skip"] == 0
+    assert data["limit"] == 5

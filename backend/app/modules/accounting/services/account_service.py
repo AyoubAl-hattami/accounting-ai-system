@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.accounting.models.account import Account
@@ -42,6 +42,16 @@ def list_accounts(
     statement = statement.offset(skip).limit(limit)
 
     return list(db.scalars(statement).all())
+def count_accounts(
+    db: Session,
+    company_id: int | None = None,
+) -> int:
+    statement = select(func.count()).select_from(Account)
+
+    if company_id is not None:
+        statement = statement.where(Account.company_id == company_id)
+
+    return int(db.scalar(statement) or 0)
 
 
 def create_account(db: Session, payload: AccountCreate) -> Account:
