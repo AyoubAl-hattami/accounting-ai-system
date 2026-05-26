@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.accounting.models.company import Company
 from app.modules.accounting.schemas.company import CompanyCreate, CompanyUpdate
+from app.modules.accounting.models.company_user import CompanyUser
 
 
 def create_company(db: Session, payload: CompanyCreate) -> Company:
@@ -62,3 +63,41 @@ def update_company(
     db.refresh(company)
 
     return company
+def list_companies_for_user(
+    db: Session,
+    user_id: int,
+    skip: int = 0,
+    limit: int = 100,
+) -> list[Company]:
+    statement = (
+        select(Company)
+        .join(CompanyUser, CompanyUser.company_id == Company.id)
+        .where(
+            CompanyUser.user_id == user_id,
+            CompanyUser.is_active.is_(True),
+            Company.is_active.is_(True),
+        )
+        .order_by(Company.id.asc())
+        .offset(skip)
+        .limit(limit)
+    )
+
+    return list(db.scalars(statement).all())
+
+
+def count_companies_for_user(
+    db: Session,
+    user_id: int,
+) -> int:
+    statement = (
+        select(func.count())
+        .select_from(Company)
+        .join(CompanyUser, CompanyUser.company_id == Company.id)
+        .where(
+            CompanyUser.user_id == user_id,
+            CompanyUser.is_active.is_(True),
+            Company.is_active.is_(True),
+        )
+    )
+
+    return int(db.scalar(statement) or 0)

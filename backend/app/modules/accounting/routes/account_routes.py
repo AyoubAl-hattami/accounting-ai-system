@@ -49,6 +49,12 @@ def create_account_endpoint(
         allowed_roles={"admin", "accountant"},
     )
 
+    if payload.is_system:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="System accounts can only be created by the default account seed",
+        )
+
     company = get_company_or_none(db=db, company_id=payload.company_id)
 
     if not company:
@@ -196,6 +202,28 @@ def update_account_endpoint(
         company_id=account.company_id,
         allowed_roles={"admin", "accountant"},
     )
+
+    if account.is_system:
+        update_data = payload.model_dump(exclude_unset=True)
+
+        protected_fields = {
+            "code",
+            "account_type",
+            "parent_id",
+            "is_system",
+            "is_active",
+        }
+
+        attempted_protected_changes = protected_fields.intersection(update_data.keys())
+
+        if attempted_protected_changes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "System accounts cannot update protected fields: "
+                    + ", ".join(sorted(attempted_protected_changes))
+                ),
+            )
 
     if payload.code is not None:
         existing_account = get_account_by_code(

@@ -54,6 +54,23 @@ def get_fiscal_year_by_name(
         FiscalYear.name == name.strip(),
     )
     return db.scalar(statement)
+def find_overlapping_fiscal_year(
+    db: Session,
+    company_id: int,
+    start_date: date,
+    end_date: date,
+    exclude_fiscal_year_id: int | None = None,
+) -> FiscalYear | None:
+    statement = select(FiscalYear).where(
+        FiscalYear.company_id == company_id,
+        FiscalYear.start_date <= end_date,
+        FiscalYear.end_date >= start_date,
+    )
+
+    if exclude_fiscal_year_id is not None:
+        statement = statement.where(FiscalYear.id != exclude_fiscal_year_id)
+
+    return db.scalar(statement)
 
 
 def list_fiscal_years(

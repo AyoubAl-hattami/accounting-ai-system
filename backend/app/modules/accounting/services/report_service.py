@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.modules.accounting.models.account import Account
 from app.modules.accounting.models.journal_entry import JournalEntry
 from app.modules.accounting.models.journal_line import JournalLine
+from app.modules.accounting.models.fiscal_year import FiscalYear
 from app.modules.accounting.schemas.report import (
     TrialBalanceLine,
     TrialBalanceRead,
@@ -127,7 +128,7 @@ def get_trial_balance(
         total_credit=total_credit,
         total_debit_balance=total_debit_balance,
         total_credit_balance=total_credit_balance,
-        is_balanced=total_debit == total_credit,
+        is_balanced=total_debit_balance == total_credit_balance,
         lines=lines,
     )
 def get_profit_and_loss(
@@ -368,10 +369,22 @@ def get_balance_sheet(
                 )
             )
 
+    effective_date = as_of_date or date.today()
+
+    fiscal_year = db.scalar(
+        select(FiscalYear).where(
+            FiscalYear.company_id == company_id,
+            FiscalYear.start_date <= effective_date,
+            FiscalYear.end_date >= effective_date,
+        )
+    )
+
+    profit_start_date = fiscal_year.start_date if fiscal_year else None
+
     profit_and_loss = get_profit_and_loss(
         db=db,
         company_id=company_id,
-        start_date=None,
+        start_date=profit_start_date,
         end_date=as_of_date,
     )
 

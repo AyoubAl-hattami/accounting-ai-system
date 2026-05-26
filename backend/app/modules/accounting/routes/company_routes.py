@@ -14,15 +14,15 @@ from app.modules.accounting.schemas.company import (
 from app.modules.accounting.schemas.company_user import CompanyUserCreate
 from app.modules.accounting.services.company_service import (
     count_companies,
+    count_companies_for_user,
     create_company,
     get_company,
     list_companies,
+    list_companies_for_user,
     update_company,
 )
 from app.modules.accounting.services.company_user_service import (
-    count_company_users,
     create_company_user,
-    list_company_users,
 )
 
 
@@ -83,25 +83,14 @@ def list_companies_endpoint(
             limit=limit,
         )
 
-    company_user_links = list_company_users(
+    companies = list_companies_for_user(
         db=db,
         user_id=current_user.id,
         skip=skip,
         limit=limit,
     )
 
-    companies = []
-
-    for link in company_user_links:
-        if not link.is_active:
-            continue
-
-        company = get_company(db=db, company_id=link.company_id)
-
-        if company:
-            companies.append(company)
-
-    total = count_company_users(
+    total = count_companies_for_user(
         db=db,
         user_id=current_user.id,
     )

@@ -29,6 +29,7 @@ from app.modules.accounting.services.fiscal_service import (
     list_fiscal_years,
     update_fiscal_period,
     update_fiscal_year,
+    find_overlapping_fiscal_year,
 )
 
 
@@ -74,7 +75,22 @@ def create_fiscal_year_endpoint(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Fiscal year name already exists for this company",
+            
         )
+    overlapping_year = find_overlapping_fiscal_year(
+        db=db,
+        company_id=payload.company_id,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+    )
+
+    if overlapping_year:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Fiscal year dates overlap with an existing fiscal year",
+        )
+    
+    
 
     return create_fiscal_year(db=db, payload=payload)
 
@@ -179,7 +195,28 @@ def update_fiscal_year_endpoint(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Fiscal year name already exists for this company",
             )
+    new_start_date = payload.start_date or fiscal_year.start_date
+    new_end_date = payload.end_date or fiscal_year.end_date
 
+    if new_end_date < new_start_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="end_date must be greater than or equal to start_date",
+        )
+
+    overlapping_year = find_overlapping_fiscal_year(
+        db=db,
+        company_id=fiscal_year.company_id,
+        start_date=new_start_date,
+        end_date=new_end_date,
+        exclude_fiscal_year_id=fiscal_year.id,
+    )
+
+    if overlapping_year:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Fiscal year dates overlap with an existing fiscal year",
+        )
     return update_fiscal_year(
         db=db,
         fiscal_year=fiscal_year,
