@@ -15,7 +15,7 @@ from app.modules.accounting.routes.audit_routes import router as audit_router
 
 app = FastAPI(
     title=settings.APP_NAME,
-    version="0.1.0",
+    version=settings.APP_VERSION,
 )
 
 

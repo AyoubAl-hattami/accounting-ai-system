@@ -4,6 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     APP_NAME: str = "Accounting AI System"
     APP_ENV: str = "development"
+    APP_VERSION: str = "0.1.0"
+
     DATABASE_URL: str
 
     SECRET_KEY: str = "change-this-secret-key-in-production"
