@@ -14,6 +14,7 @@ from app.modules.accounting.services.auth_service import (
     create_user_token,
     get_user_by_email,
 )
+from app.modules.accounting.services.audit_service import create_audit_log
 from app.core.auth_dependencies import get_current_user
 from app.modules.accounting.models.user import User
 
@@ -44,10 +45,22 @@ def register_endpoint(
             detail="Email already registered",
         )
 
-    return create_user(
+    new_user = create_user(
         db=db,
         payload=payload,
     )
+
+    create_audit_log(
+        db=db,
+        company_id=None,
+        actor=new_user.email,
+        action="register_user",
+        entity_type="user",
+        entity_id=new_user.id,
+        description=f"Registered user {new_user.email}",
+    )
+
+    return new_user
 
 
 @router.post(

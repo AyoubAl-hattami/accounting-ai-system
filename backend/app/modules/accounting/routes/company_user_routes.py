@@ -21,6 +21,7 @@ from app.modules.accounting.services.company_user_service import (
     list_company_users,
     update_company_user,
 )
+from app.modules.accounting.services.audit_service import create_audit_log
 
 
 router = APIRouter(
@@ -74,10 +75,22 @@ def create_company_user_endpoint(
             detail="User is already assigned to this company",
         )
 
-    return create_company_user(
+    company_user = create_company_user(
         db=db,
         payload=payload,
     )
+
+    create_audit_log(
+        db=db,
+        company_id=company_user.company_id,
+        actor=current_user.email,
+        action="create_company_user",
+        entity_type="company_user",
+        entity_id=company_user.id,
+        description=f"Added user {payload.user_id} to company {payload.company_id} with role {company_user.role}",
+    )
+
+    return company_user
 
 
 @router.get(
@@ -179,8 +192,20 @@ def update_company_user_endpoint(
         allowed_roles={"admin"},
     )
 
-    return update_company_user(
+    updated = update_company_user(
         db=db,
         company_user=company_user,
         payload=payload,
     )
+
+    create_audit_log(
+        db=db,
+        company_id=updated.company_id,
+        actor=current_user.email,
+        action="update_company_user",
+        entity_type="company_user",
+        entity_id=updated.id,
+        description=f"Updated company user {updated.id} in company {updated.company_id}",
+    )
+
+    return updated

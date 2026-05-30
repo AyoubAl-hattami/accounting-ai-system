@@ -3,15 +3,12 @@ import time
 import requests
 
 
-BASE_URL = "http://127.0.0.1:8010"
-
-
-def test_register_login_and_me():
+def test_register_login_and_me(base_url):
     unique_email = f"testuser_{int(time.time())}@example.com"
     password = "Password123"
 
     register_response = requests.post(
-        f"{BASE_URL}/auth/register",
+        f"{base_url}/auth/register",
         json={
             "email": unique_email,
             "password": password,
@@ -29,7 +26,7 @@ def test_register_login_and_me():
     assert "hashed_password" not in user_data
 
     login_response = requests.post(
-        f"{BASE_URL}/auth/login",
+        f"{base_url}/auth/login",
         json={
             "email": unique_email,
             "password": password,
@@ -48,7 +45,7 @@ def test_register_login_and_me():
     }
 
     me_response = requests.get(
-        f"{BASE_URL}/auth/me",
+        f"{base_url}/auth/me",
         headers=headers,
     )
 

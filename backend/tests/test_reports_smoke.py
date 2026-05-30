@@ -1,35 +1,14 @@
 import requests
 
 
-BASE_URL = "http://127.0.0.1:8010"
 COMPANY_ID = 3
 BANK_ACCOUNT_ID = 5
 
 
-def login_and_get_headers():
-    response = requests.post(
-        f"{BASE_URL}/auth/login",
-        json={
-            "email": "admin@example.com",
-            "password": "Password123",
-        },
-    )
-
-    assert response.status_code == 200
-
-    token = response.json()["access_token"]
-
-    return {
-        "Authorization": f"Bearer {token}",
-    }
-
-
-def test_all_reports_work_with_token():
-    headers = login_and_get_headers()
-
+def test_all_reports_work_with_token(base_url, admin_headers):
     trial_balance_response = requests.get(
-        f"{BASE_URL}/reports/trial-balance?company_id={COMPANY_ID}",
-        headers=headers,
+        f"{base_url}/reports/trial-balance?company_id={COMPANY_ID}",
+        headers=admin_headers,
     )
 
     assert trial_balance_response.status_code == 200
@@ -43,8 +22,8 @@ def test_all_reports_work_with_token():
     assert isinstance(trial_balance["lines"], list)
 
     profit_and_loss_response = requests.get(
-        f"{BASE_URL}/reports/profit-and-loss?company_id={COMPANY_ID}",
-        headers=headers,
+        f"{base_url}/reports/profit-and-loss?company_id={COMPANY_ID}",
+        headers=admin_headers,
     )
 
     assert profit_and_loss_response.status_code == 200
@@ -59,8 +38,8 @@ def test_all_reports_work_with_token():
     assert isinstance(profit_and_loss["expense_lines"], list)
 
     balance_sheet_response = requests.get(
-        f"{BASE_URL}/reports/balance-sheet?company_id={COMPANY_ID}",
-        headers=headers,
+        f"{base_url}/reports/balance-sheet?company_id={COMPANY_ID}",
+        headers=admin_headers,
     )
 
     assert balance_sheet_response.status_code == 200
@@ -79,10 +58,10 @@ def test_all_reports_work_with_token():
 
     account_ledger_response = requests.get(
         (
-            f"{BASE_URL}/reports/account-ledger"
+            f"{base_url}/reports/account-ledger"
             f"?company_id={COMPANY_ID}&account_id={BANK_ACCOUNT_ID}"
         ),
-        headers=headers,
+        headers=admin_headers,
     )
 
     assert account_ledger_response.status_code == 200
@@ -96,8 +75,8 @@ def test_all_reports_work_with_token():
     assert isinstance(account_ledger["lines"], list)
 
     general_ledger_response = requests.get(
-        f"{BASE_URL}/reports/general-ledger?company_id={COMPANY_ID}",
-        headers=headers,
+        f"{base_url}/reports/general-ledger?company_id={COMPANY_ID}",
+        headers=admin_headers,
     )
 
     assert general_ledger_response.status_code == 200

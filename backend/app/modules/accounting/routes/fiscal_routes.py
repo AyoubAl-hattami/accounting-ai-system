@@ -31,6 +31,7 @@ from app.modules.accounting.services.fiscal_service import (
     update_fiscal_year,
     find_overlapping_fiscal_year,
 )
+from app.modules.accounting.services.audit_service import create_audit_log
 
 
 router = APIRouter(tags=["Fiscal"])
@@ -89,10 +90,19 @@ def create_fiscal_year_endpoint(
             status_code=status.HTTP_409_CONFLICT,
             detail="Fiscal year dates overlap with an existing fiscal year",
         )
-    
-    
+    fiscal_year = create_fiscal_year(db=db, payload=payload)
 
-    return create_fiscal_year(db=db, payload=payload)
+    create_audit_log(
+        db=db,
+        company_id=fiscal_year.company_id,
+        actor=current_user.email,
+        action="create_fiscal_year",
+        entity_type="fiscal_year",
+        entity_id=fiscal_year.id,
+        description=f"Created fiscal year {fiscal_year.name}",
+    )
+
+    return fiscal_year
 
 
 @router.get(
@@ -217,11 +227,23 @@ def update_fiscal_year_endpoint(
             status_code=status.HTTP_409_CONFLICT,
             detail="Fiscal year dates overlap with an existing fiscal year",
         )
-    return update_fiscal_year(
+    updated = update_fiscal_year(
         db=db,
         fiscal_year=fiscal_year,
         payload=payload,
     )
+
+    create_audit_log(
+        db=db,
+        company_id=updated.company_id,
+        actor=current_user.email,
+        action="update_fiscal_year",
+        entity_type="fiscal_year",
+        entity_id=updated.id,
+        description=f"Updated fiscal year {updated.name}",
+    )
+
+    return updated
 
 
 # -------------------------
@@ -297,7 +319,19 @@ def create_fiscal_period_endpoint(
             detail="Fiscal period name already exists for this fiscal year",
         )
 
-    return create_fiscal_period(db=db, payload=payload)
+    fiscal_period = create_fiscal_period(db=db, payload=payload)
+
+    create_audit_log(
+        db=db,
+        company_id=fiscal_period.company_id,
+        actor=current_user.email,
+        action="create_fiscal_period",
+        entity_type="fiscal_period",
+        entity_id=fiscal_period.id,
+        description=f"Created fiscal period {fiscal_period.name}",
+    )
+
+    return fiscal_period
 
 
 @router.get(
@@ -443,8 +477,20 @@ def update_fiscal_period_endpoint(
                 detail="Fiscal period name already exists for this fiscal year",
             )
 
-    return update_fiscal_period(
+    updated = update_fiscal_period(
         db=db,
         fiscal_period=fiscal_period,
         payload=payload,
     )
+
+    create_audit_log(
+        db=db,
+        company_id=updated.company_id,
+        actor=current_user.email,
+        action="update_fiscal_period",
+        entity_type="fiscal_period",
+        entity_id=updated.id,
+        description=f"Updated fiscal period {updated.name}",
+    )
+
+    return updated

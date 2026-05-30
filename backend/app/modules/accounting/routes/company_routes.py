@@ -24,6 +24,7 @@ from app.modules.accounting.services.company_service import (
 from app.modules.accounting.services.company_user_service import (
     create_company_user,
 )
+from app.modules.accounting.services.audit_service import create_audit_log
 
 
 router = APIRouter(
@@ -52,6 +53,16 @@ def create_company_endpoint(
             role="admin",
             is_active=True,
         ),
+    )
+
+    create_audit_log(
+        db=db,
+        company_id=company.id,
+        actor=current_user.email,
+        action="create_company",
+        entity_type="company",
+        entity_id=company.id,
+        description=f"Created company {company.name}",
     )
 
     return company
@@ -154,8 +165,20 @@ def update_company_endpoint(
         allowed_roles={"admin"},
     )
 
-    return update_company(
+    updated = update_company(
         db=db,
         company=company,
         payload=payload,
     )
+
+    create_audit_log(
+        db=db,
+        company_id=updated.id,
+        actor=current_user.email,
+        action="update_company",
+        entity_type="company",
+        entity_id=updated.id,
+        description=f"Updated company {updated.name}",
+    )
+
+    return updated

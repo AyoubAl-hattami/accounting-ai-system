@@ -24,6 +24,7 @@ from app.modules.accounting.services.account_service import (
 from app.modules.accounting.services.default_accounts_service import (
     seed_default_accounts,
 )
+from app.modules.accounting.services.audit_service import create_audit_log
 
 
 router = APIRouter(
@@ -90,7 +91,19 @@ def create_account_endpoint(
                 detail="Parent account must belong to the same company",
             )
 
-    return create_account(db=db, payload=payload)
+    account = create_account(db=db, payload=payload)
+
+    create_audit_log(
+        db=db,
+        company_id=account.company_id,
+        actor=current_user.email,
+        action="create_account",
+        entity_type="account",
+        entity_id=account.id,
+        description=f"Created account {account.code} - {account.name}",
+    )
+
+    return account
 
 
 @router.get(
@@ -146,10 +159,25 @@ def seed_default_accounts_endpoint(
         allowed_roles={"admin", "accountant"},
     )
 
-    return seed_default_accounts(
+    result = seed_default_accounts(
         db=db,
         company_id=company_id,
     )
+
+    create_audit_log(
+        db=db,
+        company_id=company_id,
+        actor=current_user.email,
+        action="seed_default_accounts",
+        entity_type="account",
+        entity_id=None,
+        description=(
+            f"Seeded default accounts: "
+            f"{result.created_count} created, {result.skipped_count} skipped"
+        ),
+    )
+
+    return result
 
 
 @router.get(
@@ -259,4 +287,16 @@ def update_account_endpoint(
                 detail="Parent account must belong to the same company",
             )
 
-    return update_account(db=db, account=account, payload=payload)
+    updated = update_account(db=db, account=account, payload=payload)
+
+    create_audit_log(
+        db=db,
+        company_id=updated.company_id,
+        actor=current_user.email,
+        action="update_account",
+        entity_type="account",
+        entity_id=updated.id,
+        description=f"Updated account {updated.code} - {updated.name}",
+    )
+
+    return updated
