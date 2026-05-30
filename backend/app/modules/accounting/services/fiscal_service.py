@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.modules.accounting.models.company import Company
 from app.modules.accounting.models.fiscal_period import FiscalPeriod
 from app.modules.accounting.models.fiscal_year import FiscalYear
+from app.modules.accounting.models.journal_entry import JournalEntry
 from app.modules.accounting.schemas.fiscal import (
     FiscalPeriodCreate,
     FiscalPeriodUpdate,
@@ -97,6 +98,19 @@ def count_fiscal_years(
 
     if company_id is not None:
         statement = statement.where(FiscalYear.company_id == company_id)
+
+    return int(db.scalar(statement) or 0)
+
+
+def count_journal_entries_for_fiscal_year(
+    db: Session,
+    fiscal_year_id: int,
+) -> int:
+    statement = (
+        select(func.count())
+        .select_from(JournalEntry)
+        .where(JournalEntry.fiscal_year_id == fiscal_year_id)
+    )
 
     return int(db.scalar(statement) or 0)
 

@@ -17,6 +17,7 @@ from app.modules.accounting.schemas.fiscal import (
 from app.modules.accounting.services.fiscal_service import (
     count_fiscal_periods,
     count_fiscal_years,
+    count_journal_entries_for_fiscal_year,
     create_fiscal_period,
     create_fiscal_year,
     get_company_or_none,
@@ -205,6 +206,27 @@ def update_fiscal_year_endpoint(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Fiscal year name already exists for this company",
             )
+
+    date_change_requested = (
+        payload.start_date is not None
+        or payload.end_date is not None
+    )
+
+    if date_change_requested:
+        journal_entry_count = count_journal_entries_for_fiscal_year(
+            db=db,
+            fiscal_year_id=fiscal_year.id,
+        )
+
+        if journal_entry_count > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Fiscal year dates cannot be changed because journal "
+                    "entries already exist for this fiscal year"
+                ),
+            )
+
     new_start_date = payload.start_date or fiscal_year.start_date
     new_end_date = payload.end_date or fiscal_year.end_date
 
