@@ -65,6 +65,14 @@ DEFAULT_ACCOUNTS = [
         "is_system": True,
     },
     {
+        "code": "3200",
+        "name": "Retained Earnings",
+        "account_type": "equity",
+        "parent_code": "3000",
+        "description": "Accumulated retained earnings",
+        "is_system": True,
+    },
+    {
         "code": "4000",
         "name": "Income",
         "account_type": "income",

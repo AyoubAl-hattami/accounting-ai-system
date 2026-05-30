@@ -51,6 +51,7 @@ def test_seed_default_accounts_with_token(base_url, admin_headers):
     assert "1000" in account_codes
     assert "1110" in account_codes
     assert "3100" in account_codes
+    assert "3200" in account_codes
     assert "4100" in account_codes
     assert "5200" in account_codes
 
