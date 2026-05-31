@@ -92,3 +92,10 @@ export interface DashboardData {
   journalEntries: PaginatedResponse<JournalEntry> | null;
   accounts: PaginatedResponse<Account> | null;
 }
+
+// ── Seed result ──
+export interface AccountSeedResult {
+  created_count: number;
+  skipped_count: number;
+}
+

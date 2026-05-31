@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../auth/AuthContext';
 import CompanySelector from './CompanySelector';
@@ -23,10 +24,11 @@ interface AppShellProps {
   onSelectCompany: (id: number) => void;
   pageTitle?: string;
   pageSubtitle?: string;
+  activePath?: string;
 }
 
 const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', active: true },
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: BookOpen, label: 'Journal Entries', path: '/journal-entries' },
   { icon: Receipt, label: 'Accounts', path: '/accounts' },
   { icon: BarChart3, label: 'Trial Balance', path: '/reports/trial-balance' },
@@ -41,12 +43,19 @@ export default function AppShell({
   onSelectCompany,
   pageTitle = 'Dashboard',
   pageSubtitle = 'Financial overview',
+  activePath = '/dashboard',
 }: AppShellProps) {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const sidebarWidth = collapsed ? 'w-[72px]' : 'w-64';
+
+  const handleNav = (path: string) => {
+    navigate(path);
+    setMobileOpen(false);
+  };
 
   return (
     <div className="min-h-screen bg-surface-900 flex">
@@ -77,7 +86,7 @@ export default function AppShell({
       >
         {/* Logo area */}
         <div className="h-16 flex items-center px-4 border-b border-white/[0.06]">
-          <div className="flex items-center gap-3 overflow-hidden">
+          <div className="flex items-center gap-3 overflow-hidden cursor-pointer" onClick={() => handleNav('/dashboard')}>
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center flex-shrink-0 shadow-lg shadow-brand-500/20">
               <Scale className="w-5 h-5 text-white" />
             </div>
@@ -107,25 +116,29 @@ export default function AppShell({
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
-          {navItems.map((item) => (
-            <button
-              key={item.path}
-              className={`
-                w-full flex items-center gap-3 px-3 py-2.5 rounded-xl
-                transition-all duration-200 group
-                ${item.active
-                  ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
-                }
-                ${collapsed ? 'justify-center' : ''}
-              `}
-            >
-              <item.icon className={`w-[18px] h-[18px] flex-shrink-0 ${item.active ? 'text-brand-400' : 'group-hover:text-gray-200'}`} />
-              {!collapsed && (
-                <span className="text-sm font-medium truncate">{item.label}</span>
-              )}
-            </button>
-          ))}
+          {navItems.map((item) => {
+            const isActive = item.path === activePath;
+            return (
+              <button
+                key={item.path}
+                onClick={() => handleNav(item.path)}
+                className={`
+                  w-full flex items-center gap-3 px-3 py-2.5 rounded-xl
+                  transition-all duration-200 group
+                  ${isActive
+                    ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
+                  }
+                  ${collapsed ? 'justify-center' : ''}
+                `}
+              >
+                <item.icon className={`w-[18px] h-[18px] flex-shrink-0 ${isActive ? 'text-brand-400' : 'group-hover:text-gray-200'}`} />
+                {!collapsed && (
+                  <span className="text-sm font-medium truncate">{item.label}</span>
+                )}
+              </button>
+            );
+          })}
         </nav>
 
         {/* Bottom area */}
