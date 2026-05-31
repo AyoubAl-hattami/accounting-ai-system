@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     ALGORITHM: str = "HS256"
 
+    AUTH_FAILED_LOGIN_LIMIT: int = 5
+    AUTH_FAILED_LOGIN_WINDOW_SECONDS: int = 60
+
+    AUTH_REGISTER_RATE_LIMIT: int = 20
+    AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS: int = 60
+
     CORS_ORIGINS: str = (
         "http://localhost:5173,"
         "http://127.0.0.1:5173,"

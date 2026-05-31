@@ -1,7 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.rate_limit import (
+    is_rate_limited,
+    make_rate_limit_key,
+    record_attempt,
+    reset_attempts,
+)
 from app.modules.accounting.schemas.user import (
     TokenRead,
     UserCreate,
@@ -32,8 +39,23 @@ router = APIRouter(
 )
 def register_endpoint(
     payload: UserCreate,
+    request: Request,
     db: Session = Depends(get_db),
 ):
+    register_key = make_rate_limit_key("register", request)
+
+    if is_rate_limited(
+        key=register_key,
+        limit=settings.AUTH_REGISTER_RATE_LIMIT,
+        window_seconds=settings.AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many registration attempts. Please try again later.",
+        )
+
+    record_attempt(register_key, settings.AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS)
+
     existing_user = get_user_by_email(
         db=db,
         email=payload.email,
@@ -69,8 +91,23 @@ def register_endpoint(
 )
 def login_endpoint(
     payload: UserLogin,
+    request: Request,
     db: Session = Depends(get_db),
 ):
+    login_key = make_rate_limit_key(
+        "login", request, payload.email.lower().strip()
+    )
+
+    if is_rate_limited(
+        key=login_key,
+        limit=settings.AUTH_FAILED_LOGIN_LIMIT,
+        window_seconds=settings.AUTH_FAILED_LOGIN_WINDOW_SECONDS,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Please try again later.",
+        )
+
     user = authenticate_user(
         db=db,
         email=payload.email,
@@ -78,10 +115,14 @@ def login_endpoint(
     )
 
     if not user:
+        record_attempt(login_key, settings.AUTH_FAILED_LOGIN_WINDOW_SECONDS)
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
+
+    reset_attempts(login_key)
 
     token = create_user_token(user)
 
@@ -89,6 +130,8 @@ def login_endpoint(
         access_token=token,
         token_type="bearer",
     )
+
+
 @router.get(
     "/me",
     response_model=UserRead,
