@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import AppShell from '../components/AppShell';
+import AppShell from '../components/layout/AppShell';
 import DashboardMetricCard from '../components/DashboardMetricCard';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';

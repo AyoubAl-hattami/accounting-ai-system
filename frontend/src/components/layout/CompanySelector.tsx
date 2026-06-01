@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Building2, ChevronDown, Check } from 'lucide-react';
-import type { Company } from '../api/types';
+import type { Company } from '../../api/types';
 
 interface CompanySelectorProps {
   companies: Company[];

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '../auth/AuthContext';
+import { useAuth } from '../../auth/AuthContext';
 import CompanySelector from './CompanySelector';
-import type { Company } from '../api/types';
+import type { Company } from '../../api/types';
 import {
   LayoutDashboard,
   BookOpen,

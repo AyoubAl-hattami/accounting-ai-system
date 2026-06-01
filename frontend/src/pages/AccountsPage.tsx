@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import AppShell from '../components/AppShell';
+import AppShell from '../components/layout/AppShell';
 import AccountTypeBadge from '../components/AccountTypeBadge';
 import PaginationControls from '../components/PaginationControls';
 import LoadingState from '../components/LoadingState';

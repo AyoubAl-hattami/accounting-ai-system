@@ -3,7 +3,7 @@ import LoginPage from '../pages/LoginPage';
 import DashboardPage from '../pages/DashboardPage';
 import AccountsPage from '../pages/AccountsPage';
 import JournalEntriesPage from '../pages/JournalEntriesPage';
-import ProtectedRoute from '../components/ProtectedRoute';
+import ProtectedRoute from '../components/layout/ProtectedRoute';
 
 export default function AppRoutes() {
   return (
