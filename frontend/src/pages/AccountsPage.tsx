@@ -5,6 +5,7 @@ import AccountTypeBadge from '../components/AccountTypeBadge';
 import PaginationControls from '../components/PaginationControls';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
+import EmptyState from '../components/EmptyState';
 import { useCompanies } from '../hooks/useCompanies';
 import { useAccounts } from '../hooks/useAccounts';
 import {
@@ -130,21 +131,12 @@ export default function AccountsPage() {
         pageTitle="Chart of Accounts"
         pageSubtitle="Manage your account structure"
       >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="flex items-center justify-center py-32"
-        >
-          <div className="glass-panel p-10 max-w-md text-center">
-            <div className="w-16 h-16 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center mx-auto mb-5">
-              <Building2 className="w-8 h-8 text-brand-400" />
-            </div>
-            <h2 className="text-xl font-bold text-white mb-2">No Companies Yet</h2>
-            <p className="text-gray-400 text-sm leading-relaxed">
-              Create a company from the backend or ask an administrator for access.
-            </p>
-          </div>
-        </motion.div>
+        <EmptyState
+          icon={<Building2 className="w-7 h-7 text-brand-400" />}
+          title="No Companies Yet"
+          description="Create a company from the backend or ask an administrator for access."
+          className="py-32"
+        />
       </AppShell>
     );
   }
@@ -279,19 +271,11 @@ export default function AccountsPage() {
 
           {/* Empty state */}
           {accounts.length === 0 && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="flex items-center justify-center py-20"
-            >
-              <div className="glass-panel p-8 max-w-sm text-center">
-                <div className="w-14 h-14 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center mx-auto mb-4">
-                  <Receipt className="w-7 h-7 text-brand-400" />
-                </div>
-                <h3 className="text-white font-semibold text-lg mb-2">No Accounts</h3>
-                <p className="text-gray-400 text-sm leading-relaxed mb-5">
-                  This company has no accounts yet. Seed the default chart of accounts to get started.
-                </p>
+            <EmptyState
+              icon={<Receipt className="w-7 h-7 text-brand-400" />}
+              title="No Accounts"
+              description="This company has no accounts yet. Seed the default chart of accounts to get started."
+              action={
                 <button
                   onClick={handleSeed}
                   disabled={isSeeding}
@@ -300,8 +284,8 @@ export default function AccountsPage() {
                   {isSeeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sprout className="w-4 h-4" />}
                   Seed Default Accounts
                 </button>
-              </div>
-            </motion.div>
+              }
+            />
           )}
 
           {/* Filtered empty state */}

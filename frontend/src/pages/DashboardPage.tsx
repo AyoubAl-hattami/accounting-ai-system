@@ -3,6 +3,7 @@ import AppShell from '../components/AppShell';
 import DashboardMetricCard from '../components/DashboardMetricCard';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
+import EmptyState from '../components/EmptyState';
 import { useCompanies } from '../hooks/useCompanies';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { formatCompactCurrency as formatCurrency } from '../lib/format';
@@ -47,22 +48,12 @@ export default function DashboardPage() {
         selectedCompany={selectedCompany}
         onSelectCompany={selectCompany}
       >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="flex items-center justify-center py-32"
-        >
-          <div className="glass-panel p-10 max-w-md text-center">
-            <div className="w-16 h-16 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center mx-auto mb-5">
-              <Building2 className="w-8 h-8 text-brand-400" />
-            </div>
-            <h2 className="text-xl font-bold text-white mb-2">No Companies Yet</h2>
-            <p className="text-gray-400 text-sm leading-relaxed">
-              Create a company from the backend or ask an administrator for access.
-              Once a company is available, your financial dashboard will appear here.
-            </p>
-          </div>
-        </motion.div>
+        <EmptyState
+          icon={<Building2 className="w-7 h-7 text-brand-400" />}
+          title="No Companies Yet"
+          description="Create a company from the backend or ask an administrator for access. Once a company is available, your financial dashboard will appear here."
+          className="py-32"
+        />
       </AppShell>
     );
   }
