@@ -32,17 +32,37 @@ export interface Account {
 }
 
 // ── Journal Entry ──
+export type JournalEntryStatus = 'draft' | 'reviewed' | 'posted' | 'void' | 'reversed';
+
+export interface JournalLine {
+  id: number;
+  journal_entry_id: number;
+  company_id: number;
+  account_id: number;
+  line_no: number;
+  debit: string;
+  credit: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface JournalEntry {
   id: number;
   company_id: number;
   fiscal_year_id: number;
   fiscal_period_id: number | null;
+  entry_no: string;
   entry_date: string;
-  reference: string | null;
   description: string | null;
-  status: string;
+  status: JournalEntryStatus;
+  source_type: string | null;
+  source_id: string | null;
+  reversal_of_id: number | null;
+  posted_at: string | null;
   created_at: string;
   updated_at: string;
+  lines: JournalLine[];
 }
 
 // ── Report rows ──

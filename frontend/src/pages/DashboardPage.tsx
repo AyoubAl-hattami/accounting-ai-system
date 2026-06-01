@@ -5,6 +5,7 @@ import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
 import { useCompanies } from '../hooks/useCompanies';
 import { useDashboardData } from '../hooks/useDashboardData';
+import { formatCompactCurrency as formatCurrency } from '../lib/format';
 import {
   Landmark,
   HandCoins,
@@ -19,13 +20,6 @@ import {
   FileText,
   Building2,
 } from 'lucide-react';
-
-function formatCurrency(n: number): string {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 export default function DashboardPage() {
   const {
@@ -292,7 +286,7 @@ export default function DashboardPage() {
                   {data.journalEntries.items.map((je) => (
                     <div key={je.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
                       <div className="min-w-0">
-                        <p className="text-sm text-gray-200 truncate">{je.description || je.reference || `Entry #${je.id}`}</p>
+                        <p className="text-sm text-gray-200 truncate">{je.description || je.entry_no || `Entry #${je.id}`}</p>
                         <p className="text-[11px] text-gray-500">{new Date(je.entry_date).toLocaleDateString()}</p>
                       </div>
                       <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${
