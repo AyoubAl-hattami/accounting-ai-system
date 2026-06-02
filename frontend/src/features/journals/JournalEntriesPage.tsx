@@ -1,16 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import AppShell from '../components/layout/AppShell';
-import JournalStatusBadge from '../components/JournalStatusBadge';
-import JournalEntryLines from '../components/JournalEntryLines';
-import PaginationControls from '../components/ui/PaginationControls';
-import LoadingState from '../components/feedback/LoadingState';
-import ErrorState from '../components/feedback/ErrorState';
-import EmptyState from '../components/feedback/EmptyState';
-import { useCompanies } from '../hooks/useCompanies';
-import { useJournalEntries } from '../hooks/useJournalEntries';
-import { formatCurrency as fmtCurrency } from '../lib/format';
-import type { JournalEntry, JournalEntryStatus } from '../api/types';
+import AppShell from '../../components/layout/AppShell';
+import JournalStatusBadge from './JournalStatusBadge';
+import JournalEntryLines from './JournalEntryLines';
+import PaginationControls from '../../components/ui/PaginationControls';
+import LoadingState from '../../components/feedback/LoadingState';
+import ErrorState from '../../components/feedback/ErrorState';
+import EmptyState from '../../components/feedback/EmptyState';
+import { useCompanies } from '../../hooks/useCompanies';
+import { useJournalEntries } from './useJournalEntries';
+import { formatCurrency as fmtCurrency } from '../../lib/format';
+import type { JournalEntry, JournalEntryStatus } from '../../api/types';
 import {
   BookOpen,
   Search,

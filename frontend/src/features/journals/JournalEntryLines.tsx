@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import type { JournalLine } from '../api/types';
+import type { JournalLine } from '../../api/types';
 
 interface JournalEntryLinesProps {
   lines: JournalLine[];

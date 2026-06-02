@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
-import apiClient from '../api/client';
-import type { JournalEntry, PaginatedResponse } from '../api/types';
+import apiClient from '../../api/client';
+import type { JournalEntry, PaginatedResponse } from '../../api/types';
 
 const JE_PAGE_SIZE = 10;
 

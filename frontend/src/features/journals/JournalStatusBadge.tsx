@@ -1,4 +1,4 @@
-import type { JournalEntryStatus } from '../api/types';
+import type { JournalEntryStatus } from '../../api/types';
 
 interface JournalStatusBadgeProps {
   status: JournalEntryStatus;
