@@ -1,12 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import AppShell from '../../components/layout/AppShell';
+import PageLayout from '../../components/layout/PageLayout';
 import AccountTypeBadge from './AccountTypeBadge';
 import PaginationControls from '../../components/ui/PaginationControls';
 import LoadingState from '../../components/feedback/LoadingState';
 import ErrorState from '../../components/feedback/ErrorState';
 import EmptyState from '../../components/feedback/EmptyState';
-import { useCompanies } from '../../hooks/useCompanies';
 import { useAccounts } from './useAccounts';
 import {
   Receipt,
@@ -15,7 +14,6 @@ import {
   Sprout,
   Loader2,
   CheckCircle2,
-  Building2,
   X,
 } from 'lucide-react';
 
@@ -24,14 +22,28 @@ const ACCOUNT_TYPES = ['asset', 'liability', 'equity', 'income', 'expense'];
 const PAGE_SIZE = 10;
 
 export default function AccountsPage() {
-  const {
-    companies,
-    selectedCompanyId,
-    selectedCompany,
-    selectCompany,
-    isLoading: companiesLoading,
-  } = useCompanies();
+  return (
+    <PageLayout
+      pageTitle="Chart of Accounts"
+      pageSubtitle="Manage your account structure"
+      activePath="/accounts"
+    >
+      {({ selectedCompanyId, companiesLoading }) => (
+        <AccountsContent
+          selectedCompanyId={selectedCompanyId}
+          companiesLoading={companiesLoading}
+        />
+      )}
+    </PageLayout>
+  );
+}
 
+interface AccountsContentProps {
+  selectedCompanyId: number | null;
+  companiesLoading: boolean;
+}
+
+function AccountsContent({ selectedCompanyId, companiesLoading }: AccountsContentProps) {
   // ── Pagination ──
   const [skip, setSkip] = useState(0);
 
@@ -121,39 +133,10 @@ export default function AccountsPage() {
 
   const isLoading = companiesLoading || accountsLoading;
 
-  // ── No companies ──
-  if (!companiesLoading && companies.length === 0) {
-    return (
-      <AppShell
-        companies={companies}
-        selectedCompany={selectedCompany}
-        onSelectCompany={selectCompany}
-        pageTitle="Chart of Accounts"
-        pageSubtitle="Manage your account structure"
-      >
-        <EmptyState
-          icon={<Building2 className="w-7 h-7 text-brand-400" />}
-          title="No Companies Yet"
-          description="Create a company from the backend or ask an administrator for access."
-          className="py-32"
-        />
-      </AppShell>
-    );
-  }
-
-  const subtitle = selectedCompany
-    ? `${selectedCompany.name} — Account structure & categories`
-    : 'Manage your account structure';
+  // Note: PageLayout handles pageSubtitle; content below provides the real header
 
   return (
-    <AppShell
-      companies={companies}
-      selectedCompany={selectedCompany}
-      onSelectCompany={selectCompany}
-      pageTitle="Chart of Accounts"
-      pageSubtitle={subtitle}
-      activePath="/accounts"
-    >
+    <>
       {/* Loading */}
       {isLoading && <LoadingState />}
 
@@ -433,6 +416,6 @@ export default function AccountsPage() {
           )}
         </>
       )}
-    </AppShell>
+    </>
   );
 }

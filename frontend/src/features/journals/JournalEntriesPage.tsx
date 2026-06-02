@@ -1,13 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import AppShell from '../../components/layout/AppShell';
+import PageLayout from '../../components/layout/PageLayout';
 import JournalStatusBadge from './JournalStatusBadge';
 import JournalEntryLines from './JournalEntryLines';
 import PaginationControls from '../../components/ui/PaginationControls';
 import LoadingState from '../../components/feedback/LoadingState';
 import ErrorState from '../../components/feedback/ErrorState';
 import EmptyState from '../../components/feedback/EmptyState';
-import { useCompanies } from '../../hooks/useCompanies';
 import { useJournalEntries } from './useJournalEntries';
 import { formatCurrency as fmtCurrency } from '../../lib/format';
 import type { JournalEntry, JournalEntryStatus } from '../../api/types';
@@ -17,7 +16,6 @@ import {
   Filter,
   ChevronDown,
   CheckCircle2,
-  Building2,
 } from 'lucide-react';
 
 const STATUSES: JournalEntryStatus[] = ['draft', 'reviewed', 'posted', 'void', 'reversed'];
@@ -33,14 +31,28 @@ function calcTotals(entry: JournalEntry) {
 }
 
 export default function JournalEntriesPage() {
-  const {
-    companies,
-    selectedCompanyId,
-    selectedCompany,
-    selectCompany,
-    isLoading: companiesLoading,
-  } = useCompanies();
+  return (
+    <PageLayout
+      pageTitle="Journal Entries"
+      pageSubtitle="Review and monitor accounting entries"
+      activePath="/journal-entries"
+    >
+      {({ selectedCompanyId, companiesLoading }) => (
+        <JournalEntriesContent
+          selectedCompanyId={selectedCompanyId}
+          companiesLoading={companiesLoading}
+        />
+      )}
+    </PageLayout>
+  );
+}
 
+interface JournalEntriesContentProps {
+  selectedCompanyId: number | null;
+  companiesLoading: boolean;
+}
+
+function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalEntriesContentProps) {
   const [skip, setSkip] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -91,40 +103,8 @@ export default function JournalEntriesPage() {
 
   const isLoading = companiesLoading || entriesLoading;
 
-  // No companies
-  if (!companiesLoading && companies.length === 0) {
-    return (
-      <AppShell
-        companies={companies}
-        selectedCompany={selectedCompany}
-        onSelectCompany={selectCompany}
-        pageTitle="Journal Entries"
-        pageSubtitle="Accounting entries"
-        activePath="/journal-entries"
-      >
-        <EmptyState
-          icon={<Building2 className="w-7 h-7 text-brand-400" />}
-          title="No Companies Yet"
-          description="Create a company from the backend or ask an administrator for access."
-          className="py-32"
-        />
-      </AppShell>
-    );
-  }
-
-  const subtitle = selectedCompany
-    ? `${selectedCompany.name} — Review and monitor accounting entries`
-    : 'Review and monitor accounting entries across the selected company';
-
   return (
-    <AppShell
-      companies={companies}
-      selectedCompany={selectedCompany}
-      onSelectCompany={selectCompany}
-      pageTitle="Journal Entries"
-      pageSubtitle={subtitle}
-      activePath="/journal-entries"
-    >
+    <>
       {isLoading && <LoadingState />}
 
       {!isLoading && error && <ErrorState message={error} onRetry={fetchEntries} />}
@@ -381,6 +361,6 @@ export default function JournalEntriesPage() {
           )}
         </>
       )}
-    </AppShell>
+    </>
   );
 }

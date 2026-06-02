@@ -1,10 +1,8 @@
 import { motion } from 'framer-motion';
-import AppShell from '../../components/layout/AppShell';
+import PageLayout from '../../components/layout/PageLayout';
 import DashboardMetricCard from '../../components/ui/DashboardMetricCard';
 import LoadingState from '../../components/feedback/LoadingState';
 import ErrorState from '../../components/feedback/ErrorState';
-import EmptyState from '../../components/feedback/EmptyState';
-import { useCompanies } from '../../hooks/useCompanies';
 import { useDashboardData } from './useDashboardData';
 import { formatCompactCurrency as formatCurrency } from '../../lib/format';
 import {
@@ -19,18 +17,29 @@ import {
   Receipt,
   BarChart3,
   FileText,
-  Building2,
 } from 'lucide-react';
 
 export default function DashboardPage() {
-  const {
-    companies,
-    selectedCompanyId,
-    selectedCompany,
-    selectCompany,
-    isLoading: companiesLoading,
-  } = useCompanies();
+  return (
+    <PageLayout>
+      {({ selectedCompanyId, selectedCompany, companiesLoading }) => (
+        <DashboardContent
+          selectedCompanyId={selectedCompanyId}
+          selectedCompany={selectedCompany}
+          companiesLoading={companiesLoading}
+        />
+      )}
+    </PageLayout>
+  );
+}
 
+interface DashboardContentProps {
+  selectedCompanyId: number | null;
+  selectedCompany: { name: string } | null;
+  companiesLoading: boolean;
+}
+
+function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading }: DashboardContentProps) {
   const {
     data,
     isLoading: dataLoading,
@@ -39,24 +48,6 @@ export default function DashboardPage() {
   } = useDashboardData(selectedCompanyId);
 
   const isLoading = companiesLoading || dataLoading;
-
-  // ── No companies state ──
-  if (!companiesLoading && companies.length === 0) {
-    return (
-      <AppShell
-        companies={companies}
-        selectedCompany={selectedCompany}
-        onSelectCompany={selectCompany}
-      >
-        <EmptyState
-          icon={<Building2 className="w-7 h-7 text-brand-400" />}
-          title="No Companies Yet"
-          description="Create a company from the backend or ask an administrator for access. Once a company is available, your financial dashboard will appear here."
-          className="py-32"
-        />
-      </AppShell>
-    );
-  }
 
   // ── Derived values ──
   const bs = data.balanceSheet;
@@ -71,17 +62,8 @@ export default function DashboardPage() {
   const journalCount = data.journalEntries?.total ?? 0;
   const accountCount = data.accounts?.total ?? 0;
 
-  const subtitle = selectedCompany
-    ? `${selectedCompany.name} — Financial overview`
-    : 'Financial overview';
-
   return (
-    <AppShell
-      companies={companies}
-      selectedCompany={selectedCompany}
-      onSelectCompany={selectCompany}
-      pageSubtitle={subtitle}
-    >
+    <>
       {/* Loading */}
       {isLoading && <LoadingState />}
 
@@ -299,6 +281,6 @@ export default function DashboardPage() {
           </div>
         </>
       )}
-    </AppShell>
+    </>
   );
 }

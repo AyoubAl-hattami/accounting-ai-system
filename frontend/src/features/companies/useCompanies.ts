@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import apiClient from '../api/client';
-import type { Company, PaginatedResponse } from '../api/types';
+import apiClient from '../../api/client';
+import type { Company, PaginatedResponse } from '../../api/types';
 
 const STORAGE_KEY = 'selected_company_id';
 
