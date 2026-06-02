@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AppShell from '../components/layout/AppShell';
 import AccountTypeBadge from '../components/AccountTypeBadge';
-import PaginationControls from '../components/PaginationControls';
+import PaginationControls from '../components/ui/PaginationControls';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
