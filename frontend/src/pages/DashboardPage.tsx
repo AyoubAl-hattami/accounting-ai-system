@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion';
 import AppShell from '../components/layout/AppShell';
 import DashboardMetricCard from '../components/ui/DashboardMetricCard';
-import LoadingState from '../components/LoadingState';
-import ErrorState from '../components/ErrorState';
-import EmptyState from '../components/EmptyState';
+import LoadingState from '../components/feedback/LoadingState';
+import ErrorState from '../components/feedback/ErrorState';
+import EmptyState from '../components/feedback/EmptyState';
 import { useCompanies } from '../hooks/useCompanies';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { formatCompactCurrency as formatCurrency } from '../lib/format';
