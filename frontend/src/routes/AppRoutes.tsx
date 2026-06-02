@@ -3,6 +3,7 @@ import LoginPage from '../features/auth/LoginPage';
 import DashboardPage from '../features/dashboard/DashboardPage';
 import AccountsPage from '../features/accounts/AccountsPage';
 import JournalEntriesPage from '../features/journals/JournalEntriesPage';
+import TrialBalancePage from '../features/reports/trial-balance/TrialBalancePage';
 import ProtectedRoute from '../components/layout/ProtectedRoute';
 
 export default function AppRoutes() {
@@ -31,6 +32,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <JournalEntriesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/trial-balance"
+          element={
+            <ProtectedRoute>
+              <TrialBalancePage />
             </ProtectedRoute>
           }
         />

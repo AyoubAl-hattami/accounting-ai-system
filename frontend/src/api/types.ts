@@ -119,3 +119,25 @@ export interface AccountSeedResult {
   skipped_count: number;
 }
 
+// ── Trial Balance (detailed report) ──
+export interface TrialBalanceLine {
+  account_id: number;
+  account_code: string;
+  account_name: string;
+  account_type: string;
+  debit_total: string;
+  credit_total: string;
+  debit_balance: string;
+  credit_balance: string;
+}
+
+export interface TrialBalanceRead {
+  company_id: number;
+  as_of_date: string | null;
+  total_debit: string;
+  total_credit: string;
+  total_debit_balance: string;
+  total_credit_balance: string;
+  is_balanced: boolean;
+  lines: TrialBalanceLine[];
+}
