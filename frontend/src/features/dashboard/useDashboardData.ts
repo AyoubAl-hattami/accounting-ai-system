@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import apiClient from '../api/client';
-import type { DashboardData } from '../api/types';
+import apiClient from '../../api/client';
+import type { DashboardData } from '../../api/types';
 
 export function useDashboardData(companyId: number | null) {
   const [data, setData] = useState<DashboardData>({
