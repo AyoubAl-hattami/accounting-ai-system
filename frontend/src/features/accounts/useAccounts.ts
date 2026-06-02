@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
-import apiClient from '../api/client';
-import type { Account, PaginatedResponse, AccountSeedResult } from '../api/types';
+import apiClient from '../../api/client';
+import type { Account, PaginatedResponse, AccountSeedResult } from '../../api/types';
 
 interface UseAccountsOptions {
   companyId: number | null;
