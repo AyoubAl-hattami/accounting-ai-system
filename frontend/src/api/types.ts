@@ -161,3 +161,26 @@ export interface ProfitAndLossRead {
   income_lines: ProfitAndLossLine[];
   expense_lines: ProfitAndLossLine[];
 }
+
+// ── Balance Sheet (detailed report) ──
+export interface BalanceSheetLine {
+  account_id: number;
+  account_code: string;
+  account_name: string;
+  account_type: string;
+  amount: string;
+}
+
+export interface BalanceSheetRead {
+  company_id: number;
+  as_of_date: string | null;
+  total_assets: string;
+  total_liabilities: string;
+  total_equity: string;
+  current_year_earnings: string;
+  total_liabilities_and_equity: string;
+  is_balanced: boolean;
+  asset_lines: BalanceSheetLine[];
+  liability_lines: BalanceSheetLine[];
+  equity_lines: BalanceSheetLine[];
+}

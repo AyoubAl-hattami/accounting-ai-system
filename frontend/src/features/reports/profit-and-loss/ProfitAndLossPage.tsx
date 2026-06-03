@@ -194,49 +194,52 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 }}
-            className="flex flex-col sm:flex-row gap-3 mb-6"
+            className="flex flex-wrap items-end gap-3 mb-6"
           >
-            {/* Start date */}
-            <div>
-              <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">Start Date</label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                <input
-                  type="date"
-                  value={startDate || ''}
-                  onChange={(e) => setStartDate(e.target.value || null)}
-                  className="input-field pl-10 text-sm min-w-[170px]"
-                />
+            {/* Date group */}
+            <div className="flex items-end gap-3">
+              {/* Start date */}
+              <div>
+                <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">Start Date</label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  <input
+                    type="date"
+                    value={startDate || ''}
+                    onChange={(e) => setStartDate(e.target.value || null)}
+                    className="input-field pl-10 text-sm min-w-[160px]"
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* End date */}
-            <div>
-              <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">End Date</label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                <input
-                  type="date"
-                  value={endDate || ''}
-                  onChange={(e) => setEndDate(e.target.value || null)}
-                  className="input-field pl-10 text-sm min-w-[170px]"
-                />
+              {/* End date */}
+              <div>
+                <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">End Date</label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  <input
+                    type="date"
+                    value={endDate || ''}
+                    onChange={(e) => setEndDate(e.target.value || null)}
+                    className="input-field pl-10 text-sm min-w-[160px]"
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* Clear dates */}
-            {(startDate || endDate) && (
-              <button
-                onClick={clearDates}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-gray-400 hover:text-gray-200 border border-white/[0.06] hover:border-white/[0.12] bg-white/[0.02] transition-all"
-              >
-                <X className="w-3.5 h-3.5" />
-                Clear dates
-              </button>
-            )}
+              {/* Clear dates */}
+              {(startDate || endDate) && (
+                <button
+                  onClick={clearDates}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-gray-400 hover:text-gray-200 border border-white/[0.06] hover:border-white/[0.12] bg-white/[0.02] transition-all h-[38px]"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Clear
+                </button>
+              )}
+            </div>
 
             {/* Search */}
-            <div className="relative flex-1">
+            <div className="relative flex-1 min-w-[260px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
                 type="text"
@@ -247,7 +250,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
               />
             </div>
 
-            <div className="flex items-center px-3">
+            <div className="flex items-center h-[38px] px-1">
               <span className="text-xs text-gray-500 font-medium whitespace-nowrap">
                 {totalFiltered} of {totalLines} account{totalLines !== 1 ? 's' : ''}
               </span>

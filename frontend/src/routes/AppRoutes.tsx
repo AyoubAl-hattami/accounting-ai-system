@@ -5,6 +5,7 @@ import AccountsPage from '../features/accounts/AccountsPage';
 import JournalEntriesPage from '../features/journals/JournalEntriesPage';
 import TrialBalancePage from '../features/reports/trial-balance/TrialBalancePage';
 import ProfitAndLossPage from '../features/reports/profit-and-loss/ProfitAndLossPage';
+import BalanceSheetPage from '../features/reports/balance-sheet/BalanceSheetPage';
 import ProtectedRoute from '../components/layout/ProtectedRoute';
 
 export default function AppRoutes() {
@@ -49,6 +50,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <ProfitAndLossPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/balance-sheet"
+          element={
+            <ProtectedRoute>
+              <BalanceSheetPage />
             </ProtectedRoute>
           }
         />
