@@ -4,6 +4,7 @@ import DashboardPage from '../features/dashboard/DashboardPage';
 import AccountsPage from '../features/accounts/AccountsPage';
 import JournalEntriesPage from '../features/journals/JournalEntriesPage';
 import TrialBalancePage from '../features/reports/trial-balance/TrialBalancePage';
+import ProfitAndLossPage from '../features/reports/profit-and-loss/ProfitAndLossPage';
 import ProtectedRoute from '../components/layout/ProtectedRoute';
 
 export default function AppRoutes() {
@@ -40,6 +41,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <TrialBalancePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/profit-and-loss"
+          element={
+            <ProtectedRoute>
+              <ProfitAndLossPage />
             </ProtectedRoute>
           }
         />

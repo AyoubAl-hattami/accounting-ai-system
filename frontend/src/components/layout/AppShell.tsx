@@ -32,7 +32,7 @@ const navItems = [
   { icon: BookOpen, label: 'Journal Entries', path: '/journal-entries' },
   { icon: Receipt, label: 'Accounts', path: '/accounts' },
   { icon: BarChart3, label: 'Trial Balance', path: '/reports/trial-balance' },
-  { icon: FileText, label: 'Profit & Loss', path: '/reports/profit-loss' },
+  { icon: FileText, label: 'Profit & Loss', path: '/reports/profit-and-loss' },
   { icon: Scale, label: 'Balance Sheet', path: '/reports/balance-sheet' },
 ];
 

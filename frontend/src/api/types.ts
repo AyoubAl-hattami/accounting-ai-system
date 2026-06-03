@@ -141,3 +141,23 @@ export interface TrialBalanceRead {
   is_balanced: boolean;
   lines: TrialBalanceLine[];
 }
+
+// ── Profit & Loss (detailed report) ──
+export interface ProfitAndLossLine {
+  account_id: number;
+  account_code: string;
+  account_name: string;
+  account_type: string;
+  amount: string;
+}
+
+export interface ProfitAndLossRead {
+  company_id: number;
+  start_date: string | null;
+  end_date: string | null;
+  total_income: string;
+  total_expenses: string;
+  net_profit: string;
+  income_lines: ProfitAndLossLine[];
+  expense_lines: ProfitAndLossLine[];
+}
