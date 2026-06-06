@@ -6,6 +6,7 @@ import JournalEntriesPage from '../features/journals/JournalEntriesPage';
 import TrialBalancePage from '../features/reports/trial-balance/TrialBalancePage';
 import ProfitAndLossPage from '../features/reports/profit-and-loss/ProfitAndLossPage';
 import BalanceSheetPage from '../features/reports/balance-sheet/BalanceSheetPage';
+import AccountLedgerPage from '../features/reports/account-ledger/AccountLedgerPage';
 import ProtectedRoute from '../components/layout/ProtectedRoute';
 
 export default function AppRoutes() {
@@ -58,6 +59,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <BalanceSheetPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/account-ledger"
+          element={
+            <ProtectedRoute>
+              <AccountLedgerPage />
             </ProtectedRoute>
           }
         />

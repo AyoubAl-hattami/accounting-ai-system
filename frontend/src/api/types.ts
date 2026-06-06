@@ -184,3 +184,28 @@ export interface BalanceSheetRead {
   liability_lines: BalanceSheetLine[];
   equity_lines: BalanceSheetLine[];
 }
+
+// ── Account Ledger (detailed report) ──
+export interface AccountLedgerLine {
+  journal_entry_id: number;
+  entry_no: string;
+  entry_date: string;
+  line_no: number;
+  description: string | null;
+  debit: string;
+  credit: string;
+  running_balance: string;
+}
+
+export interface AccountLedgerRead {
+  company_id: number;
+  account_id: number;
+  account_code: string;
+  account_name: string;
+  account_type: string;
+  start_date: string | null;
+  end_date: string | null;
+  opening_balance: string;
+  closing_balance: string;
+  lines: AccountLedgerLine[];
+}

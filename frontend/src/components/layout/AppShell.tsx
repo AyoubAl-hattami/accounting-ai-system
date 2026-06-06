@@ -11,6 +11,7 @@ import {
   BarChart3,
   FileText,
   Scale,
+  BookMarked,
   Settings,
   LogOut,
   ChevronLeft,
@@ -34,6 +35,7 @@ const navItems = [
   { icon: BarChart3, label: 'Trial Balance', path: '/reports/trial-balance' },
   { icon: FileText, label: 'Profit & Loss', path: '/reports/profit-and-loss' },
   { icon: Scale, label: 'Balance Sheet', path: '/reports/balance-sheet' },
+  { icon: BookMarked, label: 'Account Ledger', path: '/reports/account-ledger' },
 ];
 
 export default function AppShell({
