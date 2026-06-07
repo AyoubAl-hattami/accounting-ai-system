@@ -21,6 +21,8 @@ import {
 import CreateJournalEntryModal from './CreateJournalEntryModal';
 import { useReviewJournalEntry } from './useReviewJournalEntry';
 import ReviewJournalEntryModal from './ReviewJournalEntryModal';
+import { usePostJournalEntry } from './usePostJournalEntry';
+import PostJournalEntryModal from './PostJournalEntryModal';
 
 const STATUSES: JournalEntryStatus[] = ['draft', 'reviewed', 'posted', 'void', 'reversed'];
 
@@ -64,6 +66,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [selectedReviewEntry, setSelectedReviewEntry] = useState<JournalEntry | null>(null);
+  const [selectedPostEntry, setSelectedPostEntry] = useState<JournalEntry | null>(null);
 
   const {
     entries,
@@ -81,6 +84,13 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     setSubmitError: setReviewSubmitError,
   } = useReviewJournalEntry();
 
+  const {
+    postJournalEntry,
+    isSubmitting: isPostSubmitting,
+    submitError: postSubmitError,
+    setSubmitError: setPostSubmitError,
+  } = usePostJournalEntry();
+
   const handleOpenReviewModal = (entry: JournalEntry) => {
     setSelectedReviewEntry(entry);
     setReviewSubmitError(null);
@@ -96,6 +106,21 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     }
   };
 
+  const handleOpenPostModal = (entry: JournalEntry) => {
+    setSelectedPostEntry(entry);
+    setPostSubmitError(null);
+  };
+
+  const handleConfirmPost = async () => {
+    if (!selectedPostEntry) return;
+    const updated = await postJournalEntry(selectedPostEntry.id);
+    if (updated) {
+      setSelectedPostEntry(null);
+      setSuccessToast('Journal entry posted.');
+      fetchEntries();
+    }
+  };
+
   // Reset on company change
   useEffect(() => {
     setSkip(0);
@@ -104,6 +129,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     setExpandedId(null);
     setIsCreateModalOpen(false);
     setSelectedReviewEntry(null);
+    setSelectedPostEntry(null);
   }, [selectedCompanyId]);
 
   // Auto-hide toast
@@ -314,14 +340,24 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                                {entry.status === 'draft' && (
-                                  <button
-                                    onClick={() => handleOpenReviewModal(entry)}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
-                                  >
-                                    Review
-                                  </button>
-                                )}
+                                <div className="flex items-center justify-end gap-2">
+                                  {entry.status === 'draft' && (
+                                    <button
+                                      onClick={() => handleOpenReviewModal(entry)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                                    >
+                                      Review
+                                    </button>
+                                  )}
+                                  {entry.status === 'reviewed' && (
+                                    <button
+                                      onClick={() => handleOpenPostModal(entry)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/30 text-amber-400 hover:text-amber-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                                    >
+                                      Post
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </motion.tr>
                             {/* Expanded lines */}
@@ -400,18 +436,30 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                         </div>
                       </div>
 
-                      {entry.status === 'draft' && (
+                      {(entry.status === 'draft' || entry.status === 'reviewed') && (
                         <div
                           className="px-4 py-2.5 flex items-center justify-between border-t border-white/[0.04] bg-white/[0.01]"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Actions</span>
-                          <button
-                            onClick={() => handleOpenReviewModal(entry)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
-                          >
-                            Review
-                          </button>
+                          <div className="flex items-center gap-2">
+                            {entry.status === 'draft' && (
+                              <button
+                                onClick={() => handleOpenReviewModal(entry)}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                              >
+                                Review
+                              </button>
+                            )}
+                            {entry.status === 'reviewed' && (
+                              <button
+                                onClick={() => handleOpenPostModal(entry)}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/30 text-amber-400 hover:text-amber-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                              >
+                                Post
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
 
@@ -452,6 +500,17 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
             isSubmitting={isReviewSubmitting}
             error={reviewSubmitError}
             entryNo={selectedReviewEntry?.entry_no || ''}
+          />
+
+          <PostJournalEntryModal
+            isOpen={!!selectedPostEntry}
+            onClose={() => setSelectedPostEntry(null)}
+            onConfirm={handleConfirmPost}
+            isSubmitting={isPostSubmitting}
+            error={postSubmitError}
+            entryNo={selectedPostEntry?.entry_no || ''}
+            entryDate={selectedPostEntry?.entry_date}
+            entryDescription={selectedPostEntry?.description || undefined}
           />
 
           {/* Toast Notification */}
