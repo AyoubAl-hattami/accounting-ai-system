@@ -209,3 +209,11 @@ export interface AccountLedgerRead {
   closing_balance: string;
   lines: AccountLedgerLine[];
 }
+
+// ── General Ledger (all accounts) ──
+export interface GeneralLedgerRead {
+  company_id: number;
+  start_date: string | null;
+  end_date: string | null;
+  accounts: AccountLedgerRead[];
+}

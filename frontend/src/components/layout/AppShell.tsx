@@ -12,6 +12,7 @@ import {
   FileText,
   Scale,
   BookMarked,
+  Library,
   Settings,
   LogOut,
   ChevronLeft,
@@ -36,6 +37,7 @@ const navItems = [
   { icon: FileText, label: 'Profit & Loss', path: '/reports/profit-and-loss' },
   { icon: Scale, label: 'Balance Sheet', path: '/reports/balance-sheet' },
   { icon: BookMarked, label: 'Account Ledger', path: '/reports/account-ledger' },
+  { icon: Library, label: 'General Ledger', path: '/reports/general-ledger' },
 ];
 
 export default function AppShell({
