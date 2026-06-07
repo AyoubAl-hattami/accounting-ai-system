@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageLayout from '../../components/layout/PageLayout';
 import JournalStatusBadge from './JournalStatusBadge';
@@ -268,13 +268,11 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                         const isExpanded = expandedId === entry.id;
 
                         return (
-                          <motion.tbody
-                            key={entry.id}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: i * 0.03 }}
-                          >
-                            <tr
+                          <Fragment key={entry.id}>
+                            <motion.tr
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ delay: i * 0.03 }}
                               className={`border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors cursor-pointer ${isExpanded ? 'bg-white/[0.02]' : ''}`}
                               onClick={() => setExpandedId(isExpanded ? null : entry.id)}
                             >
@@ -325,18 +323,18 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                                   </button>
                                 )}
                               </td>
-                            </tr>
+                            </motion.tr>
                             {/* Expanded lines */}
                             <AnimatePresence>
                               {isExpanded && (
-                                <tr>
+                                <tr key={`${entry.id}-lines`}>
                                   <td colSpan={11} className="p-0 border-b border-white/[0.05]">
                                     <JournalEntryLines lines={entry.lines} />
                                   </td>
                                 </tr>
                               )}
                             </AnimatePresence>
-                          </motion.tbody>
+                          </Fragment>
                         );
                       })}
                     </tbody>
