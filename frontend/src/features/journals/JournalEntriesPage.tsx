@@ -19,6 +19,8 @@ import {
   Plus,
 } from 'lucide-react';
 import CreateJournalEntryModal from './CreateJournalEntryModal';
+import { useReviewJournalEntry } from './useReviewJournalEntry';
+import ReviewJournalEntryModal from './ReviewJournalEntryModal';
 
 const STATUSES: JournalEntryStatus[] = ['draft', 'reviewed', 'posted', 'void', 'reversed'];
 
@@ -61,6 +63,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [selectedReviewEntry, setSelectedReviewEntry] = useState<JournalEntry | null>(null);
 
   const {
     entries,
@@ -71,6 +74,28 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     pageSize,
   } = useJournalEntries({ companyId: selectedCompanyId, skip });
 
+  const {
+    reviewJournalEntry,
+    isSubmitting: isReviewSubmitting,
+    submitError: reviewSubmitError,
+    setSubmitError: setReviewSubmitError,
+  } = useReviewJournalEntry();
+
+  const handleOpenReviewModal = (entry: JournalEntry) => {
+    setSelectedReviewEntry(entry);
+    setReviewSubmitError(null);
+  };
+
+  const handleConfirmReview = async () => {
+    if (!selectedReviewEntry) return;
+    const updated = await reviewJournalEntry(selectedReviewEntry.id);
+    if (updated) {
+      setSelectedReviewEntry(null);
+      setSuccessToast('Journal entry reviewed.');
+      fetchEntries();
+    }
+  };
+
   // Reset on company change
   useEffect(() => {
     setSkip(0);
@@ -78,6 +103,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     setStatusFilter('');
     setExpandedId(null);
     setIsCreateModalOpen(false);
+    setSelectedReviewEntry(null);
   }, [selectedCompanyId]);
 
   // Auto-hide toast
@@ -233,6 +259,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                         <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Debit</th>
                         <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Credit</th>
                         <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Posted</th>
+                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -288,12 +315,22 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                                   {entry.posted_at ? new Date(entry.posted_at).toLocaleDateString() : '—'}
                                 </span>
                               </td>
+                              <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                                {entry.status === 'draft' && (
+                                  <button
+                                    onClick={() => handleOpenReviewModal(entry)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                                  >
+                                    Review
+                                  </button>
+                                )}
+                              </td>
                             </tr>
                             {/* Expanded lines */}
                             <AnimatePresence>
                               {isExpanded && (
                                 <tr>
-                                  <td colSpan={10} className="p-0 border-b border-white/[0.05]">
+                                  <td colSpan={11} className="p-0 border-b border-white/[0.05]">
                                     <JournalEntryLines lines={entry.lines} />
                                   </td>
                                 </tr>
@@ -365,6 +402,21 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                         </div>
                       </div>
 
+                      {entry.status === 'draft' && (
+                        <div
+                          className="px-4 py-2.5 flex items-center justify-between border-t border-white/[0.04] bg-white/[0.01]"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Actions</span>
+                          <button
+                            onClick={() => handleOpenReviewModal(entry)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                          >
+                            Review
+                          </button>
+                        </div>
+                      )}
+
                       <AnimatePresence>
                         {isExpanded && <JournalEntryLines lines={entry.lines} />}
                       </AnimatePresence>
@@ -393,6 +445,15 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
               fetchEntries();
             }}
             companyId={selectedCompanyId}
+          />
+
+          <ReviewJournalEntryModal
+            isOpen={!!selectedReviewEntry}
+            onClose={() => setSelectedReviewEntry(null)}
+            onConfirm={handleConfirmReview}
+            isSubmitting={isReviewSubmitting}
+            error={reviewSubmitError}
+            entryNo={selectedReviewEntry?.entry_no || ''}
           />
 
           {/* Toast Notification */}
