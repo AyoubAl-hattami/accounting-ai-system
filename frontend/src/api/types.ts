@@ -217,3 +217,22 @@ export interface GeneralLedgerRead {
   end_date: string | null;
   accounts: AccountLedgerRead[];
 }
+
+// ── Journal Entry Payloads ──
+export interface JournalEntryLineCreatePayload {
+  account_id: number;
+  debit: number;
+  credit: number;
+  description: string;
+}
+
+export interface JournalEntryCreatePayload {
+  company_id: number;
+  entry_no: string;
+  entry_date: string;
+  description: string;
+  source_type: string;
+  source_id: string;
+  lines: JournalEntryLineCreatePayload[];
+}
+

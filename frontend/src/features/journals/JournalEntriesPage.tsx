@@ -16,7 +16,9 @@ import {
   Filter,
   ChevronDown,
   CheckCircle2,
+  Plus,
 } from 'lucide-react';
+import CreateJournalEntryModal from './CreateJournalEntryModal';
 
 const STATUSES: JournalEntryStatus[] = ['draft', 'reviewed', 'posted', 'void', 'reversed'];
 
@@ -57,6 +59,8 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
 
   const {
     entries,
@@ -73,7 +77,16 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     setSearchQuery('');
     setStatusFilter('');
     setExpandedId(null);
+    setIsCreateModalOpen(false);
   }, [selectedCompanyId]);
+
+  // Auto-hide toast
+  useEffect(() => {
+    if (successToast) {
+      const timer = setTimeout(() => setSuccessToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [successToast]);
 
   // Fetch on mount, company, or skip change
   useEffect(() => {
@@ -124,9 +137,20 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                 Review and monitor accounting entries across the selected company.
               </p>
             </div>
-            <span className="text-xs text-gray-500 font-medium">
-              {total} entr{total !== 1 ? 'ies' : 'y'} total
-            </span>
+            <div className="flex items-center gap-4">
+              <span className="text-xs text-gray-500 font-medium">
+                {total} entr{total !== 1 ? 'ies' : 'y'} total
+              </span>
+              {selectedCompanyId && (
+                <button
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white text-sm font-semibold rounded-xl shadow-lg shadow-brand-500/25 active:scale-[0.98] transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>New Journal Entry</span>
+                </button>
+              )}
+            </div>
           </motion.div>
 
           {/* Search & filter */}
@@ -359,6 +383,32 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
               </div>
             </motion.div>
           )}
+
+          <CreateJournalEntryModal
+            isOpen={isCreateModalOpen}
+            onClose={() => setIsCreateModalOpen(false)}
+            onSuccess={() => {
+              setIsCreateModalOpen(false);
+              setSuccessToast('Journal entry created as draft.');
+              fetchEntries();
+            }}
+            companyId={selectedCompanyId}
+          />
+
+          {/* Toast Notification */}
+          <AnimatePresence>
+            {successToast && (
+              <motion.div
+                initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.9 }}
+                className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm shadow-xl shadow-emerald-500/5 backdrop-blur-md"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{successToast}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </>
       )}
     </>
