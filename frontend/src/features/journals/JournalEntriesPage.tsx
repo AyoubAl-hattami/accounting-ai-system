@@ -25,6 +25,8 @@ import { usePostJournalEntry } from './usePostJournalEntry';
 import PostJournalEntryModal from './PostJournalEntryModal';
 import { useVoidJournalEntry } from './useVoidJournalEntry';
 import VoidJournalEntryModal from './VoidJournalEntryModal';
+import { useReverseJournalEntry } from './useReverseJournalEntry';
+import ReverseJournalEntryModal from './ReverseJournalEntryModal';
 
 const STATUSES: JournalEntryStatus[] = ['draft', 'reviewed', 'posted', 'void', 'reversed'];
 
@@ -70,6 +72,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
   const [selectedReviewEntry, setSelectedReviewEntry] = useState<JournalEntry | null>(null);
   const [selectedPostEntry, setSelectedPostEntry] = useState<JournalEntry | null>(null);
   const [selectedVoidEntry, setSelectedVoidEntry] = useState<JournalEntry | null>(null);
+  const [selectedReverseEntry, setSelectedReverseEntry] = useState<JournalEntry | null>(null);
 
   const {
     entries,
@@ -100,6 +103,13 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     submitError: voidSubmitError,
     setSubmitError: setVoidSubmitError,
   } = useVoidJournalEntry();
+
+  const {
+    reverseJournalEntry,
+    isSubmitting: isReverseSubmitting,
+    submitError: reverseSubmitError,
+    setSubmitError: setReverseSubmitError,
+  } = useReverseJournalEntry();
 
   const handleOpenReviewModal = (entry: JournalEntry) => {
     setSelectedReviewEntry(entry);
@@ -146,6 +156,21 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     }
   };
 
+  const handleOpenReverseModal = (entry: JournalEntry) => {
+    setSelectedReverseEntry(entry);
+    setReverseSubmitError(null);
+  };
+
+  const handleConfirmReverse = async (payload: { entry_no: string; entry_date: string; description: string }) => {
+    if (!selectedReverseEntry) return;
+    const updated = await reverseJournalEntry(selectedReverseEntry.id, payload);
+    if (updated) {
+      setSelectedReverseEntry(null);
+      setSuccessToast('Reversal entry created as draft.');
+      fetchEntries();
+    }
+  };
+
   // Reset on company change
   useEffect(() => {
     setSkip(0);
@@ -156,6 +181,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     setSelectedReviewEntry(null);
     setSelectedPostEntry(null);
     setSelectedVoidEntry(null);
+    setSelectedReverseEntry(null);
   }, [selectedCompanyId]);
 
   // Auto-hide toast
@@ -391,6 +417,14 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                                       Post
                                     </button>
                                   )}
+                                  {entry.status === 'posted' && (
+                                    <button
+                                      onClick={() => handleOpenReverseModal(entry)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/30 text-purple-400 hover:text-purple-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                                    >
+                                      Reverse
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             </motion.tr>
@@ -419,6 +453,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                     total={total}
                     onPrev={() => setSkip(Math.max(0, skip - pageSize))}
                     onNext={() => setSkip(skip + pageSize)}
+                    entityName="entries"
                   />
                 </div>
               </div>
@@ -470,7 +505,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                         </div>
                       </div>
 
-                      {(entry.status === 'draft' || entry.status === 'reviewed') && (
+                      {(entry.status === 'draft' || entry.status === 'reviewed' || entry.status === 'posted') && (
                         <div
                           className="px-4 py-2.5 flex items-center justify-between border-t border-white/[0.04] bg-white/[0.01]"
                           onClick={(e) => e.stopPropagation()}
@@ -501,6 +536,14 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                                 Post
                               </button>
                             )}
+                            {entry.status === 'posted' && (
+                              <button
+                                onClick={() => handleOpenReverseModal(entry)}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/30 text-purple-400 hover:text-purple-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                              >
+                                Reverse
+                              </button>
+                            )}
                           </div>
                         </div>
                       )}
@@ -519,6 +562,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                   total={total}
                   onPrev={() => setSkip(Math.max(0, skip - pageSize))}
                   onNext={() => setSkip(skip + pageSize)}
+                  entityName="entries"
                 />
               </div>
             </motion.div>
@@ -564,6 +608,15 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
             entryNo={selectedVoidEntry?.entry_no || ''}
             entryDate={selectedVoidEntry?.entry_date}
             entryDescription={selectedVoidEntry?.description || undefined}
+          />
+
+          <ReverseJournalEntryModal
+            isOpen={!!selectedReverseEntry}
+            onClose={() => setSelectedReverseEntry(null)}
+            onConfirm={handleConfirmReverse}
+            isSubmitting={isReverseSubmitting}
+            error={reverseSubmitError}
+            originalEntry={selectedReverseEntry}
           />
 
           {/* Toast Notification */}

@@ -6,6 +6,7 @@ interface PaginationControlsProps {
   total: number;
   onPrev: () => void;
   onNext: () => void;
+  entityName?: string;
 }
 
 export default function PaginationControls({
@@ -14,6 +15,7 @@ export default function PaginationControls({
   total,
   onPrev,
   onNext,
+  entityName = 'accounts',
 }: PaginationControlsProps) {
   const start = total === 0 ? 0 : skip + 1;
   const end = Math.min(skip + limit, total);
@@ -24,7 +26,7 @@ export default function PaginationControls({
     <div className="flex items-center justify-between pt-4">
       <p className="text-xs text-gray-500">
         Showing <span className="text-gray-300 font-medium">{start}–{end}</span> of{' '}
-        <span className="text-gray-300 font-medium">{total}</span> accounts
+        <span className="text-gray-300 font-medium">{total}</span> {entityName}
       </p>
       <div className="flex items-center gap-2">
         <button
