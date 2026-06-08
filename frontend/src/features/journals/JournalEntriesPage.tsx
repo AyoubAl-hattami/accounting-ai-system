@@ -23,6 +23,8 @@ import { useReviewJournalEntry } from './useReviewJournalEntry';
 import ReviewJournalEntryModal from './ReviewJournalEntryModal';
 import { usePostJournalEntry } from './usePostJournalEntry';
 import PostJournalEntryModal from './PostJournalEntryModal';
+import { useVoidJournalEntry } from './useVoidJournalEntry';
+import VoidJournalEntryModal from './VoidJournalEntryModal';
 
 const STATUSES: JournalEntryStatus[] = ['draft', 'reviewed', 'posted', 'void', 'reversed'];
 
@@ -67,6 +69,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [selectedReviewEntry, setSelectedReviewEntry] = useState<JournalEntry | null>(null);
   const [selectedPostEntry, setSelectedPostEntry] = useState<JournalEntry | null>(null);
+  const [selectedVoidEntry, setSelectedVoidEntry] = useState<JournalEntry | null>(null);
 
   const {
     entries,
@@ -90,6 +93,13 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     submitError: postSubmitError,
     setSubmitError: setPostSubmitError,
   } = usePostJournalEntry();
+
+  const {
+    voidJournalEntry,
+    isSubmitting: isVoidSubmitting,
+    submitError: voidSubmitError,
+    setSubmitError: setVoidSubmitError,
+  } = useVoidJournalEntry();
 
   const handleOpenReviewModal = (entry: JournalEntry) => {
     setSelectedReviewEntry(entry);
@@ -121,6 +131,21 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     }
   };
 
+  const handleOpenVoidModal = (entry: JournalEntry) => {
+    setSelectedVoidEntry(entry);
+    setVoidSubmitError(null);
+  };
+
+  const handleConfirmVoid = async () => {
+    if (!selectedVoidEntry) return;
+    const updated = await voidJournalEntry(selectedVoidEntry.id);
+    if (updated) {
+      setSelectedVoidEntry(null);
+      setSuccessToast('Journal entry voided.');
+      fetchEntries();
+    }
+  };
+
   // Reset on company change
   useEffect(() => {
     setSkip(0);
@@ -130,6 +155,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     setIsCreateModalOpen(false);
     setSelectedReviewEntry(null);
     setSelectedPostEntry(null);
+    setSelectedVoidEntry(null);
   }, [selectedCompanyId]);
 
   // Auto-hide toast
@@ -342,12 +368,20 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                               <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center justify-end gap-2">
                                   {entry.status === 'draft' && (
-                                    <button
-                                      onClick={() => handleOpenReviewModal(entry)}
-                                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
-                                    >
-                                      Review
-                                    </button>
+                                    <>
+                                      <button
+                                        onClick={() => handleOpenReviewModal(entry)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                                      >
+                                        Review
+                                      </button>
+                                      <button
+                                        onClick={() => handleOpenVoidModal(entry)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                                      >
+                                        Void
+                                      </button>
+                                    </>
                                   )}
                                   {entry.status === 'reviewed' && (
                                     <button
@@ -444,12 +478,20 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                           <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Actions</span>
                           <div className="flex items-center gap-2">
                             {entry.status === 'draft' && (
-                              <button
-                                onClick={() => handleOpenReviewModal(entry)}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
-                              >
-                                Review
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleOpenReviewModal(entry)}
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                                >
+                                  Review
+                                </button>
+                                <button
+                                  onClick={() => handleOpenVoidModal(entry)}
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                                >
+                                  Void
+                                </button>
+                              </>
                             )}
                             {entry.status === 'reviewed' && (
                               <button
@@ -511,6 +553,17 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
             entryNo={selectedPostEntry?.entry_no || ''}
             entryDate={selectedPostEntry?.entry_date}
             entryDescription={selectedPostEntry?.description || undefined}
+          />
+
+          <VoidJournalEntryModal
+            isOpen={!!selectedVoidEntry}
+            onClose={() => setSelectedVoidEntry(null)}
+            onConfirm={handleConfirmVoid}
+            isSubmitting={isVoidSubmitting}
+            error={voidSubmitError}
+            entryNo={selectedVoidEntry?.entry_no || ''}
+            entryDate={selectedVoidEntry?.entry_date}
+            entryDescription={selectedVoidEntry?.description || undefined}
           />
 
           {/* Toast Notification */}
