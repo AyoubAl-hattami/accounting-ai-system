@@ -4,6 +4,7 @@ import { X, Plus, Trash2, CheckCircle2, AlertCircle, Search, Save, Check } from 
 import { useAccounts } from '../accounts/useAccounts';
 import { useCreateJournalEntry } from './useCreateJournalEntry';
 import { formatCurrency as fmtCurrency } from '../../lib/format';
+import { useI18n } from '../../i18n';
 import AccountTypeBadge from '../accounts/AccountTypeBadge';
 import type { Account } from '../../api/types';
 
@@ -36,6 +37,7 @@ interface AccountPickerProps {
 }
 
 function AccountPickerModal({ isOpen, accounts, selectedAccountId, lineIndex, onSelect, onClose }: AccountPickerProps) {
+  const { t } = useI18n();
   const [search, setSearch] = useState('');
 
   // Reset search when picker opens
@@ -89,8 +91,8 @@ function AccountPickerModal({ isOpen, accounts, selectedAccountId, lineIndex, on
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
               <div>
-                <h4 className="text-sm font-bold text-white">Select Account</h4>
-                <p className="text-[11px] text-gray-500 mt-0.5">Choose the account for Line {lineIndex + 1}</p>
+                <h4 className="text-sm font-bold text-white">{t.common.selectAccount}</h4>
+                <p className="text-[11px] text-gray-500 mt-0.5">{t.createJournal.chooseAccountForLine} {lineIndex + 1}</p>
               </div>
               <button
                 type="button"
@@ -154,7 +156,7 @@ function AccountPickerModal({ isOpen, accounts, selectedAccountId, lineIndex, on
                 onClick={onClose}
                 className="px-3.5 py-1.5 rounded-lg border border-white/[0.06] hover:border-white/[0.12] text-xs font-medium text-gray-400 hover:text-gray-200 bg-white/[0.02] transition-colors"
               >
-                Cancel
+                {t.common.cancel}
               </button>
             </div>
           </motion.div>
@@ -170,6 +172,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
   // ── Hooks ──
   const { accounts, fetchAccounts } = useAccounts({ companyId, skip: 0, limit: 500 });
   const { createJournalEntry, isSubmitting, submitError, setSubmitError } = useCreateJournalEntry();
+  const { t } = useI18n();
 
   // ── Auto-generate default entry number ──
   const generateDefaultEntryNo = () => {
@@ -359,7 +362,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
             <span className="text-gray-200 truncate">{selectedAcc.name}</span>
           </div>
         ) : (
-          <span className="text-gray-500 group-hover:text-gray-400 transition-colors">Select account...</span>
+          <span className="text-gray-500 group-hover:text-gray-400 transition-colors">{t.common.selectAccountPrompt}</span>
         )}
         <Search className="w-3.5 h-3.5 text-gray-500 group-hover:text-brand-400 flex-shrink-0 transition-colors" />
       </button>
@@ -391,8 +394,8 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06] bg-surface-800/40">
                 <div>
-                  <h3 className="text-lg font-bold text-white">New Journal Entry</h3>
-                  <p className="text-xs text-gray-400">Create a new draft journal entry. Double-entry balances are verified on submit.</p>
+                  <h3 className="text-lg font-bold text-white">{t.createJournal.newJournalEntry}</h3>
+                  <p className="text-xs text-gray-400">{t.createJournal.newJournalEntryDesc}</p>
                 </div>
                 <button
                   onClick={onClose}
@@ -407,7 +410,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                 {/* Top fields */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1.5">Entry No</label>
+                    <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1.5">{t.common.entryNumber}</label>
                     <input
                       type="text"
                       required
@@ -417,7 +420,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1.5">Entry Date</label>
+                    <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1.5">{t.common.date}</label>
                     <input
                       type="date"
                       required
@@ -427,7 +430,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1.5">Description</label>
+                    <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1.5">{t.common.description}</label>
                     <input
                       type="text"
                       value={description}
@@ -441,10 +444,10 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                 {/* Source (Subtle hidden / metadata values display) */}
                 <div className="flex gap-4 p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
                   <div className="text-[11px] text-gray-500">
-                    <span className="font-semibold text-gray-400 uppercase tracking-wider">Source Type:</span> {sourceType}
+                    <span className="font-semibold text-gray-400 uppercase tracking-wider">{t.common.sourceType}</span> {sourceType}
                   </div>
                   <div className="text-[11px] text-gray-500 border-l border-white/[0.06] pl-4">
-                    <span className="font-semibold text-gray-400 uppercase tracking-wider">Source ID:</span> {sourceId}
+                    <span className="font-semibold text-gray-400 uppercase tracking-wider">{t.common.sourceId}</span> {sourceId}
                   </div>
                 </div>
 
@@ -455,7 +458,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                       <div className="flex items-start gap-2">
                         <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                         <div>
-                          <span className="font-semibold">Submission Error:</span> {submitError}
+                          <span className="font-semibold">{t.common.submissionError}</span> {submitError}
                         </div>
                       </div>
                     )}
@@ -463,7 +466,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                       <div className="flex items-start gap-2">
                         <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                         <div>
-                          <span className="font-semibold">Validation Warnings:</span>
+                          <span className="font-semibold">{t.common.validationWarnings}</span>
                           <ul className="list-disc pl-4 mt-1 space-y-1">
                             {validationErrors.map((err, idx) => (
                               <li key={idx}>{err}</li>
@@ -479,7 +482,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                 <div>
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2.5">
-                      <h4 className="text-xs uppercase tracking-wider text-gray-400 font-bold">Journal Lines</h4>
+                      <h4 className="text-xs uppercase tracking-wider text-gray-400 font-bold">{t.common.journalLines}</h4>
                       <span className="hidden md:inline-flex items-center gap-1 text-[10px] text-gray-500">
                         <AlertCircle className="w-3 h-3 text-gray-500" />
                         Each line can contain either a debit or a credit amount, not both.
@@ -498,7 +501,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-brand-400 hover:text-brand-300 border border-brand-500/20 hover:border-brand-500/40 bg-brand-500/5 transition-all self-start sm:self-auto"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      Add Line
+                      {t.common.addLine}
                     </button>
                   </div>
 
@@ -507,11 +510,11 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                     <table className="w-full text-left border-collapse hidden sm:table">
                       <thead>
                         <tr className="border-b border-white/[0.06] bg-white/[0.02]">
-                          <th className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Account</th>
-                          <th className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3 w-[140px] text-right">Debit</th>
-                          <th className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3 w-[140px] text-right">Credit</th>
-                          <th className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Line Description</th>
-                          <th className="text-center text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3 w-[50px]">Delete</th>
+                          <th className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.account}</th>
+                          <th className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3 w-[140px] text-right">{t.reports.trialBalance.debit}</th>
+                          <th className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3 w-[140px] text-right">{t.reports.trialBalance.credit}</th>
+                          <th className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.createJournal.lineDescription}</th>
+                          <th className="text-center text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3 w-[50px]">{t.common.delete}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/[0.04]">
@@ -580,7 +583,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                       {lines.map((line, idx) => (
                         <div key={idx} className="space-y-3 pt-4 first:pt-0">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Line #{idx + 1}</span>
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t.common.line} #{idx + 1}</span>
                             <button
                               type="button"
                               disabled={lines.length <= 2}
@@ -588,20 +591,20 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                               className="inline-flex items-center gap-1 text-[10px] text-red-500 uppercase tracking-wider font-semibold disabled:opacity-40"
                             >
                               <Trash2 className="w-3 h-3" />
-                              Remove
+                              {t.common.remove}
                             </button>
                           </div>
 
                           {/* Account */}
                           <div>
-                            <label className="block text-[9px] uppercase tracking-wider text-gray-500 mb-1">Account</label>
+                            <label className="block text-[9px] uppercase tracking-wider text-gray-500 mb-1">{t.common.account}</label>
                             {renderAccountButton(line, idx)}
                           </div>
 
                           {/* Debit / Credit Row */}
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-[9px] uppercase tracking-wider text-gray-500 mb-1">Debit</label>
+                              <label className="block text-[9px] uppercase tracking-wider text-gray-500 mb-1">{t.reports.trialBalance.debit}</label>
                               <input
                                 type="number"
                                 step="any"
@@ -613,7 +616,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                               />
                             </div>
                             <div>
-                              <label className="block text-[9px] uppercase tracking-wider text-gray-500 mb-1">Credit</label>
+                              <label className="block text-[9px] uppercase tracking-wider text-gray-500 mb-1">{t.reports.trialBalance.credit}</label>
                               <input
                                 type="number"
                                 step="any"
@@ -628,7 +631,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
 
                           {/* Line Description */}
                           <div>
-                            <label className="block text-[9px] uppercase tracking-wider text-gray-500 mb-1">Line Description</label>
+                            <label className="block text-[9px] uppercase tracking-wider text-gray-500 mb-1">{t.createJournal.lineDescription}</label>
                             <input
                               type="text"
                               value={line.description}
@@ -684,7 +687,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                     onClick={onClose}
                     className="px-4 py-2.5 rounded-xl border border-white/[0.06] hover:border-white/[0.12] text-sm font-medium text-gray-400 hover:text-gray-200 bg-white/[0.02] transition-colors"
                   >
-                    Cancel
+                    {t.common.cancel}
                   </button>
                   <button
                     type="submit"
@@ -693,11 +696,11 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                     className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white text-sm font-semibold rounded-xl shadow-lg shadow-brand-500/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none transition-all active:scale-[0.98]"
                   >
                     {isSubmitting ? (
-                      <span>Saving...</span>
+                      <span>{t.createJournal.submitting}</span>
                     ) : (
                       <>
                         <Save className="w-4 h-4" />
-                        <span>Save Draft</span>
+                        <span>{t.createJournal.submit}</span>
                       </>
                     )}
                   </button>

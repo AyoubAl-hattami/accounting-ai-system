@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, Save, Edit3, CheckCircle, AlertCircle, HelpCircle, Lock } from 'lucide-react';
+import { Building2, Save, Edit3, CheckCircle, AlertCircle, HelpCircle, Lock, Globe } from 'lucide-react';
 import PageLayout from '../../components/layout/PageLayout';
 import LoadingState from '../../components/feedback/LoadingState';
 import ErrorState from '../../components/feedback/ErrorState';
 import EmptyState from '../../components/feedback/EmptyState';
 import { useCompanySettings } from './useCompanySettings';
+import { useI18n } from '../../i18n';
+import type { Language } from '../../i18n/types';
 
 export default function SettingsPage() {
+  const { t } = useI18n();
   return (
     <PageLayout
-      pageTitle="Company Settings"
-      pageSubtitle="View and update your company information and preferences"
+      pageTitle={t.settingsPage.pageTitle}
+      pageSubtitle={t.settingsPage.pageSubtitle}
       activePath="/settings"
     >
       {({ selectedCompanyId, companiesLoading }) => (
@@ -30,6 +33,7 @@ interface SettingsContentProps {
 }
 
 function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsContentProps) {
+  const { t, language, setLanguage } = useI18n();
   const [isEditing, setIsEditing] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
@@ -98,12 +102,12 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
     if (!selectedCompanyId) return;
 
     if (!name.trim()) {
-      setSubmitError('Company Name is required.');
+      setSubmitError(t.settingsPage.companyNameRequired);
       return;
     }
 
     if (!baseCurrency.trim() || baseCurrency.length !== 3) {
-      setSubmitError('Base Currency must be a 3-character ISO code (e.g. USD).');
+      setSubmitError(t.settingsPage.currencyInvalid);
       return;
     }
 
@@ -119,7 +123,7 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
     const updated = await updateCompany(selectedCompanyId, payload);
     if (updated) {
       setIsEditing(false);
-      setSuccessToast('Company settings updated successfully.');
+      setSuccessToast(t.settingsPage.updateSuccess);
     }
   };
 
@@ -130,8 +134,8 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
   if (!selectedCompanyId) {
     return (
       <EmptyState
-        title="No Company Selected"
-        description="Select a company from the header dropdown to view settings."
+        title={t.common.noCompanySelected}
+        description={t.common.selectCompanyPrompt}
       />
     );
   }
@@ -148,12 +152,12 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
           <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-5 shadow-[0_0_15px_rgba(239,68,68,0.07)]">
             <Lock className="w-8 h-8 text-red-400 animate-pulse" />
           </div>
-          <h3 className="text-white font-bold text-xl mb-3">Access Denied</h3>
+          <h3 className="text-white font-bold text-xl mb-3">{t.settingsPage.accessDenied}</h3>
           <p className="text-gray-400 text-sm leading-relaxed mb-6">
-            You do not have permission to view settings for this company. Access is restricted to assigned members of the organization.
+            {t.settingsPage.accessDeniedMessage}
           </p>
           <div className="text-xs text-gray-500 border-t border-white/[0.06] pt-4">
-            If you believe this is an error, please contact your administrator.
+            {t.settingsPage.accessDeniedHelp}
           </div>
         </div>
       </motion.div>
@@ -165,7 +169,7 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
   }
 
   if (error || !company) {
-    return <ErrorState message={error || 'Failed to load company details.'} onRetry={() => fetchCompany(selectedCompanyId)} />;
+    return <ErrorState message={error || t.common.somethingWentWrong} onRetry={() => fetchCompany(selectedCompanyId)} />;
   }
 
   return (
@@ -199,8 +203,8 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
                 <Building2 className="w-5.5 h-5.5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-white">Company Profile</h3>
-                <p className="text-xs text-gray-500">Official company record and tax registration details</p>
+                <h3 className="text-base font-bold text-white">{t.settingsPage.companyProfile}</h3>
+                <p className="text-xs text-gray-500">{t.settingsPage.companyProfileDesc}</p>
               </div>
             </div>
 
@@ -211,7 +215,7 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
                 className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] hover:border-white/[0.1] text-gray-300 hover:text-white text-xs font-semibold transition-all duration-200"
               >
                 <Edit3 className="w-3.5 h-3.5" />
-                Edit Settings
+                {t.settingsPage.editSettings}
               </button>
             ) : (
               <div className="flex gap-2">
@@ -220,7 +224,7 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
                   onClick={handleCancel}
                   className="px-4 py-2 rounded-xl border border-white/[0.06] hover:border-white/[0.12] text-xs font-semibold text-gray-400 hover:text-gray-200 bg-white/[0.02] transition-colors"
                 >
-                  Cancel
+                  {t.common.cancel}
                 </button>
                 <button
                   type="submit"
@@ -228,7 +232,7 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
                   className="inline-flex items-center gap-1.5 px-4.5 py-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-semibold rounded-xl shadow-lg shadow-indigo-500/25 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  {isSubmitting ? 'Saving...' : 'Save Changes'}
+                  {isSubmitting ? t.settingsPage.saving : t.settingsPage.saveChanges}
                 </button>
               </div>
             )}
@@ -244,7 +248,7 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
               >
                 <AlertCircle className="w-4.5 h-4.5 shrink-0 text-red-400" />
                 <div>
-                  <span className="font-semibold block">Error updating settings</span>
+                  <span className="font-semibold block">{t.settingsPage.errorUpdating}</span>
                   <span>{submitError}</span>
                 </div>
               </motion.div>
@@ -254,7 +258,7 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
               {/* Company Name */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-gray-400 block">
-                  Company Name <span className="text-red-400">*</span>
+                  {t.settingsPage.companyName} <span className="text-red-400">*</span>
                 </label>
                 {isEditing ? (
                   <input
@@ -271,11 +275,11 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
 
               {/* Legal Name */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-400 block">Legal / Business Name</label>
+                <label className="text-xs font-semibold text-gray-400 block">{t.settingsPage.legalName}</label>
                 {isEditing ? (
                   <input
                     type="text"
-                    placeholder="e.g. Acme Corporation LLC"
+                    placeholder={t.settingsPage.legalNamePlaceholder}
                     value={legalName}
                     onChange={(e) => setLegalName(e.target.value)}
                     className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] px-3.5 py-2.5 text-sm text-white focus:border-indigo-500/50 focus:bg-white/[0.05] focus:outline-none transition-all"
@@ -287,11 +291,11 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
 
               {/* Registration Number */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-400 block">Registration Number</label>
+                <label className="text-xs font-semibold text-gray-400 block">{t.settingsPage.registrationNo}</label>
                 {isEditing ? (
                   <input
                     type="text"
-                    placeholder="e.g. CR-8374929"
+                    placeholder={t.settingsPage.registrationNoPlaceholder}
                     value={registrationNo}
                     onChange={(e) => setRegistrationNo(e.target.value)}
                     className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] px-3.5 py-2.5 text-sm text-white focus:border-indigo-500/50 focus:bg-white/[0.05] focus:outline-none transition-all"
@@ -303,11 +307,11 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
 
               {/* Tax ID */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-400 block">Tax / VAT ID</label>
+                <label className="text-xs font-semibold text-gray-400 block">{t.settingsPage.taxId}</label>
                 {isEditing ? (
                   <input
                     type="text"
-                    placeholder="e.g. TX-993848-P"
+                    placeholder={t.settingsPage.taxIdPlaceholder}
                     value={taxNo}
                     onChange={(e) => setTaxNo(e.target.value)}
                     className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] px-3.5 py-2.5 text-sm text-white focus:border-indigo-500/50 focus:bg-white/[0.05] focus:outline-none transition-all"
@@ -321,12 +325,12 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
               <div className="space-y-1.5">
                 <div className="flex items-center gap-1">
                   <label className="text-xs font-semibold text-gray-400 block">
-                    Base Currency <span className="text-red-400">*</span>
+                    {t.settingsPage.baseCurrency} <span className="text-red-400">*</span>
                   </label>
                   <div className="group relative">
                     <HelpCircle className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300 cursor-pointer" />
                     <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-48 p-2 rounded-lg bg-slate-950 border border-white/[0.08] text-[10px] text-gray-400 leading-normal hidden group-hover:block z-10 shadow-xl">
-                      Used as the default currency for ledger accounts and journals. Must be 3 chars (e.g. USD).
+                      {t.settingsPage.baseCurrencyHelp}
                     </span>
                   </div>
                 </div>
@@ -335,7 +339,7 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
                     type="text"
                     required
                     maxLength={3}
-                    placeholder="e.g. USD"
+                    placeholder={t.settingsPage.baseCurrencyPlaceholder}
                     value={baseCurrency}
                     onChange={(e) => setBaseCurrency(e.target.value)}
                     className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] px-3.5 py-2.5 text-sm text-white focus:border-indigo-500/50 focus:bg-white/[0.05] focus:outline-none transition-all font-mono uppercase"
@@ -347,11 +351,11 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
 
               {/* Address */}
               <div className="space-y-1.5 md:col-span-2">
-                <label className="text-xs font-semibold text-gray-400 block">Business Address</label>
+                <label className="text-xs font-semibold text-gray-400 block">{t.settingsPage.businessAddress}</label>
                 {isEditing ? (
                   <textarea
                     rows={3}
-                    placeholder="Street Address, City, State, ZIP, Country"
+                    placeholder={t.settingsPage.businessAddressPlaceholder}
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                     className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] px-3.5 py-2.5 text-sm text-white focus:border-indigo-500/50 focus:bg-white/[0.05] focus:outline-none transition-all resize-none"
@@ -366,6 +370,61 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
           </div>
         </motion.div>
       </form>
+
+      {/* ── Language & Appearance Section ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="glass-panel overflow-hidden"
+      >
+        <div className="px-6 py-5 border-b border-white/[0.06] bg-white/[0.01]">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+              <Globe className="w-5.5 h-5.5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">{t.settingsPage.languageAppearance}</h3>
+              <p className="text-xs text-gray-500">{t.settingsPage.languageAppearanceDesc}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6">
+          <div className="max-w-md space-y-3">
+            <label className="text-xs font-semibold text-gray-400 block">{t.settingsPage.language}</label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setLanguage('en' as Language)}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border text-sm font-semibold transition-all duration-200 ${
+                  language === 'en'
+                    ? 'bg-brand-500/10 border-brand-500/30 text-brand-400 shadow-lg shadow-brand-500/5'
+                    : 'bg-white/[0.02] border-white/[0.06] text-gray-400 hover:bg-white/[0.04] hover:border-white/[0.1] hover:text-gray-200'
+                }`}
+              >
+                <span className="text-lg">🇺🇸</span>
+                <span>{t.settingsPage.english}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguage('ar' as Language)}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border text-sm font-semibold transition-all duration-200 ${
+                  language === 'ar'
+                    ? 'bg-brand-500/10 border-brand-500/30 text-brand-400 shadow-lg shadow-brand-500/5'
+                    : 'bg-white/[0.02] border-white/[0.06] text-gray-400 hover:bg-white/[0.04] hover:border-white/[0.1] hover:text-gray-200'
+                }`}
+              >
+                <span className="text-lg">🇸🇦</span>
+                <span>{t.settingsPage.arabic}</span>
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-500 leading-relaxed">
+              {t.settingsPage.languageHelp}
+            </p>
+          </div>
+        </div>
+      </motion.div>
     </div>
   );
 }

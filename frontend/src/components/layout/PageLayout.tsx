@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 import AppShell from './AppShell';
 import EmptyState from '../feedback/EmptyState';
 import { useCompanies } from '../../features/companies/useCompanies';
+import { useI18n } from '../../i18n';
 import { Building2 } from 'lucide-react';
 import type { Company } from '../../api/types';
 
@@ -25,6 +26,7 @@ export default function PageLayout({
   activePath,
   children,
 }: PageLayoutProps) {
+  const { t } = useI18n();
   const {
     companies,
     selectedCompanyId,
@@ -46,8 +48,8 @@ export default function PageLayout({
       >
         <EmptyState
           icon={<Building2 className="w-7 h-7 text-brand-400" />}
-          title="No Companies Yet"
-          description="Create a company from the backend or ask an administrator for access."
+          title={t.common.noCompaniesYet}
+          description={t.common.noCompaniesDescription}
           className="py-32"
         />
       </AppShell>

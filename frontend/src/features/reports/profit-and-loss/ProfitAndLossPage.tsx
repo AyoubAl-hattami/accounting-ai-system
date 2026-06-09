@@ -6,6 +6,7 @@ import ErrorState from '../../../components/feedback/ErrorState';
 import EmptyState from '../../../components/feedback/EmptyState';
 import AccountTypeBadge from '../../accounts/AccountTypeBadge';
 import { useProfitAndLoss } from './useProfitAndLoss';
+import { useI18n } from '../../../i18n';
 import { formatCurrency } from '../../../lib/format';
 import type { ProfitAndLossLine } from '../../../api/types';
 import {
@@ -30,10 +31,11 @@ function fmtAmt(v: string): string {
 }
 
 export default function ProfitAndLossPage() {
+  const { t } = useI18n();
   return (
     <PageLayout
-      pageTitle="Profit & Loss"
-      pageSubtitle="Track income, expenses, and net performance for the selected period"
+      pageTitle={t.reports.profitAndLoss.pageTitle}
+      pageSubtitle={t.reports.profitAndLoss.pageSubtitle}
       activePath="/reports/profit-and-loss"
     >
       {({ selectedCompanyId, companiesLoading }) => (
@@ -52,6 +54,7 @@ interface ProfitAndLossContentProps {
 }
 
 function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAndLossContentProps) {
+  const { t } = useI18n();
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -129,15 +132,15 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
                     <FileText className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h1 className="text-2xl font-bold text-white">Profit & Loss</h1>
+                    <h1 className="text-2xl font-bold text-white">{t.reports.profitAndLoss.pageTitle}</h1>
                     <p className="text-sm text-gray-400">
                       {data.start_date && data.end_date
                         ? `${new Date(data.start_date).toLocaleDateString()} — ${new Date(data.end_date).toLocaleDateString()}`
                         : data.start_date
-                          ? `From ${new Date(data.start_date).toLocaleDateString()}`
+                          ? `${t.common.from} ${new Date(data.start_date).toLocaleDateString()}`
                           : data.end_date
-                            ? `Through ${new Date(data.end_date).toLocaleDateString()}`
-                            : 'All-time performance'}
+                            ? `${t.common.through} ${new Date(data.end_date).toLocaleDateString()}`
+                            : t.common.allTime}
                     </p>
                   </div>
                 </div>
@@ -145,12 +148,12 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
                   {parseAmount(data.net_profit) >= 0 ? (
                     <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold">
                       <TrendingUp className="w-4 h-4" />
-                      Net Profit
+                      {t.reports.profitAndLoss.netIncome}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-semibold">
                       <TrendingDown className="w-4 h-4" />
-                      Net Loss
+                      {t.reports.profitAndLoss.netIncome}
                     </span>
                   )}
                 </div>
@@ -161,7 +164,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <ArrowDownRight className="w-3.5 h-3.5 text-emerald-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Total Income</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.profitAndLoss.totalIncome}</p>
                   </div>
                   <p className="text-xl font-bold text-emerald-400 tracking-tight font-mono">
                     {formatCurrency(parseAmount(data.total_income))}
@@ -170,7 +173,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <ArrowUpRight className="w-3.5 h-3.5 text-red-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Total Expenses</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.profitAndLoss.totalExpenses}</p>
                   </div>
                   <p className="text-xl font-bold text-red-400 tracking-tight font-mono">
                     {formatCurrency(parseAmount(data.total_expenses))}
@@ -179,7 +182,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <DollarSign className={`w-3.5 h-3.5 ${parseAmount(data.net_profit) >= 0 ? 'text-emerald-400' : 'text-red-400'}`} />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Net Result</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.profitAndLoss.netResult}</p>
                   </div>
                   <p className={`text-xl font-bold tracking-tight font-mono ${parseAmount(data.net_profit) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {parseAmount(data.net_profit) < 0 ? '−' : ''}{formatCurrency(Math.abs(parseAmount(data.net_profit)))}
@@ -200,7 +203,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
             <div className="flex items-end gap-3">
               {/* Start date */}
               <div>
-                <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">Start Date</label>
+                <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">{t.common.startDate}</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
@@ -214,7 +217,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
 
               {/* End date */}
               <div>
-                <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">End Date</label>
+                <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">{t.common.endDate}</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
@@ -233,7 +236,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-gray-400 hover:text-gray-200 border border-white/[0.06] hover:border-white/[0.12] bg-white/[0.02] transition-all h-[38px]"
                 >
                   <X className="w-3.5 h-3.5" />
-                  Clear
+                  {t.common.clear}
                 </button>
               )}
             </div>
@@ -245,7 +248,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by account code, name, or type..."
+                placeholder={t.common.searchByAccountPlaceholder}
                 className="input-field pl-10 text-sm"
               />
             </div>
@@ -270,12 +273,12 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
           {totalLines > 0 && totalFiltered === 0 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16">
               <Search className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400 text-sm">No accounts match your search.</p>
+              <p className="text-gray-400 text-sm">{t.common.noAccountsMatch}</p>
               <button
                 onClick={() => setSearchQuery('')}
                 className="mt-3 text-brand-400 text-xs font-medium hover:text-brand-300 transition-colors"
               >
-                Clear search
+                {t.common.clearSearch}
               </button>
             </motion.div>
           )}
@@ -291,7 +294,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
               >
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <h2 className="text-sm font-semibold text-white">Income</h2>
+                  <h2 className="text-sm font-semibold text-white">{t.reports.profitAndLoss.income}</h2>
                   <span className="text-[10px] text-gray-500 font-medium ml-auto">
                     {filteredIncome.length} account{filteredIncome.length !== 1 ? 's' : ''}
                   </span>
@@ -308,10 +311,10 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-white/[0.06]">
-                            <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Code</th>
-                            <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Account</th>
-                            <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Type</th>
-                            <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Amount</th>
+                            <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.code}</th>
+                            <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.account}</th>
+                            <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.type}</th>
+                            <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.amount}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -341,7 +344,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
                         <tfoot>
                           <tr className="border-t border-white/[0.08] bg-white/[0.02]">
                             <td className="px-4 py-3" colSpan={3}>
-                              <span className="text-sm font-semibold text-white">Total Income</span>
+                              <span className="text-sm font-semibold text-white">{t.reports.profitAndLoss.totalIncome}</span>
                             </td>
                             <td className="px-4 py-3 text-right">
                               <span className="text-sm font-mono font-semibold text-emerald-400">
@@ -359,7 +362,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
                         <MobileLineCard key={line.account_id} line={line} color="emerald" index={i} />
                       ))}
                       <div className="glass-panel p-3 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-white">Total Income</span>
+                        <span className="text-xs font-semibold text-white">{t.reports.profitAndLoss.totalIncome}</span>
                         <span className="text-sm font-mono font-semibold text-emerald-400">
                           {formatCurrency(parseAmount(data.total_income))}
                         </span>
@@ -377,7 +380,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
               >
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-2 h-2 rounded-full bg-red-400" />
-                  <h2 className="text-sm font-semibold text-white">Expenses</h2>
+                  <h2 className="text-sm font-semibold text-white">{t.reports.profitAndLoss.expenses}</h2>
                   <span className="text-[10px] text-gray-500 font-medium ml-auto">
                     {filteredExpenses.length} account{filteredExpenses.length !== 1 ? 's' : ''}
                   </span>
@@ -394,10 +397,10 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-white/[0.06]">
-                            <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Code</th>
-                            <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Account</th>
-                            <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Type</th>
-                            <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Amount</th>
+                            <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.code}</th>
+                            <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.account}</th>
+                            <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.type}</th>
+                            <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.amount}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -427,7 +430,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
                         <tfoot>
                           <tr className="border-t border-white/[0.08] bg-white/[0.02]">
                             <td className="px-4 py-3" colSpan={3}>
-                              <span className="text-sm font-semibold text-white">Total Expenses</span>
+                              <span className="text-sm font-semibold text-white">{t.reports.profitAndLoss.totalExpenses}</span>
                             </td>
                             <td className="px-4 py-3 text-right">
                               <span className="text-sm font-mono font-semibold text-red-400">
@@ -445,7 +448,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
                         <MobileLineCard key={line.account_id} line={line} color="red" index={i} />
                       ))}
                       <div className="glass-panel p-3 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-white">Total Expenses</span>
+                        <span className="text-xs font-semibold text-white">{t.reports.profitAndLoss.totalExpenses}</span>
                         <span className="text-sm font-mono font-semibold text-red-400">
                           {formatCurrency(parseAmount(data.total_expenses))}
                         </span>
@@ -480,9 +483,9 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-white">
-                      {parseAmount(data.net_profit) >= 0 ? 'Net Profit' : 'Net Loss'}
+                      {parseAmount(data.net_profit) >= 0 ? t.reports.profitAndLoss.netIncome : t.reports.profitAndLoss.netIncome}
                     </p>
-                    <p className="text-xs text-gray-500">Income minus expenses</p>
+                    <p className="text-xs text-gray-500">{t.reports.profitAndLoss.incomeMinusExpenses}</p>
                   </div>
                 </div>
                 <p className={`text-2xl font-bold font-mono tracking-tight ${
@@ -507,6 +510,7 @@ interface MobileLineCardProps {
 }
 
 function MobileLineCard({ line, color, index }: MobileLineCardProps) {
+  const { t } = useI18n();
   const amountColor = color === 'emerald' ? 'text-emerald-400' : 'text-red-400';
 
   return (
@@ -524,7 +528,7 @@ function MobileLineCard({ line, color, index }: MobileLineCardProps) {
         <AccountTypeBadge type={line.account_type} />
       </div>
       <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/[0.04]">
-        <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Amount</span>
+        <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.common.amount}</span>
         <span className={`text-sm font-mono font-semibold ${amountColor}`}>{fmtAmt(line.amount)}</span>
       </div>
     </motion.div>

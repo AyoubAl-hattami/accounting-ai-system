@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../auth/AuthContext';
+import { useI18n } from '../../i18n';
 import { Scale, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { t } = useI18n();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,9 +27,9 @@ export default function LoginPage() {
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'response' in err) {
         const axiosError = err as { response?: { data?: { detail?: string } } };
-        setError(axiosError.response?.data?.detail || 'Invalid credentials');
+        setError(axiosError.response?.data?.detail || t.login.invalidCredentials);
       } else {
-        setError('Network error. Please try again.');
+        setError(t.login.networkError);
       }
     } finally {
       setIsLoading(false);
@@ -70,9 +72,12 @@ export default function LoginPage() {
             <Scale className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">
-            Accounting <span className="gradient-text">AI</span>
+            {t.login.title.split(' ').length > 1
+              ? <>{t.login.title.split(' ').slice(0, -1).join(' ')} <span className="gradient-text">{t.login.title.split(' ').slice(-1)[0]}</span></>
+              : t.login.title
+            }
           </h1>
-          <p className="text-gray-500 text-sm mt-1">Enterprise Financial Management</p>
+          <p className="text-gray-500 text-sm mt-1">{t.login.subtitle}</p>
         </motion.div>
 
         {/* Login Card */}
@@ -83,8 +88,8 @@ export default function LoginPage() {
           className="glass-panel p-8"
         >
           <div className="mb-6">
-            <h2 className="text-xl font-semibold text-white">Welcome back</h2>
-            <p className="text-gray-400 text-sm mt-1">Sign in to your account to continue</p>
+            <h2 className="text-xl font-semibold text-white">{t.login.welcomeBack}</h2>
+            <p className="text-gray-400 text-sm mt-1">{t.login.signInPrompt}</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -103,14 +108,14 @@ export default function LoginPage() {
             {/* Email */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
-                Email Address
+                {t.login.emailLabel}
               </label>
               <input
                 id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@company.com"
+                placeholder={t.login.emailPlaceholder}
                 required
                 autoComplete="email"
                 className="input-field"
@@ -120,7 +125,7 @@ export default function LoginPage() {
             {/* Password */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
-                Password
+                {t.login.passwordLabel}
               </label>
               <div className="relative">
                 <input
@@ -128,7 +133,7 @@ export default function LoginPage() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
+                  placeholder={t.login.passwordPlaceholder}
                   required
                   autoComplete="current-password"
                   className="input-field pr-11"
@@ -152,10 +157,10 @@ export default function LoginPage() {
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Signing in...</span>
+                  <span>{t.login.signingIn}</span>
                 </>
               ) : (
-                <span>Sign In</span>
+                <span>{t.login.signIn}</span>
               )}
             </button>
           </form>
@@ -168,7 +173,7 @@ export default function LoginPage() {
           transition={{ duration: 0.5, delay: 0.4 }}
           className="text-center text-xs text-gray-600 mt-6"
         >
-          Accounting AI System &middot; Secure Financial Platform
+          {t.login.footer}
         </motion.p>
       </motion.div>
     </div>

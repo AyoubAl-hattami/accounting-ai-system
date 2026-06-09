@@ -7,6 +7,7 @@ import LoadingState from '../../components/feedback/LoadingState';
 import ErrorState from '../../components/feedback/ErrorState';
 import EmptyState from '../../components/feedback/EmptyState';
 import { useAccounts } from './useAccounts';
+import { useI18n } from '../../i18n';
 import {
   Receipt,
   Search,
@@ -22,10 +23,11 @@ const ACCOUNT_TYPES = ['asset', 'liability', 'equity', 'income', 'expense'];
 const PAGE_SIZE = 10;
 
 export default function AccountsPage() {
+  const { t } = useI18n();
   return (
     <PageLayout
-      pageTitle="Chart of Accounts"
-      pageSubtitle="Manage your account structure"
+      pageTitle={t.accountsPage.pageTitle}
+      pageSubtitle={t.accountsPage.pageSubtitle}
       activePath="/accounts"
     >
       {({ selectedCompanyId, companiesLoading }) => (
@@ -44,6 +46,7 @@ interface AccountsContentProps {
 }
 
 function AccountsContent({ selectedCompanyId, companiesLoading }: AccountsContentProps) {
+  const { t } = useI18n();
   // ── Pagination ──
   const [skip, setSkip] = useState(0);
 
@@ -154,9 +157,9 @@ function AccountsContent({ selectedCompanyId, companiesLoading }: AccountsConten
             className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
           >
             <div>
-              <h1 className="text-2xl font-bold text-white mb-1">Chart of Accounts</h1>
+              <h1 className="text-2xl font-bold text-white mb-1">{t.accountsPage.pageTitle}</h1>
               <p className="text-sm text-gray-400">
-                Define your company's accounting structure with hierarchical categories and codes.
+                {t.accountsPage.pageSubtitle}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -173,7 +176,7 @@ function AccountsContent({ selectedCompanyId, companiesLoading }: AccountsConten
                 ) : (
                   <Sprout className="w-3.5 h-3.5" />
                 )}
-                Seed Defaults
+                {isSeeding ? t.accountsPage.seeding : t.accountsPage.seedDefaults}
               </button>
             </div>
           </motion.div>
@@ -231,7 +234,7 @@ function AccountsContent({ selectedCompanyId, companiesLoading }: AccountsConten
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by code, name, or description..."
+                placeholder={t.accountsPage.searchPlaceholder}
                 className="input-field pl-10 text-sm"
               />
             </div>
@@ -242,10 +245,10 @@ function AccountsContent({ selectedCompanyId, companiesLoading }: AccountsConten
                 onChange={(e) => setTypeFilter(e.target.value)}
                 className="input-field pl-10 pr-8 text-sm appearance-none cursor-pointer min-w-[160px]"
               >
-                <option value="">All Types</option>
-                {ACCOUNT_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                <option value="">{t.accountsPage.allTypes}</option>
+                {ACCOUNT_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
                   </option>
                 ))}
               </select>
@@ -256,8 +259,8 @@ function AccountsContent({ selectedCompanyId, companiesLoading }: AccountsConten
           {accounts.length === 0 && (
             <EmptyState
               icon={<Receipt className="w-7 h-7 text-brand-400" />}
-              title="No Accounts"
-              description="This company has no accounts yet. Seed the default chart of accounts to get started."
+              title={t.accountsPage.noAccountsTitle}
+              description={t.accountsPage.noAccountsDescription}
               action={
                 <button
                   onClick={handleSeed}
@@ -265,7 +268,7 @@ function AccountsContent({ selectedCompanyId, companiesLoading }: AccountsConten
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 text-white text-sm font-semibold hover:from-brand-500 hover:to-brand-400 hover:shadow-lg hover:shadow-brand-500/25 transition-all duration-300 disabled:opacity-50"
                 >
                   {isSeeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sprout className="w-4 h-4" />}
-                  Seed Default Accounts
+                  {t.accountsPage.seedDefaults}
                 </button>
               }
             />
@@ -302,13 +305,13 @@ function AccountsContent({ selectedCompanyId, companiesLoading }: AccountsConten
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-white/[0.06]">
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Code</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Name</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Type</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Parent</th>
-                        <th className="text-center text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Active</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.accountsPage.code}</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.accountsPage.name}</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.accountsPage.type}</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.accountsPage.parentCode}</th>
+                        <th className="text-center text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.active}</th>
                         <th className="text-center text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">System</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Description</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.description}</th>
                       </tr>
                     </thead>
                     <tbody>

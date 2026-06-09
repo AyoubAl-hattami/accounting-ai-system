@@ -11,12 +11,14 @@ import CompanyUserRoleBadge from './CompanyUserRoleBadge';
 import AddCompanyUserModal from './AddCompanyUserModal';
 import UpdateCompanyUserModal from './UpdateCompanyUserModal';
 import type { CompanyUser, CompanyUserRole } from '../../api/types';
+import { useI18n } from '../../i18n';
 
 export default function CompanyUsersPage() {
+  const { t } = useI18n();
   return (
     <PageLayout
-      pageTitle="Company Users"
-      pageSubtitle="Manage user access and assignment roles for this company"
+      pageTitle={t.companyUsersPage.pageTitle}
+      pageSubtitle={t.companyUsersPage.pageSubtitle}
       activePath="/company-users"
     >
       {({ selectedCompanyId, companiesLoading }) => (
@@ -35,6 +37,7 @@ interface CompanyUsersContentProps {
 }
 
 function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUsersContentProps) {
+  const { t } = useI18n();
   const [skip, setSkip] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('');
@@ -166,8 +169,8 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUse
   if (!selectedCompanyId) {
     return (
       <EmptyState
-        title="No Company Selected"
-        description="Select a company from the header dropdown to view assigned users."
+        title={t.common.noCompanySelected}
+        description={t.common.selectCompanyPrompt}
       />
     );
   }
@@ -184,7 +187,7 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUse
           <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-5 shadow-[0_0_15px_rgba(239,68,68,0.07)]">
             <Lock className="w-8 h-8 text-red-400 animate-pulse" />
           </div>
-          <h3 className="text-white font-bold text-xl mb-3">Access Denied</h3>
+          <h3 className="text-white font-bold text-xl mb-3">{t.settingsPage.accessDenied}</h3>
           <p className="text-gray-400 text-sm leading-relaxed mb-6">
             You do not have permission to view this page. Access to company users list is strictly restricted to users with <span className="text-indigo-400 font-semibold">Admin</span> or <span className="text-indigo-400 font-semibold">Auditor</span> roles.
           </p>
@@ -221,7 +224,7 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUse
             <Search className="absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Search by user ID or role..."
+              placeholder={t.companyUsersPage.searchPlaceholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] py-2.5 pl-10 pr-4 text-sm text-white placeholder-gray-500 focus:border-indigo-500/50 focus:bg-white/[0.05] focus:outline-none focus:ring-0 transition-all duration-200"
@@ -235,7 +238,7 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUse
               onChange={(e) => setRoleFilter(e.target.value)}
               className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] py-2.5 pl-3 pr-8 text-sm text-white focus:border-indigo-500/50 focus:outline-none transition-all appearance-none cursor-pointer"
             >
-              <option value="" className="bg-slate-900 text-white">All Roles</option>
+              <option value="" className="bg-slate-900 text-white">{t.companyUsersPage.allRoles}</option>
               {ROLES.map((r) => (
                 <option key={r} value={r} className="bg-slate-900 text-white">
                   {r.charAt(0).toUpperCase() + r.slice(1)}
@@ -256,9 +259,9 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUse
               onChange={(e) => setActiveFilter(e.target.value)}
               className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] py-2.5 pl-3 pr-8 text-sm text-white focus:border-indigo-500/50 focus:outline-none transition-all appearance-none cursor-pointer"
             >
-              <option value="" className="bg-slate-900 text-white">All Statuses</option>
-              <option value="active" className="bg-slate-900 text-white">Active</option>
-              <option value="inactive" className="bg-slate-900 text-white">Inactive</option>
+              <option value="" className="bg-slate-900 text-white">{t.companyUsersPage.allStatuses}</option>
+              <option value="active" className="bg-slate-900 text-white">{t.common.active}</option>
+              <option value="inactive" className="bg-slate-900 text-white">{t.common.inactive}</option>
             </select>
             <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
               <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
@@ -283,7 +286,7 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUse
             className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 active:scale-[0.98] transition-all"
           >
             <UserPlus className="w-4 h-4" />
-            Add User
+            {t.companyUsersPage.addUser}
           </button>
         </div>
       </div>
@@ -295,11 +298,11 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUse
         <ErrorState message={error} onRetry={fetchUsers} />
       ) : filteredUsers.length === 0 ? (
         <EmptyState
-          title="No Users Assigned"
+          title={t.companyUsersPage.noUsersTitle}
           description={
             searchQuery || roleFilter || activeFilter
-              ? "Try adjusting your filters or search term."
-              : "No users are currently assigned to this company."
+              ? t.common.noResults
+              : t.companyUsersPage.noUsersDescription
           }
         />
       ) : (
@@ -310,12 +313,12 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUse
               <table className="w-full border-collapse text-left">
                 <thead>
                   <tr className="border-b border-white/[0.06] bg-white/[0.01]">
-                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">User ID</th>
-                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">Assigned Role</th>
-                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">Status</th>
-                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">Created At</th>
-                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">Updated At</th>
-                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400 text-right">Actions</th>
+                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">{t.companyUsersPage.userId}</th>
+                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">{t.companyUsersPage.role}</th>
+                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">{t.common.status}</th>
+                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">{t.companyUsersPage.createdAt}</th>
+                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">{t.companyUsersPage.updatedAt}</th>
+                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400 text-right">{t.common.actions}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.04]">
@@ -343,7 +346,7 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUse
                           ) : (
                             <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500">
                               <span className="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
-                              Inactive
+                              {t.common.inactive}
                             </span>
                           )}
                         </td>
@@ -360,7 +363,7 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUse
                             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-white/[0.06] hover:border-white/[0.12] text-xs font-medium text-gray-300 hover:text-white bg-white/[0.02] hover:bg-white/[0.04] transition-all"
                           >
                             <Edit2 className="w-3 h-3" />
-                            Edit
+                            {t.common.edit}
                           </button>
                         </td>
                       </motion.tr>
@@ -392,20 +395,20 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUse
                       className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-white/[0.06] hover:border-white/[0.12] text-xs font-medium text-gray-300 hover:text-white bg-white/[0.02] transition-colors"
                     >
                       <Edit2 className="w-3 h-3" />
-                      Edit
+                      {t.common.edit}
                     </button>
                   </div>
 
                   <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-sm pt-1">
                     <div>
-                      <span className="text-xs text-gray-500 block">Assigned Role</span>
+                      <span className="text-xs text-gray-500 block">{t.companyUsersPage.role}</span>
                       <div className="mt-1">
                         <CompanyUserRoleBadge role={user.role} />
                       </div>
                     </div>
 
                     <div>
-                      <span className="text-xs text-gray-500 block">Access Status</span>
+                      <span className="text-xs text-gray-500 block">{t.common.status}</span>
                       <div className="mt-1">
                         {user.is_active ? (
                           <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-400">
@@ -415,14 +418,14 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUse
                         ) : (
                           <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500">
                             <XCircle className="w-3.5 h-3.5" />
-                            Inactive
+                            {t.common.inactive}
                           </span>
                         )}
                       </div>
                     </div>
 
                     <div>
-                      <span className="text-xs text-gray-500 block">Assigned On</span>
+                      <span className="text-xs text-gray-500 block">{t.companyUsersPage.createdAt}</span>
                       <span className="text-gray-300 font-medium text-xs mt-0.5 block flex items-center gap-1">
                         <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                         {formatDateTime(user.created_at)}
@@ -430,7 +433,7 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUse
                     </div>
 
                     <div>
-                      <span className="text-xs text-gray-500 block">Last Update</span>
+                      <span className="text-xs text-gray-500 block">{t.companyUsersPage.updatedAt}</span>
                       <span className="text-gray-300 font-medium text-xs mt-0.5 block flex items-center gap-1">
                         <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                         {formatDateTime(user.updated_at)}

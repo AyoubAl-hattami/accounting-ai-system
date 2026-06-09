@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { useI18n } from '../../i18n';
 
 interface ReviewJournalEntryModalProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ export default function ReviewJournalEntryModal({
   error,
   entryNo,
 }: ReviewJournalEntryModalProps) {
+  const { t } = useI18n();
   return (
     <AnimatePresence>
       {isOpen && (
@@ -41,7 +43,7 @@ export default function ReviewJournalEntryModal({
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
-              <h3 className="text-base font-bold text-white">Review Journal Entry</h3>
+              <h3 className="text-base font-bold text-white">{t.reviewJournal.title}</h3>
               <button
                 onClick={onClose}
                 className="p-1 rounded-lg hover:bg-white/[0.04] text-gray-500 hover:text-gray-300 transition-colors"
@@ -57,7 +59,7 @@ export default function ReviewJournalEntryModal({
                   <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold text-white">Review this draft journal entry?</p>
+                  <p className="text-sm font-semibold text-white">{t.reviewJournal.confirmMessage}</p>
                   <p className="text-xs text-gray-400 leading-relaxed">
                     Reviewed entries can be posted by an approver.
                   </p>
@@ -67,7 +69,7 @@ export default function ReviewJournalEntryModal({
               {/* Journal Entry Details */}
               <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.04]">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-500">Entry Number</span>
+                  <span className="text-gray-500">{t.common.entryNumber}</span>
                   <span className="font-mono font-semibold text-brand-400">{entryNo}</span>
                 </div>
               </div>
@@ -79,7 +81,7 @@ export default function ReviewJournalEntryModal({
                   animate={{ opacity: 1, y: 0 }}
                   className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2"
                 >
-                  <span className="font-semibold">Error:</span>
+                  <span className="font-semibold">{t.common.errorLabel}</span>
                   <span className="flex-1">{error}</span>
                 </motion.div>
               )}
@@ -93,7 +95,7 @@ export default function ReviewJournalEntryModal({
                 disabled={isSubmitting}
                 className="px-4 py-2 rounded-xl border border-white/[0.06] hover:border-white/[0.12] text-xs font-semibold text-gray-400 hover:text-gray-200 bg-white/[0.02] transition-colors"
               >
-                Cancel
+                {t.common.cancel}
               </button>
               <button
                 type="button"
@@ -102,11 +104,11 @@ export default function ReviewJournalEntryModal({
                 className="inline-flex items-center gap-1.5 px-4.5 py-2 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white text-xs font-semibold rounded-xl shadow-lg shadow-brand-500/25 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
                 {isSubmitting ? (
-                  <span>Reviewing...</span>
+                  <span>{t.reviewJournal.reviewing}</span>
                 ) : (
                   <>
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Review Entry</span>
+                    <span>{t.reviewJournal.reviewBtn}</span>
                   </>
                 )}
               </button>

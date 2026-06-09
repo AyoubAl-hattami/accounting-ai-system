@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Building2, ChevronDown, Check } from 'lucide-react';
 import type { Company } from '../../api/types';
+import { useI18n } from '../../i18n';
 
 interface CompanySelectorProps {
   companies: Company[];
@@ -16,6 +17,7 @@ export default function CompanySelector({
   onSelect,
   collapsed = false,
 }: CompanySelectorProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -51,10 +53,10 @@ export default function CompanySelector({
         <Building2 className="w-4 h-4 text-brand-400 flex-shrink-0" />
         <div className="min-w-0 flex-1 text-left">
           <p className="text-xs font-medium text-gray-300 truncate">
-            {selectedCompany?.name || 'Select Company'}
+            {selectedCompany?.name || t.common.selectCompany}
           </p>
           <p className="text-[10px] text-gray-500">
-            {selectedCompany ? 'Active' : 'No company selected'}
+            {selectedCompany ? t.common.active : t.common.noCompanySelectedText}
           </p>
         </div>
         <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />

@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, AlertTriangle, Send } from 'lucide-react';
+import { useI18n } from '../../i18n';
 
 interface PostJournalEntryModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ export default function PostJournalEntryModal({
   entryDate,
   entryDescription,
 }: PostJournalEntryModalProps) {
+  const { t } = useI18n();
   return (
     <AnimatePresence>
       {isOpen && (
@@ -45,7 +47,7 @@ export default function PostJournalEntryModal({
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
-              <h3 className="text-base font-bold text-white">Post Journal Entry</h3>
+              <h3 className="text-base font-bold text-white">{t.postJournal.title}</h3>
               <button
                 onClick={onClose}
                 className="p-1 rounded-lg hover:bg-white/[0.04] text-gray-500 hover:text-gray-300 transition-colors"
@@ -61,7 +63,7 @@ export default function PostJournalEntryModal({
                   <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold text-white">Post this reviewed journal entry?</p>
+                  <p className="text-sm font-semibold text-white">{t.postJournal.confirmMessage}</p>
                   <p className="text-xs text-gray-400 leading-relaxed">
                     Posted entries become part of official financial reports and cannot be edited directly.
                   </p>
@@ -71,18 +73,18 @@ export default function PostJournalEntryModal({
               {/* Journal Entry Details */}
               <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.04] space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-500">Entry Number</span>
+                  <span className="text-gray-500">{t.common.entryNumber}</span>
                   <span className="font-mono font-semibold text-brand-400">{entryNo}</span>
                 </div>
                 {entryDate && (
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-500">Date</span>
+                    <span className="text-gray-500">{t.common.date}</span>
                     <span className="text-gray-300">{new Date(entryDate).toLocaleDateString()}</span>
                   </div>
                 )}
                 {entryDescription && (
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-500">Description</span>
+                    <span className="text-gray-500">{t.common.description}</span>
                     <span className="text-gray-300 truncate max-w-[200px] text-right">{entryDescription}</span>
                   </div>
                 )}
@@ -95,7 +97,7 @@ export default function PostJournalEntryModal({
                   animate={{ opacity: 1, y: 0 }}
                   className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2"
                 >
-                  <span className="font-semibold">Error:</span>
+                  <span className="font-semibold">{t.common.errorLabel}</span>
                   <span className="flex-1">{error}</span>
                 </motion.div>
               )}
@@ -109,7 +111,7 @@ export default function PostJournalEntryModal({
                 disabled={isSubmitting}
                 className="px-4 py-2 rounded-xl border border-white/[0.06] hover:border-white/[0.12] text-xs font-semibold text-gray-400 hover:text-gray-200 bg-white/[0.02] transition-colors"
               >
-                Cancel
+                {t.common.cancel}
               </button>
               <button
                 type="button"
@@ -118,11 +120,11 @@ export default function PostJournalEntryModal({
                 className="inline-flex items-center gap-1.5 px-4.5 py-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white text-xs font-semibold rounded-xl shadow-lg shadow-amber-500/25 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
                 {isSubmitting ? (
-                  <span>Posting...</span>
+                  <span>{t.postJournal.posting}</span>
                 ) : (
                   <>
                     <Send className="w-3.5 h-3.5" />
-                    <span>Post Entry</span>
+                    <span>{t.postJournal.postBtn}</span>
                   </>
                 )}
               </button>

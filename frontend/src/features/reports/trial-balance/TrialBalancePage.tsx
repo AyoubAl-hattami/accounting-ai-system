@@ -6,6 +6,7 @@ import ErrorState from '../../../components/feedback/ErrorState';
 import EmptyState from '../../../components/feedback/EmptyState';
 import AccountTypeBadge from '../../accounts/AccountTypeBadge';
 import { useTrialBalance } from './useTrialBalance';
+import { useI18n } from '../../../i18n';
 import { formatCurrency } from '../../../lib/format';
 import {
   BarChart3,
@@ -28,10 +29,11 @@ function fmtAmt(v: string): string {
 }
 
 export default function TrialBalancePage() {
+  const { t } = useI18n();
   return (
     <PageLayout
-      pageTitle="Trial Balance"
-      pageSubtitle="Verify that total debit and credit balances remain aligned"
+      pageTitle={t.reports.trialBalance.pageTitle}
+      pageSubtitle={t.reports.trialBalance.pageSubtitle}
       activePath="/reports/trial-balance"
     >
       {({ selectedCompanyId, companiesLoading }) => (
@@ -50,6 +52,7 @@ interface TrialBalanceContentProps {
 }
 
 function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalanceContentProps) {
+  const { t } = useI18n();
   const [asOfDate, setAsOfDate] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -109,11 +112,11 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
                     <BarChart3 className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h1 className="text-2xl font-bold text-white">Trial Balance</h1>
+                    <h1 className="text-2xl font-bold text-white">{t.reports.trialBalance.pageTitle}</h1>
                     <p className="text-sm text-gray-400">
                       {data.as_of_date
-                        ? `As of ${new Date(data.as_of_date).toLocaleDateString()}`
-                        : 'All-time balances'}
+                        ? `${t.common.through} ${new Date(data.as_of_date).toLocaleDateString()}`
+                        : t.common.allTime}
                     </p>
                   </div>
                 </div>
@@ -121,12 +124,12 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
                   {data.is_balanced ? (
                     <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold">
                       <CheckCircle2 className="w-4 h-4" />
-                      Balanced
+                      {t.reports.trialBalance.balanced}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-semibold">
                       <XCircle className="w-4 h-4" />
-                      Unbalanced
+                      {t.reports.trialBalance.unbalanced}
                     </span>
                   )}
                 </div>
@@ -137,7 +140,7 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <ArrowDownRight className="w-3.5 h-3.5 text-emerald-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Total Debit</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.common.debitTotal}</p>
                   </div>
                   <p className="text-xl font-bold text-emerald-400 tracking-tight font-mono">
                     {formatCurrency(parseAmount(data.total_debit))}
@@ -146,7 +149,7 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <ArrowUpRight className="w-3.5 h-3.5 text-red-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Total Credit</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.common.creditTotal}</p>
                   </div>
                   <p className="text-xl font-bold text-red-400 tracking-tight font-mono">
                     {formatCurrency(parseAmount(data.total_credit))}
@@ -155,7 +158,7 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <ArrowDownRight className="w-3.5 h-3.5 text-blue-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Debit Balance</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.trialBalance.debitBalance}</p>
                   </div>
                   <p className="text-xl font-bold text-white tracking-tight font-mono">
                     {formatCurrency(parseAmount(data.total_debit_balance))}
@@ -164,7 +167,7 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <ArrowUpRight className="w-3.5 h-3.5 text-violet-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Credit Balance</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.trialBalance.creditBalance}</p>
                   </div>
                   <p className="text-xl font-bold text-white tracking-tight font-mono">
                     {formatCurrency(parseAmount(data.total_credit_balance))}
@@ -208,7 +211,7 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by account code, name, or type..."
+                placeholder={t.common.searchByAccountPlaceholder}
                 className="input-field pl-10 text-sm"
               />
             </div>
@@ -234,12 +237,12 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
           {data.lines.length > 0 && filteredLines.length === 0 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16">
               <Search className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400 text-sm">No accounts match your search.</p>
+              <p className="text-gray-400 text-sm">{t.common.noAccountsMatch}</p>
               <button
                 onClick={() => setSearchQuery('')}
                 className="mt-3 text-brand-400 text-xs font-medium hover:text-brand-300 transition-colors"
               >
-                Clear search
+                {t.common.clearSearch}
               </button>
             </motion.div>
           )}
@@ -257,13 +260,13 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-white/[0.06]">
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Code</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Account Name</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Type</th>
-                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Debit Total</th>
-                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Credit Total</th>
-                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Debit Balance</th>
-                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Credit Balance</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.code}</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.reports.trialBalance.accountName}</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.type}</th>
+                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.debitTotal}</th>
+                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.creditTotal}</th>
+                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.reports.trialBalance.debitBalance}</th>
+                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.reports.trialBalance.creditBalance}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -307,7 +310,7 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
                     <tfoot>
                       <tr className="border-t border-white/[0.08] bg-white/[0.02]">
                         <td className="px-4 py-3" colSpan={3}>
-                          <span className="text-sm font-semibold text-white">Totals</span>
+                          <span className="text-sm font-semibold text-white">{t.reports.trialBalance.totals}</span>
                         </td>
                         <td className="px-4 py-3 text-right">
                           <span className="text-sm font-mono font-semibold text-emerald-400">
@@ -379,14 +382,14 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
 
                 {/* Mobile totals footer */}
                 <div className="glass-panel p-4 border-brand-500/20">
-                  <p className="text-xs font-semibold text-white mb-2">Totals</p>
+                  <p className="text-xs font-semibold text-white mb-2">{t.reports.trialBalance.totals}</p>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <p className="text-[9px] uppercase tracking-wider text-gray-500 font-medium">Debit</p>
+                      <p className="text-[9px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.trialBalance.debit}</p>
                       <p className="text-sm font-mono font-semibold text-emerald-400">{formatCurrency(parseAmount(data.total_debit))}</p>
                     </div>
                     <div>
-                      <p className="text-[9px] uppercase tracking-wider text-gray-500 font-medium">Credit</p>
+                      <p className="text-[9px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.trialBalance.credit}</p>
                       <p className="text-sm font-mono font-semibold text-red-400">{formatCurrency(parseAmount(data.total_credit))}</p>
                     </div>
                   </div>

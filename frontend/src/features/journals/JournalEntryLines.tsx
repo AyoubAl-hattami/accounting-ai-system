@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import type { JournalLine } from '../../api/types';
+import { useI18n } from '../../i18n';
 
 interface JournalEntryLinesProps {
   lines: JournalLine[];
@@ -12,6 +13,7 @@ function fmt(v: string): string {
 }
 
 export default function JournalEntryLines({ lines }: JournalEntryLinesProps) {
+  const { t } = useI18n();
   if (lines.length === 0) {
     return (
       <p className="text-xs text-gray-500 text-center py-4">No lines for this entry.</p>
@@ -33,10 +35,10 @@ export default function JournalEntryLines({ lines }: JournalEntryLinesProps) {
             <thead>
               <tr className="border-b border-white/[0.05]">
                 <th className="text-left text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-3 py-2">#</th>
-                <th className="text-left text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-3 py-2">Account ID</th>
-                <th className="text-right text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-3 py-2">Debit</th>
-                <th className="text-right text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-3 py-2">Credit</th>
-                <th className="text-left text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-3 py-2">Description</th>
+                <th className="text-left text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-3 py-2">{t.common.account}</th>
+                <th className="text-right text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-3 py-2">{t.reports.trialBalance.debit}</th>
+                <th className="text-right text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-3 py-2">{t.reports.trialBalance.credit}</th>
+                <th className="text-left text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-3 py-2">{t.common.description}</th>
               </tr>
             </thead>
             <tbody>

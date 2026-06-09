@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageLayout from '../../components/layout/PageLayout';
+import { useI18n } from '../../i18n';
 import JournalStatusBadge from './JournalStatusBadge';
 import JournalEntryLines from './JournalEntryLines';
 import PaginationControls from '../../components/ui/PaginationControls';
@@ -41,10 +42,11 @@ function calcTotals(entry: JournalEntry) {
 }
 
 export default function JournalEntriesPage() {
+  const { t } = useI18n();
   return (
     <PageLayout
-      pageTitle="Journal Entries"
-      pageSubtitle="Review and monitor accounting entries"
+      pageTitle={t.journals.pageTitle}
+      pageSubtitle={t.journals.pageSubtitle}
       activePath="/journal-entries"
     >
       {({ selectedCompanyId, companiesLoading }) => (
@@ -63,6 +65,7 @@ interface JournalEntriesContentProps {
 }
 
 function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalEntriesContentProps) {
+  const { t } = useI18n();
   const [skip, setSkip] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -236,9 +239,9 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
             className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
           >
             <div>
-              <h1 className="text-2xl font-bold text-white mb-1">Journal Entries</h1>
+              <h1 className="text-2xl font-bold text-white mb-1">{t.journals.pageTitle}</h1>
               <p className="text-sm text-gray-400">
-                Review and monitor accounting entries across the selected company.
+                {t.journals.pageSubtitle}
               </p>
             </div>
             <div className="flex items-center gap-4">
@@ -251,7 +254,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                   className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white text-sm font-semibold rounded-xl shadow-lg shadow-brand-500/25 active:scale-[0.98] transition-all"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>New Journal Entry</span>
+                  <span>{t.journals.newEntry}</span>
                 </button>
               )}
             </div>
@@ -270,7 +273,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by entry no, description, or source..."
+                placeholder={t.journals.searchPlaceholder}
                 className="input-field pl-10 text-sm"
               />
             </div>
@@ -281,7 +284,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="input-field pl-10 pr-8 text-sm appearance-none cursor-pointer min-w-[160px]"
               >
-                <option value="">All Statuses</option>
+                <option value="">{t.journals.allStatuses}</option>
                 {STATUSES.map((s) => (
                   <option key={s} value={s}>
                     {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -295,8 +298,8 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
           {entries.length === 0 && (
             <EmptyState
               icon={<BookOpen className="w-7 h-7 text-brand-400" />}
-              title="No Journal Entries"
-              description="This company has no journal entries yet. Create entries from the backend to see them here."
+              title={t.journals.noEntriesTitle}
+              description={t.journals.noEntriesDescription}
             />
           )}
 
@@ -328,16 +331,16 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                     <thead>
                       <tr className="border-b border-white/[0.06]">
                         <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3 w-8" />
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Entry No</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Date</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Description</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Status</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Source</th>
-                        <th className="text-center text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Lines</th>
-                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Debit</th>
-                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Credit</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Posted</th>
-                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Actions</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.journals.entryNo}</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.journals.entryDate}</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.description}</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.status}</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.source}</th>
+                        <th className="text-center text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.journals.lines}</th>
+                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.journals.debit}</th>
+                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.journals.credit}</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.journals.posted}</th>
+                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.actions}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -405,7 +408,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                                         onClick={() => handleOpenVoidModal(entry)}
                                         className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
                                       >
-                                        Void
+                                        {t.journals.void}
                                       </button>
                                     </>
                                   )}
@@ -422,7 +425,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                                       onClick={() => handleOpenReverseModal(entry)}
                                       className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/30 text-purple-400 hover:text-purple-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
                                     >
-                                      Reverse
+                                      {t.journals.reverse}
                                     </button>
                                   )}
                                 </div>
@@ -499,7 +502,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                           {totals.balanced && (
                             <div className="flex items-center gap-1">
                               <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                              <span className="text-[10px] text-emerald-400 font-medium">Balanced</span>
+                              <span className="text-[10px] text-emerald-400 font-medium">{t.reports.trialBalance.balanced}</span>
                             </div>
                           )}
                         </div>
@@ -510,7 +513,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                           className="px-4 py-2.5 flex items-center justify-between border-t border-white/[0.04] bg-white/[0.01]"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Actions</span>
+                          <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">{t.common.actions}</span>
                           <div className="flex items-center gap-2">
                             {entry.status === 'draft' && (
                               <>

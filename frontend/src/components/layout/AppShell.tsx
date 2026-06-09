@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../auth/AuthContext';
+import { useI18n } from '../../i18n';
 import CompanySelector from './CompanySelector';
 import type { Company } from '../../api/types';
 import {
@@ -31,39 +32,46 @@ interface AppShellProps {
   activePath?: string;
 }
 
-const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-  { icon: BookOpen, label: 'Journal Entries', path: '/journal-entries' },
-  { icon: Receipt, label: 'Accounts', path: '/accounts' },
-  { icon: Shield, label: 'Audit Logs', path: '/audit-logs' },
-  { icon: Users, label: 'Company Users', path: '/company-users' },
-  { icon: BarChart3, label: 'Trial Balance', path: '/reports/trial-balance' },
-  { icon: FileText, label: 'Profit & Loss', path: '/reports/profit-and-loss' },
-  { icon: Scale, label: 'Balance Sheet', path: '/reports/balance-sheet' },
-  { icon: BookMarked, label: 'Account Ledger', path: '/reports/account-ledger' },
-  { icon: Library, label: 'General Ledger', path: '/reports/general-ledger' },
-];
-
 export default function AppShell({
   children,
   companies,
   selectedCompany,
   onSelectCompany,
-  pageTitle = 'Dashboard',
-  pageSubtitle = 'Financial overview',
+  pageTitle,
+  pageSubtitle,
   activePath = '/dashboard',
 }: AppShellProps) {
   const { user, logout } = useAuth();
+  const { t, dir } = useI18n();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const sidebarWidth = collapsed ? 'w-[72px]' : 'w-64';
 
+  // Use translated page title/subtitle with fallback
+  const displayTitle = pageTitle || t.dashboard.pageTitle;
+  const displaySubtitle = pageSubtitle || t.dashboard.pageSubtitle;
+
+  const navItems = [
+    { icon: LayoutDashboard, label: t.nav.dashboard, path: '/dashboard' },
+    { icon: BookOpen, label: t.nav.journalEntries, path: '/journal-entries' },
+    { icon: Receipt, label: t.nav.accounts, path: '/accounts' },
+    { icon: Shield, label: t.nav.auditLogs, path: '/audit-logs' },
+    { icon: Users, label: t.nav.companyUsers, path: '/company-users' },
+    { icon: BarChart3, label: t.nav.trialBalance, path: '/reports/trial-balance' },
+    { icon: FileText, label: t.nav.profitAndLoss, path: '/reports/profit-and-loss' },
+    { icon: Scale, label: t.nav.balanceSheet, path: '/reports/balance-sheet' },
+    { icon: BookMarked, label: t.nav.accountLedger, path: '/reports/account-ledger' },
+    { icon: Library, label: t.nav.generalLedger, path: '/reports/general-ledger' },
+  ];
+
   const handleNav = (path: string) => {
     navigate(path);
     setMobileOpen(false);
   };
+
+  const isRtl = dir === 'rtl';
 
   return (
     <div className="min-h-screen bg-surface-900 flex">
@@ -83,13 +91,19 @@ export default function AppShell({
       {/* Sidebar */}
       <aside
         className={`
-          fixed lg:sticky top-0 left-0 h-screen z-50
+          fixed lg:sticky top-0 h-screen z-50
+          ${isRtl ? 'right-0' : 'left-0'}
           ${sidebarWidth}
           bg-surface-800/80 backdrop-blur-2xl
-          border-r border-white/[0.06]
+          ${isRtl ? 'border-l' : 'border-r'} border-white/[0.06]
           flex flex-col
           transition-all duration-300 ease-in-out
-          ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+          ${mobileOpen
+            ? 'translate-x-0'
+            : isRtl
+              ? 'translate-x-full lg:translate-x-0'
+              : '-translate-x-full lg:translate-x-0'
+          }
         `}
       >
         {/* Logo area */}
@@ -106,8 +120,8 @@ export default function AppShell({
                   exit={{ opacity: 0, width: 0 }}
                   className="overflow-hidden whitespace-nowrap"
                 >
-                  <h1 className="text-base font-bold text-white tracking-tight">Accounting</h1>
-                  <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">AI System</p>
+                  <h1 className="text-base font-bold text-white tracking-tight">{t.nav.appName}</h1>
+                  <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">{t.nav.appTagline}</p>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -162,23 +176,23 @@ export default function AppShell({
             `}
           >
             <Settings className={`w-[18px] h-[18px] flex-shrink-0 ${activePath === '/settings' ? 'text-brand-400' : 'group-hover:text-gray-200'}`} />
-            {!collapsed && <span className="text-sm font-medium">Settings</span>}
+            {!collapsed && <span className="text-sm font-medium">{t.nav.settings}</span>}
           </button>
           <button
             onClick={logout}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-red-400 hover:bg-red-500/[0.06] transition-all duration-200 ${collapsed ? 'justify-center' : ''}`}
           >
             <LogOut className="w-[18px] h-[18px] flex-shrink-0" />
-            {!collapsed && <span className="text-sm font-medium">Sign Out</span>}
+            {!collapsed && <span className="text-sm font-medium">{t.nav.signOut}</span>}
           </button>
         </div>
 
         {/* Collapse button */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="hidden lg:flex absolute -right-3 top-20 w-6 h-6 items-center justify-center rounded-full bg-surface-600 border border-white/[0.1] text-gray-400 hover:text-white hover:bg-surface-500 transition-all duration-200"
+          className={`hidden lg:flex absolute ${isRtl ? '-left-3' : '-right-3'} top-20 w-6 h-6 items-center justify-center rounded-full bg-surface-600 border border-white/[0.1] text-gray-400 hover:text-white hover:bg-surface-500 transition-all duration-200`}
         >
-          <ChevronLeft className={`w-3.5 h-3.5 transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`} />
+          <ChevronLeft className={`w-3.5 h-3.5 transition-transform duration-300 ${collapsed ? (isRtl ? '' : 'rotate-180') : (isRtl ? 'rotate-180' : '')}`} />
         </button>
       </aside>
 
@@ -194,8 +208,8 @@ export default function AppShell({
               <Menu className="w-5 h-5" />
             </button>
             <div>
-              <h2 className="text-lg font-semibold text-white">{pageTitle}</h2>
-              <p className="text-xs text-gray-500">{pageSubtitle}</p>
+              <h2 className="text-lg font-semibold text-white">{displayTitle}</h2>
+              <p className="text-xs text-gray-500">{displaySubtitle}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -205,9 +219,9 @@ export default function AppShell({
                 <span className="text-xs font-medium text-brand-300">{selectedCompany.name}</span>
               </div>
             )}
-            <div className="text-right hidden sm:block">
+            <div className={`${isRtl ? 'text-left' : 'text-right'} hidden sm:block`}>
               <p className="text-sm font-medium text-gray-200">{user?.full_name || user?.email}</p>
-              <p className="text-[11px] text-gray-500">{user?.is_superuser ? 'Administrator' : 'User'}</p>
+              <p className="text-[11px] text-gray-500">{user?.is_superuser ? t.common.administrator : t.common.user}</p>
             </div>
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-violet-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-brand-500/20">
               {(user?.full_name || user?.email || 'U')[0].toUpperCase()}

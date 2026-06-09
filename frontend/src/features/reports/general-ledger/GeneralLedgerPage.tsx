@@ -6,6 +6,7 @@ import ErrorState from '../../../components/feedback/ErrorState';
 import EmptyState from '../../../components/feedback/EmptyState';
 import AccountTypeBadge from '../../accounts/AccountTypeBadge';
 import { useGeneralLedger } from './useGeneralLedger';
+import { useI18n } from '../../../i18n';
 import { formatCurrency } from '../../../lib/format';
 import type { AccountLedgerRead } from '../../../api/types';
 import type { AccountLedgerLine } from '../../../api/types';
@@ -35,10 +36,11 @@ function fmtAmt(v: string): string {
 const ACCOUNT_TYPES = ['all', 'asset', 'liability', 'equity', 'income', 'expense'] as const;
 
 export default function GeneralLedgerPage() {
+  const { t } = useI18n();
   return (
     <PageLayout
-      pageTitle="General Ledger"
-      pageSubtitle="Review all account ledgers and running balances across the selected company"
+      pageTitle={t.reports.generalLedger.pageTitle}
+      pageSubtitle={t.reports.generalLedger.pageSubtitle}
       activePath="/reports/general-ledger"
     >
       {({ selectedCompanyId, companiesLoading }) => (
@@ -57,6 +59,7 @@ interface GeneralLedgerContentProps {
 }
 
 function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLedgerContentProps) {
+  const { t } = useI18n();
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -180,15 +183,15 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
                     <Library className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h1 className="text-2xl font-bold text-white">General Ledger</h1>
+                    <h1 className="text-2xl font-bold text-white">{t.reports.generalLedger.pageTitle}</h1>
                     <p className="text-sm text-gray-400">
                       {data.start_date && data.end_date
                         ? `${new Date(data.start_date).toLocaleDateString()} — ${new Date(data.end_date).toLocaleDateString()}`
                         : data.start_date
-                          ? `From ${new Date(data.start_date).toLocaleDateString()}`
+                          ? `${t.common.from} ${new Date(data.start_date).toLocaleDateString()}`
                           : data.end_date
-                            ? `Through ${new Date(data.end_date).toLocaleDateString()}`
-                            : 'All-time activity'}
+                            ? `${t.common.through} ${new Date(data.end_date).toLocaleDateString()}`
+                            : t.common.allTime}
                     </p>
                   </div>
                 </div>
@@ -198,15 +201,15 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <Hash className="w-3 h-3 text-cyan-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Accounts</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.generalLedger.accounts}</p>
                   </div>
                   <p className="text-xl font-bold text-white tracking-tight font-mono">{totalAccounts}</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">{accountsWithActivity} with activity</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">{accountsWithActivity} {t.common.withActivity}</p>
                 </div>
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <ArrowDownRight className="w-3 h-3 text-gray-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Σ Opening</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Σ {t.common.opening}</p>
                   </div>
                   <p className="text-xl font-bold text-white tracking-tight font-mono">
                     {formatCurrency(Math.abs(aggregateOpening))}
@@ -215,7 +218,7 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <ArrowUpRight className="w-3 h-3 text-gray-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Σ Closing</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Σ {t.common.closing}</p>
                   </div>
                   <p className={`text-xl font-bold tracking-tight font-mono ${aggregateClosing < 0 ? 'text-red-400' : 'text-white'}`}>
                     {aggregateClosing < 0 ? '−' : ''}{formatCurrency(Math.abs(aggregateClosing))}
@@ -224,17 +227,17 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <Hash className="w-3 h-3 text-gray-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Total Lines</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.generalLedger.totalLines}</p>
                   </div>
                   <p className="text-xl font-bold text-white tracking-tight font-mono">{totalLines}</p>
                 </div>
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <Filter className="w-3 h-3 text-gray-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Showing</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.generalLedger.showing}</p>
                   </div>
                   <p className="text-xl font-bold text-white tracking-tight font-mono">{filteredAccounts.length}</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">of {totalAccounts} accounts</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">{t.common.of} {totalAccounts} {t.reports.generalLedger.accounts.toLowerCase()}</p>
                 </div>
               </div>
             </div>
@@ -249,7 +252,7 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
           >
             <div className="flex items-end gap-3">
               <div>
-                <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">Start Date</label>
+                <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">{t.common.startDate}</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
@@ -261,7 +264,7 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
                 </div>
               </div>
               <div>
-                <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">End Date</label>
+                <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">{t.common.endDate}</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
@@ -278,21 +281,21 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-gray-400 hover:text-gray-200 border border-white/[0.06] hover:border-white/[0.12] bg-white/[0.02] transition-all h-[38px]"
                 >
                   <X className="w-3.5 h-3.5" />
-                  Clear
+                  {t.common.clear}
                 </button>
               )}
             </div>
 
             {/* Account type filter */}
             <div className="relative min-w-[160px] w-full sm:w-auto" ref={dropdownRef}>
-              <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">Type</label>
+              <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">{t.common.type}</label>
               <button
                 type="button"
                 onClick={() => setTypeDropdownOpen(!typeDropdownOpen)}
                 className="input-field text-sm w-full flex items-center justify-between gap-2 px-4 text-left cursor-pointer select-none bg-white/[0.04] border border-white/[0.08] rounded-xl text-gray-100 hover:border-white/[0.12] transition-all"
               >
                 <span>
-                  {typeFilter === 'all' ? 'All Types' : typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1)}
+                  {typeFilter === 'all' ? t.reports.generalLedger.allTypes : typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1)}
                 </span>
                 <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${typeDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
@@ -306,15 +309,15 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
                     transition={{ duration: 0.15 }}
                     className="absolute z-50 mt-1 w-full rounded-xl bg-surface-800 border border-white/[0.08] shadow-2xl shadow-black/40 overflow-hidden py-1"
                   >
-                    {ACCOUNT_TYPES.map((t) => {
-                      const isSelected = typeFilter === t;
-                      const label = t === 'all' ? 'All Types' : t.charAt(0).toUpperCase() + t.slice(1);
+                    {ACCOUNT_TYPES.map((acctType) => {
+                      const isSelected = typeFilter === acctType;
+                      const label = acctType === 'all' ? t.reports.generalLedger.allTypes : acctType.charAt(0).toUpperCase() + acctType.slice(1);
                       return (
                         <button
-                          key={t}
+                          key={acctType}
                           type="button"
                           onClick={() => {
-                            setTypeFilter(t);
+                            setTypeFilter(acctType);
                             setTypeDropdownOpen(false);
                           }}
                           className={`w-full flex items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-white/[0.04] ${
@@ -338,7 +341,7 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search accounts, entry no, or description..."
+                placeholder={t.reports.generalLedger.searchPlaceholder}
                 className="input-field pl-10 text-sm"
               />
             </div>
@@ -350,7 +353,7 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
                 onClick={expandAll}
                 className="px-5 h-full text-sm font-medium text-gray-300 hover:text-white hover:bg-white/[0.04] rounded-lg transition-all flex items-center justify-center whitespace-nowrap"
               >
-                Expand all
+                {t.common.expandAll}
               </button>
               <div className="w-[1px] h-5 bg-white/[0.08]" />
               <button
@@ -358,7 +361,7 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
                 onClick={collapseAll}
                 className="px-5 h-full text-sm font-medium text-gray-300 hover:text-white hover:bg-white/[0.04] rounded-lg transition-all flex items-center justify-center whitespace-nowrap"
               >
-                Collapse all
+                {t.common.collapseAll}
               </button>
             </div>
           </motion.div>
@@ -367,8 +370,8 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
           {totalAccounts === 0 && (
             <EmptyState
               icon={<Library className="w-7 h-7 text-brand-400" />}
-              title="No General Ledger Data"
-              description="There are no accounts to display. Create accounts and journal entries to see the general ledger."
+              title={t.reports.generalLedger.noDataTitle}
+              description={t.reports.generalLedger.noDataDescription}
             />
           )}
 
@@ -376,12 +379,12 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
           {totalAccounts > 0 && filteredAccounts.length === 0 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16">
               <Search className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400 text-sm">No accounts match your filters.</p>
+              <p className="text-gray-400 text-sm">{t.reports.generalLedger.noMatchFilters}</p>
               <button
                 onClick={() => { setSearchQuery(''); setTypeFilter('all'); }}
                 className="mt-3 text-brand-400 text-xs font-medium hover:text-brand-300 transition-colors"
               >
-                Clear filters
+                {t.common.clearFilters}
               </button>
             </motion.div>
           )}
@@ -415,6 +418,7 @@ interface AccountCardProps {
 }
 
 function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps) {
+  const { t } = useI18n();
   const closing = parseAmount(account.closing_balance);
   const hasActivity = account.lines.length > 0;
 
@@ -445,17 +449,17 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
         </div>
         <div className="hidden sm:flex items-center gap-6 flex-shrink-0">
           <div className="text-right">
-            <p className="text-[9px] uppercase tracking-wider text-gray-500 font-medium">Opening</p>
+            <p className="text-[9px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.generalLedger.opening}</p>
             <p className="text-xs font-mono text-gray-300">{formatCurrency(parseAmount(account.opening_balance))}</p>
           </div>
           <div className="text-right">
-            <p className="text-[9px] uppercase tracking-wider text-gray-500 font-medium">Closing</p>
+            <p className="text-[9px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.generalLedger.closing}</p>
             <p className={`text-xs font-mono font-semibold ${closing < 0 ? 'text-red-400' : 'text-white'}`}>
               {closing < 0 ? '−' : ''}{formatCurrency(Math.abs(closing))}
             </p>
           </div>
           <div className="text-right min-w-[40px]">
-            <p className="text-[9px] uppercase tracking-wider text-gray-500 font-medium">Lines</p>
+            <p className="text-[9px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.generalLedger.lines}</p>
             <p className="text-xs font-mono text-gray-400">{account.lines.length}</p>
           </div>
         </div>
@@ -465,7 +469,7 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
             <p className={`text-xs font-mono font-semibold ${closing < 0 ? 'text-red-400' : 'text-white'}`}>
               {closing < 0 ? '−' : ''}{formatCurrency(Math.abs(closing))}
             </p>
-            <p className="text-[9px] text-gray-500">{account.lines.length} lines</p>
+            <p className="text-[9px] text-gray-500">{account.lines.length} {t.reports.generalLedger.lines.toLowerCase()}</p>
           </div>
         </div>
       </button>
@@ -483,7 +487,7 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
             <div className="border-t border-white/[0.06]">
               {account.lines.length === 0 ? (
                 <div className="px-6 py-8 text-center">
-                  <p className="text-sm text-gray-500">No activity for this account.</p>
+                  <p className="text-sm text-gray-500">{t.common.noActivity}</p>
                 </div>
               ) : (
                 <>
@@ -492,20 +496,20 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-white/[0.04]">
-                          <th className="text-left text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-6 py-2">Date</th>
-                          <th className="text-left text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-4 py-2">Entry No</th>
-                          <th className="text-center text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-2 py-2">Ln</th>
-                          <th className="text-left text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-4 py-2">Description</th>
-                          <th className="text-right text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-4 py-2">Debit</th>
-                          <th className="text-right text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-4 py-2">Credit</th>
-                          <th className="text-right text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-6 py-2">Balance</th>
+                          <th className="text-left text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-6 py-2">{t.reports.generalLedger.date}</th>
+                          <th className="text-left text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-4 py-2">{t.reports.generalLedger.entryNo}</th>
+                          <th className="text-center text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-2 py-2">{t.reports.generalLedger.ln}</th>
+                          <th className="text-left text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-4 py-2">{t.reports.generalLedger.description}</th>
+                          <th className="text-right text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-4 py-2">{t.reports.generalLedger.debit}</th>
+                          <th className="text-right text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-4 py-2">{t.reports.generalLedger.credit}</th>
+                          <th className="text-right text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-6 py-2">{t.reports.generalLedger.balance}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {/* Opening balance */}
                         <tr className="border-b border-white/[0.03] bg-white/[0.01]">
                           <td className="px-6 py-2" colSpan={4}>
-                            <span className="text-[11px] text-gray-500 italic">Opening Balance</span>
+                            <span className="text-[11px] text-gray-500 italic">{t.common.openingBalance}</span>
                           </td>
                           <td colSpan={2} />
                           <td className="px-6 py-2 text-right">
@@ -519,7 +523,7 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
                       <tfoot>
                         <tr className="border-t border-white/[0.06] bg-white/[0.02]">
                           <td className="px-6 py-2" colSpan={4}>
-                            <span className="text-[11px] font-semibold text-white">Closing Balance</span>
+                            <span className="text-[11px] font-semibold text-white">{t.common.closingBalance}</span>
                           </td>
                           <td className="px-4 py-2 text-right">
                             <span className="text-xs font-mono font-semibold text-emerald-400">
@@ -544,13 +548,13 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
                   {/* Mobile cards */}
                   <div className="md:hidden p-3 space-y-2">
                     <div className="flex items-center justify-between px-2 py-1">
-                      <span className="text-[10px] text-gray-500 italic">Opening: <span className="font-mono text-gray-400">{formatCurrency(parseAmount(account.opening_balance))}</span></span>
+                      <span className="text-[10px] text-gray-500 italic">{t.common.opening}: <span className="font-mono text-gray-400">{formatCurrency(parseAmount(account.opening_balance))}</span></span>
                     </div>
                     {account.lines.map((line) => (
                       <MobileLedgerCard key={`${line.journal_entry_id}-${line.line_no}`} line={line} />
                     ))}
                     <div className="flex items-center justify-between px-2 py-1 border-t border-white/[0.06]">
-                      <span className="text-[10px] font-semibold text-white">Closing</span>
+                      <span className="text-[10px] font-semibold text-white">{t.common.closing}</span>
                       <span className={`text-xs font-mono font-bold ${closing < 0 ? 'text-red-400' : 'text-white'}`}>
                         {closing < 0 ? '−' : ''}{formatCurrency(Math.abs(closing))}
                       </span>

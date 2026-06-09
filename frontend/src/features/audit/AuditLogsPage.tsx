@@ -8,12 +8,14 @@ import ErrorState from '../../components/feedback/ErrorState';
 import EmptyState from '../../components/feedback/EmptyState';
 import { useAuditLogs } from './useAuditLogs';
 import AuditActionBadge from './AuditActionBadge';
+import { useI18n } from '../../i18n';
 
 export default function AuditLogsPage() {
+  const { t } = useI18n();
   return (
     <PageLayout
-      pageTitle="Audit Logs"
-      pageSubtitle="Track actions and events across your company database"
+      pageTitle={t.auditLogs.pageTitle}
+      pageSubtitle={t.auditLogs.pageSubtitle}
       activePath="/audit-logs"
     >
       {({ selectedCompanyId, companiesLoading }) => (
@@ -32,6 +34,7 @@ interface AuditLogsContentProps {
 }
 
 function AuditLogsContent({ selectedCompanyId, companiesLoading }: AuditLogsContentProps) {
+  const { t } = useI18n();
   const [skip, setSkip] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [entityTypeFilter, setEntityTypeFilter] = useState<string>('');
@@ -108,8 +111,8 @@ function AuditLogsContent({ selectedCompanyId, companiesLoading }: AuditLogsCont
   if (!selectedCompanyId) {
     return (
       <EmptyState
-        title="No Company Selected"
-        description="Select a company from the header dropdown to view audit logs."
+        title={t.common.noCompanySelected}
+        description={t.common.selectCompanyPrompt}
       />
     );
   }
@@ -126,7 +129,7 @@ function AuditLogsContent({ selectedCompanyId, companiesLoading }: AuditLogsCont
           <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-5 shadow-[0_0_15px_rgba(239,68,68,0.07)]">
             <Lock className="w-8 h-8 text-red-400 animate-pulse" />
           </div>
-          <h3 className="text-white font-bold text-xl mb-3">Access Denied</h3>
+          <h3 className="text-white font-bold text-xl mb-3">{t.settingsPage.accessDenied}</h3>
           <p className="text-gray-400 text-sm leading-relaxed mb-6">
             You do not have permission to view this page. Access to audit logs is strictly restricted to users with <span className="text-indigo-400 font-semibold">Admin</span> or <span className="text-indigo-400 font-semibold">Auditor</span> roles.
           </p>
@@ -148,7 +151,7 @@ function AuditLogsContent({ selectedCompanyId, companiesLoading }: AuditLogsCont
             <Search className="absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Search logs by actor, action, description..."
+              placeholder={t.auditLogs.searchPlaceholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] py-2.5 pl-10 pr-4 text-sm text-white placeholder-gray-500 focus:border-indigo-500/50 focus:bg-white/[0.05] focus:outline-none focus:ring-0 transition-all duration-200"
@@ -162,7 +165,7 @@ function AuditLogsContent({ selectedCompanyId, companiesLoading }: AuditLogsCont
               onChange={handleFilterChange}
               className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] py-2.5 pl-3 pr-8 text-sm text-white focus:border-indigo-500/50 focus:outline-none transition-all duration-200 appearance-none cursor-pointer"
             >
-              <option value="" className="bg-slate-900 text-white">All Entity Types</option>
+              <option value="" className="bg-slate-900 text-white">{t.auditLogs.allEntityTypes}</option>
               {ENTITY_TYPES.map((type) => (
                 <option key={type} value={type} className="bg-slate-900 text-white">
                   {type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
@@ -193,11 +196,11 @@ function AuditLogsContent({ selectedCompanyId, companiesLoading }: AuditLogsCont
         <ErrorState message={error} onRetry={fetchLogs} />
       ) : filteredLogs.length === 0 ? (
         <EmptyState
-          title="No Logs Found"
+          title={t.auditLogs.noLogsTitle}
           description={
             searchQuery || entityTypeFilter
-              ? "Try adjusting your search query or filter settings."
-              : "There are no audit logs recorded for this company yet."
+              ? t.common.noResults
+              : t.auditLogs.noLogsDescription
           }
         />
       ) : (
@@ -208,11 +211,11 @@ function AuditLogsContent({ selectedCompanyId, companiesLoading }: AuditLogsCont
               <table className="w-full border-collapse text-left">
                 <thead>
                   <tr className="border-b border-white/[0.06] bg-white/[0.01]">
-                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">Created At</th>
-                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">Actor</th>
-                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">Action</th>
-                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">Entity Details</th>
-                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">Description</th>
+                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">{t.auditLogs.timestamp}</th>
+                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">{t.auditLogs.actor}</th>
+                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">{t.auditLogs.action}</th>
+                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">{t.auditLogs.entityType}</th>
+                    <th className="py-4 px-6 text-xs font-semibold uppercase tracking-wider text-gray-400">{t.common.description}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.04]">
@@ -276,7 +279,7 @@ function AuditLogsContent({ selectedCompanyId, companiesLoading }: AuditLogsCont
 
                   <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-sm pt-1">
                     <div>
-                      <span className="text-xs text-gray-500 block">Actor</span>
+                      <span className="text-xs text-gray-500 block">{t.auditLogs.actor}</span>
                       <span className="text-white font-medium break-all flex items-center gap-1 mt-0.5">
                         <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                         {log.actor}
@@ -284,7 +287,7 @@ function AuditLogsContent({ selectedCompanyId, companiesLoading }: AuditLogsCont
                     </div>
 
                     <div>
-                      <span className="text-xs text-gray-500 block">Entity</span>
+                      <span className="text-xs text-gray-500 block">{t.auditLogs.entityType}</span>
                       <span className="text-gray-300 font-mono text-xs flex items-center gap-1 mt-0.5">
                         <Tag className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                         <span className="uppercase">{log.entity_type}</span>
@@ -295,7 +298,7 @@ function AuditLogsContent({ selectedCompanyId, companiesLoading }: AuditLogsCont
 
                   {log.description && (
                     <div className="bg-black/10 border border-white/[0.04] p-3 rounded-lg text-xs text-gray-400">
-                      <div className="text-[10px] text-gray-500 font-semibold mb-1 uppercase tracking-wider">Description</div>
+                      <div className="text-[10px] text-gray-500 font-semibold mb-1 uppercase tracking-wider">{t.common.description}</div>
                       {log.description}
                     </div>
                   )}

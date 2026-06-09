@@ -6,6 +6,7 @@ import ErrorState from '../../../components/feedback/ErrorState';
 import EmptyState from '../../../components/feedback/EmptyState';
 import AccountTypeBadge from '../../accounts/AccountTypeBadge';
 import { useBalanceSheet } from './useBalanceSheet';
+import { useI18n } from '../../../i18n';
 import { formatCurrency } from '../../../lib/format';
 import type { BalanceSheetLine } from '../../../api/types';
 import {
@@ -33,10 +34,11 @@ function fmtAmt(v: string): string {
 }
 
 export default function BalanceSheetPage() {
+  const { t } = useI18n();
   return (
     <PageLayout
-      pageTitle="Balance Sheet"
-      pageSubtitle="Review assets, liabilities, equity, and retained performance at a point in time"
+      pageTitle={t.reports.balanceSheet.pageTitle}
+      pageSubtitle={t.reports.balanceSheet.pageSubtitle}
       activePath="/reports/balance-sheet"
     >
       {({ selectedCompanyId, companiesLoading }) => (
@@ -55,6 +57,7 @@ interface BalanceSheetContentProps {
 }
 
 function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceSheetContentProps) {
+  const { t } = useI18n();
   const [asOfDate, setAsOfDate] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -130,11 +133,11 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
                     <Scale className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h1 className="text-2xl font-bold text-white">Balance Sheet</h1>
+                    <h1 className="text-2xl font-bold text-white">{t.reports.balanceSheet.pageTitle}</h1>
                     <p className="text-sm text-gray-400">
                       {data.as_of_date
-                        ? `As of ${new Date(data.as_of_date).toLocaleDateString()}`
-                        : 'All-time balances'}
+                        ? `${t.common.through} ${new Date(data.as_of_date).toLocaleDateString()}`
+                        : t.common.allTime}
                     </p>
                   </div>
                 </div>
@@ -142,12 +145,12 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
                   {data.is_balanced ? (
                     <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-semibold">
                       <CheckCircle2 className="w-4 h-4" />
-                      Balanced
+                      {t.reports.trialBalance.balanced}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-semibold">
                       <XCircle className="w-4 h-4" />
-                      Unbalanced
+                      {t.reports.trialBalance.unbalanced}
                     </span>
                   )}
                 </div>
@@ -158,7 +161,7 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <Landmark className="w-3.5 h-3.5 text-blue-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Total Assets</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.balanceSheet.totalAssets}</p>
                   </div>
                   <p className="text-xl font-bold text-blue-400 tracking-tight font-mono">
                     {formatCurrency(parseAmount(data.total_assets))}
@@ -167,7 +170,7 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <HandCoins className="w-3.5 h-3.5 text-amber-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Liabilities</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.balanceSheet.liabilities}</p>
                   </div>
                   <p className="text-xl font-bold text-amber-400 tracking-tight font-mono">
                     {formatCurrency(parseAmount(data.total_liabilities))}
@@ -176,7 +179,7 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <Gem className="w-3.5 h-3.5 text-violet-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Equity</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.balanceSheet.equity}</p>
                   </div>
                   <p className="text-xl font-bold text-violet-400 tracking-tight font-mono">
                     {formatCurrency(parseAmount(data.total_equity))}
@@ -188,7 +191,7 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
                       ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
                       : <TrendingDown className="w-3.5 h-3.5 text-red-400" />
                     }
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Earnings</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.balanceSheet.earnings}</p>
                   </div>
                   <p className={`text-xl font-bold tracking-tight font-mono ${parseAmount(data.current_year_earnings) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {parseAmount(data.current_year_earnings) < 0 ? '−' : ''}{formatCurrency(Math.abs(parseAmount(data.current_year_earnings)))}
@@ -217,19 +220,19 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
             <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
               <div className="flex items-center gap-2">
                 <Landmark className="w-4 h-4 text-blue-400" />
-                <span className="text-gray-400">Assets</span>
+                <span className="text-gray-400">{t.reports.balanceSheet.assets}</span>
                 <span className="font-mono font-bold text-blue-400">{formatCurrency(parseAmount(data.total_assets))}</span>
               </div>
               <span className="text-gray-600 font-bold">=</span>
               <div className="flex items-center gap-2">
                 <HandCoins className="w-4 h-4 text-amber-400" />
-                <span className="text-gray-400">Liabilities</span>
+                <span className="text-gray-400">{t.reports.balanceSheet.liabilities}</span>
                 <span className="font-mono font-bold text-amber-400">{formatCurrency(parseAmount(data.total_liabilities))}</span>
               </div>
               <span className="text-gray-600 font-bold">+</span>
               <div className="flex items-center gap-2">
                 <Gem className="w-4 h-4 text-violet-400" />
-                <span className="text-gray-400">Equity</span>
+                <span className="text-gray-400">{t.reports.balanceSheet.equity}</span>
                 <span className="font-mono font-bold text-violet-400">{formatCurrency(parseAmount(data.total_equity))}</span>
               </div>
               <span className="text-gray-600 font-bold">+</span>
@@ -238,7 +241,7 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
                   ? <TrendingUp className="w-4 h-4 text-emerald-400" />
                   : <TrendingDown className="w-4 h-4 text-red-400" />
                 }
-                <span className="text-gray-400">Earnings</span>
+                <span className="text-gray-400">{t.reports.balanceSheet.earnings}</span>
                 <span className={`font-mono font-bold ${parseAmount(data.current_year_earnings) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                   {parseAmount(data.current_year_earnings) < 0 ? '−' : ''}{formatCurrency(Math.abs(parseAmount(data.current_year_earnings)))}
                 </span>
@@ -255,7 +258,7 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
           >
             {/* As of date */}
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">As of Date</label>
+              <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">{t.common.asOfDate}</label>
               <div className="relative">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input
@@ -277,14 +280,14 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
 
             {/* Search */}
             <div className="flex-1">
-              <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5 sm:invisible">Search</label>
+              <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5 sm:invisible">{t.common.search}</label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by account code, name, or type..."
+                  placeholder={t.common.searchByAccountPlaceholder}
                   className="input-field pl-10 text-sm"
                 />
               </div>
@@ -310,12 +313,12 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
           {totalLines > 0 && totalFiltered === 0 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16">
               <Search className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400 text-sm">No accounts match your search.</p>
+              <p className="text-gray-400 text-sm">{t.common.noAccountsMatch}</p>
               <button
                 onClick={() => setSearchQuery('')}
                 className="mt-3 text-brand-400 text-xs font-medium hover:text-brand-300 transition-colors"
               >
-                Clear search
+                {t.common.clearSearch}
               </button>
             </motion.div>
           )}
@@ -325,12 +328,12 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
             <div className="space-y-6">
               {/* Assets */}
               <SectionTable
-                title="Assets"
+                title={t.reports.balanceSheet.assets}
                 icon={<Landmark className="w-4 h-4 text-blue-400" />}
                 dotColor="bg-blue-400"
                 amountColor="text-blue-400"
                 lines={filteredAssets}
-                totalLabel="Total Assets"
+                totalLabel={t.reports.balanceSheet.totalAssets}
                 totalAmount={data.total_assets}
                 delay={0.15}
                 searchQuery={searchQuery}
@@ -338,12 +341,12 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
 
               {/* Liabilities */}
               <SectionTable
-                title="Liabilities"
+                title={t.reports.balanceSheet.liabilities}
                 icon={<HandCoins className="w-4 h-4 text-amber-400" />}
                 dotColor="bg-amber-400"
                 amountColor="text-amber-400"
                 lines={filteredLiabilities}
-                totalLabel="Total Liabilities"
+                totalLabel={t.reports.balanceSheet.totalLiabilities}
                 totalAmount={data.total_liabilities}
                 delay={0.25}
                 searchQuery={searchQuery}
@@ -351,12 +354,12 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
 
               {/* Equity */}
               <SectionTable
-                title="Equity"
+                title={t.reports.balanceSheet.equity}
                 icon={<Gem className="w-4 h-4 text-violet-400" />}
                 dotColor="bg-violet-400"
                 amountColor="text-violet-400"
                 lines={filteredEquity}
-                totalLabel="Total Equity"
+                totalLabel={t.reports.balanceSheet.totalEquity}
                 totalAmount={data.total_equity}
                 delay={0.35}
                 searchQuery={searchQuery}
@@ -383,6 +386,7 @@ interface SectionTableProps {
 }
 
 function SectionTable({ title, icon, dotColor, amountColor, lines, totalLabel, totalAmount, delay, searchQuery }: SectionTableProps) {
+  const { t } = useI18n();
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -409,10 +413,10 @@ function SectionTable({ title, icon, dotColor, amountColor, lines, totalLabel, t
             <table className="w-full">
               <thead>
                 <tr className="border-b border-white/[0.06]">
-                  <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Code</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Account</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Type</th>
-                  <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">Amount</th>
+                  <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.code}</th>
+                  <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.account}</th>
+                  <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.type}</th>
+                  <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.amount}</th>
                 </tr>
               </thead>
               <tbody>
@@ -472,7 +476,7 @@ function SectionTable({ title, icon, dotColor, amountColor, lines, totalLabel, t
                   <AccountTypeBadge type={line.account_type} />
                 </div>
                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/[0.04]">
-                  <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Amount</span>
+                  <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.common.amount}</span>
                   <span className={`text-sm font-mono font-semibold ${amountColor}`}>{fmtAmt(line.amount)}</span>
                 </div>
               </motion.div>

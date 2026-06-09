@@ -4,6 +4,7 @@ import DashboardMetricCard from '../../components/ui/DashboardMetricCard';
 import LoadingState from '../../components/feedback/LoadingState';
 import ErrorState from '../../components/feedback/ErrorState';
 import { useDashboardData } from './useDashboardData';
+import { useI18n } from '../../i18n';
 import { formatCompactCurrency as formatCurrency } from '../../lib/format';
 import {
   Landmark,
@@ -20,8 +21,12 @@ import {
 } from 'lucide-react';
 
 export default function DashboardPage() {
+  const { t } = useI18n();
   return (
-    <PageLayout>
+    <PageLayout
+      pageTitle={t.dashboard.pageTitle}
+      pageSubtitle={t.dashboard.pageSubtitle}
+    >
       {({ selectedCompanyId, selectedCompany, companiesLoading }) => (
         <DashboardContent
           selectedCompanyId={selectedCompanyId}
@@ -40,6 +45,7 @@ interface DashboardContentProps {
 }
 
 function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading }: DashboardContentProps) {
+  const { t } = useI18n();
   const {
     data,
     isLoading: dataLoading,
@@ -84,21 +90,21 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
             <div className="relative p-6 lg:p-8">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                 <div>
-                  <h1 className="text-2xl font-bold text-white mb-1">Financial Overview</h1>
+                  <h1 className="text-2xl font-bold text-white mb-1">{t.dashboard.financialOverview}</h1>
                   <p className="text-sm text-gray-400">
-                    Real-time financial position for {selectedCompany?.name || 'your company'}
+                    {t.dashboard.realtimePosition} {selectedCompany?.name || ''}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   {isBalanced ? (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      Balanced
+                      {t.dashboard.balanced}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold">
                       <XCircle className="w-3.5 h-3.5" />
-                      Unbalanced
+                      {t.dashboard.unbalanced}
                     </span>
                   )}
                   <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
@@ -107,7 +113,7 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
                       : 'bg-red-500/10 border border-red-500/20 text-red-400'
                   }`}>
                     {netIncome >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                    {netIncome >= 0 ? 'Profit' : 'Loss'}
+                    {netIncome >= 0 ? t.dashboard.profit : t.dashboard.loss}
                   </span>
                 </div>
               </div>
@@ -115,21 +121,21 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
               {/* Key figures row */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-                  <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">Net Income</p>
+                  <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">{t.dashboard.netIncome}</p>
                   <p className={`text-2xl font-bold tracking-tight ${netIncome >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {formatCurrency(netIncome)}
                   </p>
                 </div>
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-                  <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">Total Assets</p>
+                  <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">{t.dashboard.totalAssets}</p>
                   <p className="text-2xl font-bold text-white tracking-tight">{formatCurrency(totalAssets)}</p>
                 </div>
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-                  <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">Total Liabilities</p>
+                  <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">{t.dashboard.totalLiabilities}</p>
                   <p className="text-2xl font-bold text-white tracking-tight">{formatCurrency(totalLiabilities)}</p>
                 </div>
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-                  <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">Total Equity</p>
+                  <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">{t.dashboard.totalEquity}</p>
                   <p className="text-2xl font-bold text-white tracking-tight">{formatCurrency(totalEquity)}</p>
                 </div>
               </div>
@@ -139,7 +145,7 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
           {/* Metric cards grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <DashboardMetricCard
-              label="Total Assets"
+              label={t.dashboard.totalAssets}
               value={formatCurrency(totalAssets)}
               icon={Landmark}
               index={0}
@@ -147,7 +153,7 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
               iconColor="text-blue-400"
             />
             <DashboardMetricCard
-              label="Total Liabilities"
+              label={t.dashboard.totalLiabilities}
               value={formatCurrency(totalLiabilities)}
               icon={HandCoins}
               index={1}
@@ -155,7 +161,7 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
               iconColor="text-amber-400"
             />
             <DashboardMetricCard
-              label="Total Equity"
+              label={t.dashboard.totalEquity}
               value={formatCurrency(totalEquity)}
               icon={Scale}
               index={2}
@@ -163,12 +169,12 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
               iconColor="text-violet-400"
             />
             <DashboardMetricCard
-              label="Net Income"
+              label={t.dashboard.netIncome}
               value={formatCurrency(netIncome)}
               icon={netIncome >= 0 ? TrendingUp : TrendingDown}
               index={3}
               trend={netIncome >= 0 ? 'up' : 'down'}
-              chip={netIncome >= 0 ? 'Profit' : 'Loss'}
+              chip={netIncome >= 0 ? t.dashboard.profit : t.dashboard.loss}
               chipColor={netIncome >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}
               iconColor={netIncome >= 0 ? 'text-emerald-400' : 'text-red-400'}
             />
@@ -177,23 +183,23 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
           {/* Secondary metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             <DashboardMetricCard
-              label="Trial Balance"
-              value={isBalanced ? 'Balanced' : 'Unbalanced'}
+              label={t.dashboard.trialBalance}
+              value={isBalanced ? t.dashboard.balanced : t.dashboard.unbalanced}
               icon={BarChart3}
               index={4}
-              chip={isBalanced ? 'OK' : 'Warning'}
+              chip={isBalanced ? t.dashboard.ok : t.dashboard.warning}
               chipColor={isBalanced ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}
               iconColor="text-blue-400"
             />
             <DashboardMetricCard
-              label="Journal Entries"
+              label={t.dashboard.journalEntries}
               value={journalCount.toLocaleString()}
               icon={BookOpen}
               index={5}
               iconColor="text-amber-400"
             />
             <DashboardMetricCard
-              label="Accounts"
+              label={t.dashboard.accounts}
               value={accountCount.toLocaleString()}
               icon={Receipt}
               index={6}
@@ -212,25 +218,25 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
             >
               <div className="flex items-center gap-2 mb-4">
                 <FileText className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-sm font-semibold text-white">Profit & Loss Breakdown</h3>
+                <h3 className="text-sm font-semibold text-white">{t.dashboard.plBreakdown}</h3>
               </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                    <span className="text-sm text-gray-300">Total Income</span>
+                    <span className="text-sm text-gray-300">{t.dashboard.totalIncome}</span>
                   </div>
                   <span className="text-sm font-semibold text-emerald-400">{formatCurrency(pl?.total_income ?? 0)}</span>
                 </div>
                 <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-red-400" />
-                    <span className="text-sm text-gray-300">Total Expenses</span>
+                    <span className="text-sm text-gray-300">{t.dashboard.totalExpenses}</span>
                   </div>
                   <span className="text-sm font-semibold text-red-400">{formatCurrency(pl?.total_expenses ?? 0)}</span>
                 </div>
                 <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                  <span className="text-sm font-medium text-white">Net Result</span>
+                  <span className="text-sm font-medium text-white">{t.dashboard.netResult}</span>
                   <span className={`text-sm font-bold ${netIncome >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {formatCurrency(netIncome)}
                   </span>
@@ -248,10 +254,10 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <BookOpen className="w-4 h-4 text-amber-400" />
-                  <h3 className="text-sm font-semibold text-white">Recent Journal Entries</h3>
+                  <h3 className="text-sm font-semibold text-white">{t.dashboard.recentJournalEntries}</h3>
                 </div>
                 <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">
-                  {journalCount} total
+                  {journalCount} {t.common.total}
                 </span>
               </div>
               {data.journalEntries && data.journalEntries.items.length > 0 ? (
@@ -275,7 +281,7 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 text-center py-6">No journal entries yet</p>
+                <p className="text-sm text-gray-500 text-center py-6">{t.dashboard.noJournalEntriesYet}</p>
               )}
             </motion.div>
           </div>

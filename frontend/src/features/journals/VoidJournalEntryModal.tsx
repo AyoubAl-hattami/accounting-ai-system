@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, AlertTriangle, Trash2 } from 'lucide-react';
+import { useI18n } from '../../i18n';
 
 interface VoidJournalEntryModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ export default function VoidJournalEntryModal({
   entryDate,
   entryDescription,
 }: VoidJournalEntryModalProps) {
+  const { t } = useI18n();
   return (
     <AnimatePresence>
       {isOpen && (
@@ -45,7 +47,7 @@ export default function VoidJournalEntryModal({
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
-              <h3 className="text-base font-bold text-white">Void Journal Entry</h3>
+              <h3 className="text-base font-bold text-white">{t.voidJournal.title}</h3>
               <button
                 onClick={onClose}
                 className="p-1 rounded-lg hover:bg-white/[0.04] text-gray-500 hover:text-gray-300 transition-colors"
@@ -61,7 +63,7 @@ export default function VoidJournalEntryModal({
                   <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold text-white">Void this draft journal entry?</p>
+                  <p className="text-sm font-semibold text-white">{t.voidJournal.confirmMessage}</p>
                   <p className="text-xs text-gray-400 leading-relaxed">
                     Voiding marks this draft as cancelled. It will remain in the audit trail but will not affect reports.
                   </p>
@@ -71,18 +73,18 @@ export default function VoidJournalEntryModal({
               {/* Journal Entry Details */}
               <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.04] space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-500">Entry Number</span>
+                  <span className="text-gray-500">{t.common.entryNumber}</span>
                   <span className="font-mono font-semibold text-brand-400">{entryNo}</span>
                 </div>
                 {entryDate && (
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-500">Date</span>
+                    <span className="text-gray-500">{t.common.date}</span>
                     <span className="text-gray-300">{new Date(entryDate).toLocaleDateString()}</span>
                   </div>
                 )}
                 {entryDescription && (
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-500">Description</span>
+                    <span className="text-gray-500">{t.common.description}</span>
                     <span className="text-gray-300 truncate max-w-[200px] text-right">{entryDescription}</span>
                   </div>
                 )}
@@ -95,7 +97,7 @@ export default function VoidJournalEntryModal({
                   animate={{ opacity: 1, y: 0 }}
                   className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2"
                 >
-                  <span className="font-semibold">Error:</span>
+                  <span className="font-semibold">{t.common.errorLabel}</span>
                   <span className="flex-1">{error}</span>
                 </motion.div>
               )}
@@ -109,7 +111,7 @@ export default function VoidJournalEntryModal({
                 disabled={isSubmitting}
                 className="px-4 py-2 rounded-xl border border-white/[0.06] hover:border-white/[0.12] text-xs font-semibold text-gray-400 hover:text-gray-200 bg-white/[0.02] transition-colors"
               >
-                Cancel
+                {t.common.cancel}
               </button>
               <button
                 type="button"
@@ -118,11 +120,11 @@ export default function VoidJournalEntryModal({
                 className="inline-flex items-center gap-1.5 px-4.5 py-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white text-xs font-semibold rounded-xl shadow-lg shadow-red-500/25 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
                 {isSubmitting ? (
-                  <span>Voiding...</span>
+                  <span>{t.voidJournal.voiding}</span>
                 ) : (
                   <>
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>Void Entry</span>
+                    <span>{t.voidJournal.voidBtn}</span>
                   </>
                 )}
               </button>
