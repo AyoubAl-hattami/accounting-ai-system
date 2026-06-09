@@ -8,6 +8,9 @@ import ProfitAndLossPage from '../features/reports/profit-and-loss/ProfitAndLoss
 import BalanceSheetPage from '../features/reports/balance-sheet/BalanceSheetPage';
 import AccountLedgerPage from '../features/reports/account-ledger/AccountLedgerPage';
 import GeneralLedgerPage from '../features/reports/general-ledger/GeneralLedgerPage';
+import AuditLogsPage from '../features/audit/AuditLogsPage';
+import CompanyUsersPage from '../features/company-users/CompanyUsersPage';
+import SettingsPage from '../features/settings/SettingsPage';
 import ProtectedRoute from '../components/layout/ProtectedRoute';
 
 export default function AppRoutes() {
@@ -76,6 +79,30 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute>
               <GeneralLedgerPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/audit-logs"
+          element={
+            <ProtectedRoute>
+              <AuditLogsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/company-users"
+          element={
+            <ProtectedRoute>
+              <CompanyUsersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsPage />
             </ProtectedRoute>
           }
         />

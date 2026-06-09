@@ -17,6 +17,8 @@ import {
   LogOut,
   ChevronLeft,
   Menu,
+  Shield,
+  Users,
 } from 'lucide-react';
 
 interface AppShellProps {
@@ -33,6 +35,8 @@ const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: BookOpen, label: 'Journal Entries', path: '/journal-entries' },
   { icon: Receipt, label: 'Accounts', path: '/accounts' },
+  { icon: Shield, label: 'Audit Logs', path: '/audit-logs' },
+  { icon: Users, label: 'Company Users', path: '/company-users' },
   { icon: BarChart3, label: 'Trial Balance', path: '/reports/trial-balance' },
   { icon: FileText, label: 'Profit & Loss', path: '/reports/profit-and-loss' },
   { icon: Scale, label: 'Balance Sheet', path: '/reports/balance-sheet' },
@@ -147,8 +151,17 @@ export default function AppShell({
 
         {/* Bottom area */}
         <div className="px-3 py-3 border-t border-white/[0.06] space-y-1">
-          <button className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] transition-all duration-200 ${collapsed ? 'justify-center' : ''}`}>
-            <Settings className="w-[18px] h-[18px] flex-shrink-0" />
+          <button
+            onClick={() => handleNav('/settings')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group
+              ${activePath === '/settings'
+                ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
+              }
+              ${collapsed ? 'justify-center' : ''}
+            `}
+          >
+            <Settings className={`w-[18px] h-[18px] flex-shrink-0 ${activePath === '/settings' ? 'text-brand-400' : 'group-hover:text-gray-200'}`} />
             {!collapsed && <span className="text-sm font-medium">Settings</span>}
           </button>
           <button

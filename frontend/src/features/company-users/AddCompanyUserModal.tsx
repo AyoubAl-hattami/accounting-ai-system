@@ -1,0 +1,180 @@
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, UserPlus } from 'lucide-react';
+import type { CompanyUserRole } from '../../api/types';
+
+interface AddCompanyUserModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: (payload: { user_id: number; role: CompanyUserRole; is_active: boolean }) => Promise<void>;
+  isSubmitting: boolean;
+  error: string | null;
+  setError: (err: string | null) => void;
+}
+
+const ROLES: CompanyUserRole[] = ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'];
+
+export default function AddCompanyUserModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  isSubmitting,
+  error,
+  setError,
+}: AddCompanyUserModalProps) {
+  const [userId, setUserId] = useState<string>('');
+  const [role, setRole] = useState<CompanyUserRole>('viewer');
+  const [isActive, setIsActive] = useState<boolean>(true);
+
+  // Reset state when opening/closing
+  useEffect(() => {
+    if (isOpen) {
+      setUserId('');
+      setRole('viewer');
+      setIsActive(true);
+      setError(null);
+    }
+  }, [isOpen, setError]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const idNum = parseInt(userId, 10);
+    if (isNaN(idNum) || idNum <= 0) {
+      setError('User ID must be a positive integer.');
+      return;
+    }
+    await onConfirm({
+      user_id: idNum,
+      role,
+      is_active: isActive,
+    });
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+          />
+
+          {/* Modal Container */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.2 }}
+            className="relative w-full max-w-md bg-slate-900 border border-white/[0.08] rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-indigo-400" />
+                Add Company User
+              </h3>
+              <button
+                onClick={onClose}
+                className="p-1 rounded-lg hover:bg-white/[0.04] text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit}>
+              {/* Content */}
+              <div className="px-6 py-6 space-y-4">
+                {/* User ID Field */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-400 block">
+                    User ID <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    step="1"
+                    placeholder="Enter user numeric ID (e.g. 2)"
+                    value={userId}
+                    onChange={(e) => setUserId(e.target.value)}
+                    className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] px-3.5 py-2.5 text-sm text-white focus:border-indigo-500/50 focus:bg-white/[0.05] focus:outline-none focus:ring-0 transition-all"
+                  />
+                </div>
+
+                {/* Role Field */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-400 block">
+                    Company Role <span className="text-red-400">*</span>
+                  </label>
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value as CompanyUserRole)}
+                    className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] px-3.5 py-2.5 text-sm text-white focus:border-indigo-500/50 focus:outline-none transition-all cursor-pointer"
+                  >
+                    {ROLES.map((r) => (
+                      <option key={r} value={r} className="bg-slate-950 text-white">
+                        {r.charAt(0).toUpperCase() + r.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Active Field */}
+                <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-semibold text-gray-300 block">Active Status</span>
+                    <span className="text-[10px] text-gray-500">Allow this user to access the company</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isActive}
+                      onChange={(e) => setIsActive(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-white/[0.08] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
+
+                {/* Error state */}
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2"
+                  >
+                    <span className="font-semibold">Error:</span>
+                    <span className="flex-1">{error}</span>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-white/[0.06] bg-slate-900/40 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={isSubmitting}
+                  className="px-4 py-2 rounded-xl border border-white/[0.06] hover:border-white/[0.12] text-xs font-semibold text-gray-400 hover:text-gray-200 bg-white/[0.02] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="inline-flex items-center gap-1.5 px-4.5 py-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-semibold rounded-xl shadow-lg shadow-indigo-500/25 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  {isSubmitting ? <span>Adding User...</span> : <span>Add User</span>}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}

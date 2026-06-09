@@ -11,6 +11,11 @@ export interface Company {
   id: number;
   name: string;
   description: string | null;
+  legal_name: string | null;
+  registration_no: string | null;
+  tax_no: string | null;
+  base_currency: string;
+  address: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -235,4 +240,30 @@ export interface JournalEntryCreatePayload {
   source_id: string;
   lines: JournalEntryLineCreatePayload[];
 }
+
+// ── Audit Log ──
+export interface AuditLog {
+  id: number;
+  company_id: number | null;
+  actor: string;
+  action: string;
+  entity_type: string;
+  entity_id: number | null;
+  description: string | null;
+  created_at: string;
+}
+
+// ── Company User ──
+export type CompanyUserRole = 'admin' | 'accountant' | 'reviewer' | 'approver' | 'auditor' | 'viewer';
+
+export interface CompanyUser {
+  id: number;
+  company_id: number;
+  user_id: number;
+  role: CompanyUserRole;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 
