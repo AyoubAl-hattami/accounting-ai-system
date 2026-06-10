@@ -199,6 +199,11 @@ export const en: Translations = {
     account: 'Account',
     memo: 'Memo',
     source: 'Source',
+    successCreatedDraft: 'Journal entry created as draft.',
+    successReviewed: 'Journal entry reviewed.',
+    successPosted: 'Journal entry posted.',
+    successVoided: 'Journal entry voided.',
+    successReversalDraft: 'Reversal entry created as draft.',
   },
 
   // ── Create Journal Entry Modal ──
@@ -613,6 +618,11 @@ export const ar: Translations = {
     account: 'الحساب',
     memo: 'ملاحظة',
     source: 'المصدر',
+    successCreatedDraft: 'تم إنشاء قيد اليومية كمسودة.',
+    successReviewed: 'تمت مراجعة قيد اليومية.',
+    successPosted: 'تم ترحيل قيد اليومية.',
+    successVoided: 'تم إلغاء قيد اليومية.',
+    successReversalDraft: 'تم إنشاء قيد عكسي كمسودة.',
   },
 
   // ── Create Journal Entry Modal ──

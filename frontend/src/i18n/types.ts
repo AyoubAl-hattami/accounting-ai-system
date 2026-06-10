@@ -199,6 +199,11 @@ export interface Translations {
     account: string;
     memo: string;
     source: string;
+    successCreatedDraft: string;
+    successReviewed: string;
+    successPosted: string;
+    successVoided: string;
+    successReversalDraft: string;
   };
 
   // ── Create Journal Entry Modal ──

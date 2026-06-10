@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, Save, Edit3, CheckCircle, AlertCircle, HelpCircle, Lock, Globe } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Building2, Save, Edit3, AlertCircle, HelpCircle, Lock, Globe } from 'lucide-react';
 import PageLayout from '../../components/layout/PageLayout';
 import LoadingState from '../../components/feedback/LoadingState';
 import ErrorState from '../../components/feedback/ErrorState';
 import EmptyState from '../../components/feedback/EmptyState';
 import { useCompanySettings } from './useCompanySettings';
 import { useI18n } from '../../i18n';
+import { useToast } from '../../components/feedback/useToast';
 import type { Language } from '../../i18n/types';
 
 export default function SettingsPage() {
@@ -34,8 +35,8 @@ interface SettingsContentProps {
 
 function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsContentProps) {
   const { t, language, setLanguage } = useI18n();
+  const toast = useToast();
   const [isEditing, setIsEditing] = useState(false);
-  const [successToast, setSuccessToast] = useState<string | null>(null);
 
   // Form states
   const [name, setName] = useState('');
@@ -76,14 +77,6 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
     }
   }, [company]);
 
-  // Clear toast after timeout
-  useEffect(() => {
-    if (successToast) {
-      const timer = setTimeout(() => setSuccessToast(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [successToast]);
-
   const handleCancel = () => {
     if (company) {
       setName(company.name || '');
@@ -123,7 +116,7 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
     const updated = await updateCompany(selectedCompanyId, payload);
     if (updated) {
       setIsEditing(false);
-      setSuccessToast(t.settingsPage.updateSuccess);
+      toast.success(t.settingsPage.updateSuccess);
     }
   };
 
@@ -174,21 +167,6 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Toast Alert */}
-      <AnimatePresence>
-        {successToast && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="fixed top-20 right-6 z-50 bg-green-500 border border-green-600 text-white px-5 py-3 rounded-xl shadow-lg flex items-center gap-2.5 text-sm"
-          >
-            <CheckCircle className="w-4 h-4 shrink-0" />
-            <span>{successToast}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Main Form/Card */}
       <form onSubmit={handleSubmit} className="space-y-6">
         <motion.div

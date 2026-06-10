@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageLayout from '../../components/layout/PageLayout';
 import { useI18n } from '../../i18n';
+import { useToast } from '../../components/feedback/useToast';
 import JournalStatusBadge from './JournalStatusBadge';
 import JournalEntryLines from './JournalEntryLines';
 import PaginationControls from '../../components/ui/PaginationControls';
@@ -66,12 +67,12 @@ interface JournalEntriesContentProps {
 
 function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalEntriesContentProps) {
   const { t } = useI18n();
+  const toast = useToast();
   const [skip, setSkip] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [successToast, setSuccessToast] = useState<string | null>(null);
   const [selectedReviewEntry, setSelectedReviewEntry] = useState<JournalEntry | null>(null);
   const [selectedPostEntry, setSelectedPostEntry] = useState<JournalEntry | null>(null);
   const [selectedVoidEntry, setSelectedVoidEntry] = useState<JournalEntry | null>(null);
@@ -124,7 +125,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     const updated = await reviewJournalEntry(selectedReviewEntry.id);
     if (updated) {
       setSelectedReviewEntry(null);
-      setSuccessToast('Journal entry reviewed.');
+      toast.success(t.journals.successReviewed);
       fetchEntries();
     }
   };
@@ -139,7 +140,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     const updated = await postJournalEntry(selectedPostEntry.id);
     if (updated) {
       setSelectedPostEntry(null);
-      setSuccessToast('Journal entry posted.');
+      toast.success(t.journals.successPosted);
       fetchEntries();
     }
   };
@@ -154,7 +155,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     const updated = await voidJournalEntry(selectedVoidEntry.id);
     if (updated) {
       setSelectedVoidEntry(null);
-      setSuccessToast('Journal entry voided.');
+      toast.success(t.journals.successVoided);
       fetchEntries();
     }
   };
@@ -169,7 +170,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     const updated = await reverseJournalEntry(selectedReverseEntry.id, payload);
     if (updated) {
       setSelectedReverseEntry(null);
-      setSuccessToast('Reversal entry created as draft.');
+      toast.success(t.journals.successReversalDraft);
       fetchEntries();
     }
   };
@@ -186,14 +187,6 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
     setSelectedVoidEntry(null);
     setSelectedReverseEntry(null);
   }, [selectedCompanyId]);
-
-  // Auto-hide toast
-  useEffect(() => {
-    if (successToast) {
-      const timer = setTimeout(() => setSuccessToast(null), 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [successToast]);
 
   // Fetch on mount, company, or skip change
   useEffect(() => {
@@ -576,7 +569,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
             onClose={() => setIsCreateModalOpen(false)}
             onSuccess={() => {
               setIsCreateModalOpen(false);
-              setSuccessToast('Journal entry created as draft.');
+              toast.success(t.journals.successCreatedDraft);
               fetchEntries();
             }}
             companyId={selectedCompanyId}
@@ -621,21 +614,6 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
             error={reverseSubmitError}
             originalEntry={selectedReverseEntry}
           />
-
-          {/* Toast Notification */}
-          <AnimatePresence>
-            {successToast && (
-              <motion.div
-                initial={{ opacity: 0, y: 50, scale: 0.9 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 20, scale: 0.9 }}
-                className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm shadow-xl shadow-emerald-500/5 backdrop-blur-md"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>{successToast}</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </>
       )}
     </>
