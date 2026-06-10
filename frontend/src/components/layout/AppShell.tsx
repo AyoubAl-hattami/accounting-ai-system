@@ -20,6 +20,7 @@ import {
   Menu,
   Shield,
   Users,
+  Globe,
 } from 'lucide-react';
 
 interface AppShellProps {
@@ -42,10 +43,12 @@ export default function AppShell({
   activePath = '/dashboard',
 }: AppShellProps) {
   const { user, logout } = useAuth();
-  const { t, dir } = useI18n();
+  const { t, dir, language, setLanguage } = useI18n();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const toggleLanguage = () => setLanguage(language === 'en' ? 'ar' : 'en');
 
   const sidebarWidth = collapsed ? 'w-[72px]' : 'w-64';
 
@@ -219,6 +222,22 @@ export default function AppShell({
                 <span className="text-xs font-medium text-brand-300">{selectedCompany.name}</span>
               </div>
             )}
+
+            {/* Language toggle */}
+            <button
+              onClick={toggleLanguage}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-brand-500/30 hover:bg-white/[0.06] transition-all duration-200 group"
+              title={language === 'en' ? 'التبديل إلى العربية' : 'Switch to English'}
+            >
+              <Globe className="w-3.5 h-3.5 text-gray-400 group-hover:text-brand-400 transition-colors" />
+              <span className="text-[11px] font-bold text-brand-400 uppercase tracking-wide">
+                {language === 'en' ? 'EN' : 'AR'}
+              </span>
+              <span className="text-[10px] text-gray-500 group-hover:text-gray-300 transition-colors">
+                / {language === 'en' ? 'عر' : 'EN'}
+              </span>
+            </button>
+
             <div className={`${isRtl ? 'text-left' : 'text-right'} hidden sm:block`}>
               <p className="text-sm font-medium text-gray-200">{user?.full_name || user?.email}</p>
               <p className="text-[11px] text-gray-500">{user?.is_superuser ? t.common.administrator : t.common.user}</p>
