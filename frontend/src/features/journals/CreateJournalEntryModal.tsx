@@ -7,6 +7,8 @@ import { formatCurrency as fmtCurrency } from '../../lib/format';
 import { useI18n } from '../../i18n';
 import AccountTypeBadge from '../accounts/AccountTypeBadge';
 import type { Account } from '../../api/types';
+import { useToast } from '../../components/feedback/useToast';
+import JournalAssistantPanel from './assistant/JournalAssistantPanel';
 
 interface CreateJournalEntryModalProps {
   isOpen: boolean;
@@ -173,6 +175,50 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
   const { accounts, fetchAccounts } = useAccounts({ companyId, skip: 0, limit: 500 });
   const { createJournalEntry, isSubmitting, submitError, setSubmitError } = useCreateJournalEntry();
   const { t } = useI18n();
+  const toast = useToast();
+
+  // ── Assistant State ──
+  const [pendingSuggestion, setPendingSuggestion] = useState<{
+    debitAccountId?: number;
+    creditAccountId?: number;
+    amount?: number;
+    description: string;
+  } | null>(null);
+  const [showReplaceConfirm, setShowReplaceConfirm] = useState(false);
+
+  const applySuggestionDirectly = (suggestion: {
+    debitAccountId?: number;
+    creditAccountId?: number;
+    amount?: number;
+    description: string;
+  }) => {
+    if (!description.trim()) {
+      setDescription(suggestion.description);
+    }
+    const amountStr = suggestion.amount !== undefined ? String(suggestion.amount) : '';
+    setLines([
+      { account_id: suggestion.debitAccountId ?? null, debit: amountStr, credit: '', description: suggestion.description },
+      { account_id: suggestion.creditAccountId ?? null, debit: '', credit: amountStr, description: suggestion.description }
+    ]);
+    toast.success(t.journals.assistantApplied || 'Assistant suggestion applied.');
+  };
+
+  const handleApplySuggestion = (suggestion: {
+    debitAccountId?: number;
+    creditAccountId?: number;
+    amount?: number;
+    description: string;
+  }) => {
+    const empty = lines.every(
+      (line) => !line.account_id && !line.debit && !line.credit && !line.description
+    );
+    if (empty) {
+      applySuggestionDirectly(suggestion);
+    } else {
+      setPendingSuggestion(suggestion);
+      setShowReplaceConfirm(true);
+    }
+  };
 
   // ── Auto-generate default entry number ──
   const generateDefaultEntryNo = () => {
@@ -389,7 +435,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ duration: 0.3 }}
-              className="relative w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl bg-surface-900 border border-white/[0.08] shadow-2xl overflow-hidden z-10"
+              className="relative w-full max-w-6xl max-h-[90vh] flex flex-col rounded-2xl bg-surface-900 border border-white/[0.08] shadow-2xl overflow-hidden z-10"
             >
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06] bg-surface-800/40">
@@ -405,8 +451,10 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                 </button>
               </div>
 
-              {/* Scrollable Form Body */}
-              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Split Body Container */}
+              <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+                {/* Scrollable Form Body */}
+                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
                 {/* Top fields */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
@@ -645,7 +693,13 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                     </div>
                   </div>
                 </div>
-              </form>
+                </form>
+
+                {/* Assistant Panel */}
+                <div className="w-full lg:w-[350px] xl:w-[380px] border-t lg:border-t-0 lg:border-l rtl:lg:border-l-0 rtl:lg:border-r border-white/[0.06] bg-surface-900/30 flex flex-col p-5 overflow-y-auto">
+                  <JournalAssistantPanel accounts={accounts} onApplySuggestion={handleApplySuggestion} />
+                </div>
+              </div>
 
               {/* Sticky Bottom Footer: Metrics and Save Action */}
               <div className="px-6 py-4 border-t border-white/[0.06] bg-surface-800/40 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -720,6 +774,64 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
         onSelect={handleAccountSelect}
         onClose={() => setPickerLineIndex(null)}
       />
+
+      {/* Confirmation dialog for replacing existing lines */}
+      <AnimatePresence>
+        {showReplaceConfirm && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => {
+                setShowReplaceConfirm(false);
+                setPendingSuggestion(null);
+              }}
+            />
+            {/* Confirm Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-md bg-surface-900 border border-white/[0.08] rounded-2xl shadow-2xl z-10 p-6 flex flex-col gap-4 text-center"
+            >
+              <h4 className="text-sm font-bold text-white">
+                {t.journals.assistantReplaceExistingLines}
+              </h4>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                {t.journals.assistantReplaceConfirm}
+              </p>
+              <div className="flex items-center justify-center gap-3 mt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowReplaceConfirm(false);
+                    setPendingSuggestion(null);
+                  }}
+                  className="px-4 py-2 rounded-xl border border-white/[0.06] hover:border-white/[0.12] text-xs font-medium text-gray-400 hover:text-gray-200 bg-white/[0.02] transition-colors"
+                >
+                  {t.common.cancel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (pendingSuggestion) {
+                      applySuggestionDirectly(pendingSuggestion);
+                    }
+                    setShowReplaceConfirm(false);
+                    setPendingSuggestion(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-lg transition-all"
+                >
+                  {t.common.confirm}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

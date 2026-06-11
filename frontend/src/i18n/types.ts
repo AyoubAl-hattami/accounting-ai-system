@@ -204,6 +204,26 @@ export interface Translations {
     successPosted: string;
     successVoided: string;
     successReversalDraft: string;
+    assistantTitle: string;
+    assistantSubtitle: string;
+    assistantPlaceholder: string;
+    assistantSuggest: string;
+    assistantApply: string;
+    assistantClear: string;
+    assistantConfidence: string;
+    assistantHigh: string;
+    assistantMedium: string;
+    assistantLow: string;
+    assistantDebit: string;
+    assistantCredit: string;
+    assistantAmount: string;
+    assistantExplanation: string;
+    assistantWarnings: string;
+    assistantNoSuggestion: string;
+    assistantReviewDisclaimer: string;
+    assistantApplied: string;
+    assistantReplaceExistingLines: string;
+    assistantReplaceConfirm: string;
   };
 
   // ── Create Journal Entry Modal ──
