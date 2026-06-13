@@ -697,7 +697,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
 
                 {/* Assistant Panel */}
                 <div className="w-full lg:w-[350px] xl:w-[380px] border-t lg:border-t-0 lg:border-l rtl:lg:border-l-0 rtl:lg:border-r border-white/[0.06] bg-surface-900/30 flex flex-col p-5 overflow-y-auto">
-                  <JournalAssistantPanel accounts={accounts} onApplySuggestion={handleApplySuggestion} />
+                  <JournalAssistantPanel accounts={accounts} companyId={companyId ?? 0} onApplySuggestion={handleApplySuggestion} />
                 </div>
               </div>
 

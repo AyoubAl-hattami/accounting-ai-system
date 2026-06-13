@@ -8,6 +8,7 @@ export interface JournalAssistantSuggestion {
   explanation: string;
   warnings: string[];
   detectedIntent: string;
+  source?: 'backend_rules' | 'local_fallback';
 }
 
 export interface JournalAssistantInput {

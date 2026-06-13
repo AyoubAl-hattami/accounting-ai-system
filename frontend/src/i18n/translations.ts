@@ -224,6 +224,10 @@ export const en: Translations = {
     assistantApplied: 'Assistant suggestion applied.',
     assistantReplaceExistingLines: 'Replace existing journal lines?',
     assistantReplaceConfirm: 'This will replace your current journal lines. Are you sure you want to proceed?',
+    assistantSourceBackend: 'Backend rules',
+    assistantSourceLocal: 'Local fallback',
+    assistantFallbackWarning: 'Using local fallback suggestions.',
+    assistantLoading: 'Analyzing...',
   },
 
   // ── Create Journal Entry Modal ──
@@ -663,6 +667,10 @@ export const ar: Translations = {
     assistantApplied: 'تم تطبيق اقتراح المساعد.',
     assistantReplaceExistingLines: 'استبدال بنود القيد الحالية؟',
     assistantReplaceConfirm: 'سيؤدي هذا إلى استبدال بنود القيد الحالية. هل أنت متأكد من المتابعة؟',
+    assistantSourceBackend: 'قواعد الخادم',
+    assistantSourceLocal: 'احتياطي محلي',
+    assistantFallbackWarning: 'يتم استخدام اقتراحات محلية احتياطية.',
+    assistantLoading: 'جاري التحليل...',
   },
 
   // ── Create Journal Entry Modal ──

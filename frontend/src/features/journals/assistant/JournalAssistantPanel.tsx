@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useI18n } from '../../../i18n';
-import { Sparkles, AlertTriangle, CheckCircle2, AlertCircle } from 'lucide-react';
-import { suggestJournalEntry } from './journalAssistantRules';
-import type { Account, JournalAssistantSuggestion } from './types';
+import { Sparkles, AlertTriangle, CheckCircle2, AlertCircle, Loader2, Info, Server, Cpu } from 'lucide-react';
+import { useJournalSuggestion } from './useJournalSuggestion';
+import type { Account } from './types';
 
 interface JournalAssistantPanelProps {
   accounts: Account[];
+  companyId: number;
   onApplySuggestion: (suggestion: {
     debitAccountId?: number;
     creditAccountId?: number;
@@ -14,24 +15,19 @@ interface JournalAssistantPanelProps {
   }) => void;
 }
 
-export default function JournalAssistantPanel({ accounts, onApplySuggestion }: JournalAssistantPanelProps) {
+export default function JournalAssistantPanel({ accounts, companyId, onApplySuggestion }: JournalAssistantPanelProps) {
   const { t, language, dir } = useI18n();
   const [description, setDescription] = useState('');
-  const [suggestion, setSuggestion] = useState<JournalAssistantSuggestion | null>(null);
+  const { suggest, suggestion, isLoading, source, clear: clearSuggestion } = useJournalSuggestion();
 
   const handleSuggest = () => {
     if (!description.trim()) return;
-    const result = suggestJournalEntry({
-      description,
-      accounts,
-      language,
-    });
-    setSuggestion(result);
+    suggest(description, accounts, language, companyId);
   };
 
   const handleClear = () => {
     setDescription('');
-    setSuggestion(null);
+    clearSuggestion();
   };
 
   const handleApply = () => {
@@ -115,12 +111,21 @@ export default function JournalAssistantPanel({ accounts, onApplySuggestion }: J
           )}
           <button
             type="button"
-            disabled={!description.trim()}
+            disabled={!description.trim() || isLoading}
             onClick={handleSuggest}
             className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-500/10 hover:bg-brand-500/20 disabled:hover:bg-brand-500/5 disabled:opacity-40 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.98]"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{t.journals.assistantSuggest || 'Suggest Entry'}</span>
+            {isLoading ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>{t.journals.assistantLoading || 'Analyzing...'}</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{t.journals.assistantSuggest || 'Suggest Entry'}</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -128,15 +133,39 @@ export default function JournalAssistantPanel({ accounts, onApplySuggestion }: J
       {/* Suggestion Result Box */}
       {suggestion && (
         <div className="flex-1 flex flex-col gap-3.5 border-t border-white/[0.06] pt-4 overflow-y-auto">
-          {/* Header with intent and confidence */}
+          {/* Header with confidence and source */}
           <div className="flex items-center justify-between text-xs">
             <span className="text-gray-400 font-medium">
               {t.journals.assistantConfidence || 'Confidence'}:
             </span>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border ${getConfidenceBadgeColor(suggestion.confidence)}`}>
-              {getConfidenceLabel(suggestion.confidence)}
-            </span>
+            <div className="flex items-center gap-2">
+              {/* Source Badge */}
+              {source === 'backend_rules' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border bg-teal-500/10 text-teal-400 border-teal-500/20">
+                  <Server className="w-2.5 h-2.5" />
+                  {t.journals.assistantSourceBackend || 'Backend rules'}
+                </span>
+              )}
+              {source === 'local_fallback' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border bg-amber-500/10 text-amber-400 border-amber-500/20">
+                  <Cpu className="w-2.5 h-2.5" />
+                  {t.journals.assistantSourceLocal || 'Local fallback'}
+                </span>
+              )}
+              {/* Confidence Badge */}
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border ${getConfidenceBadgeColor(suggestion.confidence)}`}>
+                {getConfidenceLabel(suggestion.confidence)}
+              </span>
+            </div>
           </div>
+
+          {/* Local fallback warning */}
+          {source === 'local_fallback' && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/[0.06] border border-amber-500/15 text-amber-400 text-[11px]">
+              <Info className="w-3.5 h-3.5 flex-shrink-0" />
+              <span>{t.journals.assistantFallbackWarning || 'Using local fallback suggestions.'}</span>
+            </div>
+          )}
 
           {suggestion.detectedIntent === 'unknown' ? (
             <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] flex items-start gap-2">

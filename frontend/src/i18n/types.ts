@@ -224,6 +224,10 @@ export interface Translations {
     assistantApplied: string;
     assistantReplaceExistingLines: string;
     assistantReplaceConfirm: string;
+    assistantSourceBackend: string;
+    assistantSourceLocal: string;
+    assistantFallbackWarning: string;
+    assistantLoading: string;
   };
 
   // ── Create Journal Entry Modal ──
