@@ -228,6 +228,12 @@ export interface Translations {
     assistantSourceLocal: string;
     assistantFallbackWarning: string;
     assistantLoading: string;
+    aiMode: string;
+    backendRules: string;
+    rulesFallback: string;
+    aiStatusUnavailable: string;
+    llmNotConfigured: string;
+    providerStatus: string;
   };
 
   // ── Create Journal Entry Modal ──

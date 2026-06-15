@@ -228,6 +228,12 @@ export const en: Translations = {
     assistantSourceLocal: 'Local fallback',
     assistantFallbackWarning: 'Using local fallback suggestions.',
     assistantLoading: 'Analyzing...',
+    aiMode: 'AI mode',
+    backendRules: 'Backend rules',
+    rulesFallback: 'Rules fallback',
+    aiStatusUnavailable: 'AI status unavailable',
+    llmNotConfigured: 'LLM not configured',
+    providerStatus: 'Provider status',
   },
 
   // ── Create Journal Entry Modal ──
@@ -671,6 +677,12 @@ export const ar: Translations = {
     assistantSourceLocal: 'احتياطي محلي',
     assistantFallbackWarning: 'يتم استخدام اقتراحات محلية احتياطية.',
     assistantLoading: 'جاري التحليل...',
+    aiMode: 'وضع الذكاء',
+    backendRules: 'قواعد الخادم',
+    rulesFallback: 'احتياطي القواعد',
+    aiStatusUnavailable: 'حالة الذكاء غير متوفرة',
+    llmNotConfigured: 'مزود LLM غير مُهيأ',
+    providerStatus: 'حالة المزود',
   },
 
   // ── Create Journal Entry Modal ──

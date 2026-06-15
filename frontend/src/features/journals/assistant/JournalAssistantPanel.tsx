@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useI18n } from '../../../i18n';
-import { Sparkles, AlertTriangle, CheckCircle2, AlertCircle, Loader2, Info, Server, Cpu } from 'lucide-react';
+import { Sparkles, AlertTriangle, CheckCircle2, AlertCircle, Loader2, Info, Server, Cpu, Activity } from 'lucide-react';
 import { useJournalSuggestion } from './useJournalSuggestion';
+import { useAiStatus } from './useAiStatus';
 import type { Account } from './types';
 
 interface JournalAssistantPanelProps {
@@ -19,6 +20,7 @@ export default function JournalAssistantPanel({ accounts, companyId, onApplySugg
   const { t, language, dir } = useI18n();
   const [description, setDescription] = useState('');
   const { suggest, suggestion, isLoading, source, clear: clearSuggestion } = useJournalSuggestion();
+  const { status: aiStatus, error: aiStatusError } = useAiStatus();
 
   const handleSuggest = () => {
     if (!description.trim()) return;
@@ -87,6 +89,29 @@ export default function JournalAssistantPanel({ accounts, companyId, onApplySugg
             {t.journals.assistantSubtitle || 'Describe the transaction and get a suggested debit/credit entry.'}
           </p>
         </div>
+      </div>
+
+      {/* AI Mode Badge */}
+      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+        <Activity className="w-3 h-3 text-gray-500 flex-shrink-0" />
+        <span className="text-[10px] text-gray-500">
+          {t.journals.aiMode || 'AI mode'}:
+        </span>
+        {aiStatusError ? (
+          <span className="text-[10px] text-gray-600 italic">
+            {t.journals.aiStatusUnavailable || 'AI status unavailable'}
+          </span>
+        ) : aiStatus ? (
+          <span className="text-[10px] font-semibold text-teal-400">
+            {aiStatus.journal_provider === 'rules'
+              ? (t.journals.backendRules || 'Backend rules')
+              : aiStatus.journal_provider === 'llm_placeholder'
+                ? (t.journals.rulesFallback || 'Rules fallback')
+                : aiStatus.journal_provider}
+          </span>
+        ) : (
+          <span className="text-[10px] text-gray-600 animate-pulse">...</span>
+        )}
       </div>
 
       {/* Input Textarea */}

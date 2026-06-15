@@ -25,3 +25,11 @@ class JournalSuggestionResponse(BaseModel):
     warnings: list[str]
     detected_intent: str
     source: str = "backend_rules"
+
+
+class AiStatusResponse(BaseModel):
+    journal_provider: str
+    llm_enabled: bool
+    fallback_enabled: bool
+    source: str
+    message: str
