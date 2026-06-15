@@ -16,11 +16,15 @@ from app.modules.accounting.services.ai_providers.rules_provider import (
 from app.modules.accounting.services.ai_providers.llm_placeholder_provider import (
     LlmPlaceholderJournalSuggestionProvider,
 )
+from app.modules.accounting.services.ai_providers.openai_provider import (
+    OpenAIJournalSuggestionProvider,
+)
 
 
 _PROVIDERS: dict[str, type[BaseJournalSuggestionProvider]] = {
     "rules": RulesJournalSuggestionProvider,
     "llm_placeholder": LlmPlaceholderJournalSuggestionProvider,
+    "openai": OpenAIJournalSuggestionProvider,
 }
 
 
@@ -51,6 +55,7 @@ def get_journal_suggestion_provider() -> BaseJournalSuggestionProvider:
 def get_provider_status() -> dict:
     """
     Return the current AI provider status for the status endpoint.
+    Never exposes API keys or secrets.
     """
     provider = get_journal_suggestion_provider()
     provider_key = getattr(settings, "AI_JOURNAL_PROVIDER", "rules").strip().lower()
@@ -59,15 +64,29 @@ def get_provider_status() -> dict:
 
     if is_rules and provider_key == "rules":
         message = "Backend rules provider is active."
+        llm_enabled = False
     elif provider.provider_name == "llm_placeholder":
         message = "LLM provider is not configured. Backend rules fallback is active."
+        llm_enabled = False
+    elif provider.provider_name == "openai":
+        openai_key = getattr(settings, "OPENAI_API_KEY", "").strip()
+        if openai_key:
+            message = "OpenAI provider is active with backend rules fallback."
+            llm_enabled = True
+        else:
+            message = (
+                "OpenAI provider is selected but not configured. "
+                "Backend rules fallback is active."
+            )
+            llm_enabled = False
     else:
         # Fallback case (invalid config resolved to rules)
         message = "Backend rules provider is active (fallback from invalid config)."
+        llm_enabled = False
 
     return {
         "journal_provider": provider.provider_name,
-        "llm_enabled": False,
+        "llm_enabled": llm_enabled,
         "fallback_enabled": True,
         "source": provider.source_label,
         "message": message,

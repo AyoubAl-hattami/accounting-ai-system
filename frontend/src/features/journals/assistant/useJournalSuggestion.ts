@@ -3,7 +3,7 @@ import apiClient from '../../../api/client';
 import { suggestJournalEntry } from './journalAssistantRules';
 import type { Account, JournalAssistantSuggestion } from './types';
 
-export type SuggestionSource = 'backend_rules' | 'local_fallback' | null;
+export type SuggestionSource = 'backend_rules' | 'openai' | 'openai_fallback_rules' | 'llm_placeholder_fallback' | 'local_fallback' | null;
 
 interface UseSuggestionResult {
   suggest: (description: string, accounts: Account[], language: 'en' | 'ar', companyId: number) => Promise<void>;
@@ -74,11 +74,11 @@ export function useJournalSuggestion(): UseSuggestionResult {
           explanation: data.explanation,
           warnings: data.warnings,
           detectedIntent: data.detected_intent,
-          source: 'backend_rules',
+          source: (data.source as SuggestionSource) || 'backend_rules',
         };
 
         setSuggestion(mapped);
-        setSource('backend_rules');
+        setSource((data.source as SuggestionSource) || 'backend_rules');
       } catch {
         // Fallback to local rule engine on any error
         const localResult = suggestJournalEntry({

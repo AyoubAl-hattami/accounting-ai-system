@@ -234,6 +234,8 @@ export const en: Translations = {
     aiStatusUnavailable: 'AI status unavailable',
     llmNotConfigured: 'LLM not configured',
     providerStatus: 'Provider status',
+    openaiActive: 'OpenAI',
+    openaiRulesFallback: 'OpenAI fallback',
   },
 
   // ── Create Journal Entry Modal ──
@@ -683,6 +685,8 @@ export const ar: Translations = {
     aiStatusUnavailable: 'حالة الذكاء غير متوفرة',
     llmNotConfigured: 'مزود LLM غير مُهيأ',
     providerStatus: 'حالة المزود',
+    openaiActive: 'OpenAI',
+    openaiRulesFallback: 'احتياطي OpenAI',
   },
 
   // ── Create Journal Entry Modal ──

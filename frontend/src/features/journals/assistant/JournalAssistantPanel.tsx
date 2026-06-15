@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useI18n } from '../../../i18n';
-import { Sparkles, AlertTriangle, CheckCircle2, AlertCircle, Loader2, Info, Server, Cpu, Activity } from 'lucide-react';
+import { Sparkles, AlertTriangle, CheckCircle2, AlertCircle, Loader2, Info, Server, Cpu, Activity, Zap } from 'lucide-react';
 import { useJournalSuggestion } from './useJournalSuggestion';
 import { useAiStatus } from './useAiStatus';
 import type { Account } from './types';
@@ -102,12 +102,16 @@ export default function JournalAssistantPanel({ accounts, companyId, onApplySugg
             {t.journals.aiStatusUnavailable || 'AI status unavailable'}
           </span>
         ) : aiStatus ? (
-          <span className="text-[10px] font-semibold text-teal-400">
+          <span className={`text-[10px] font-semibold ${aiStatus.llm_enabled ? 'text-violet-400' : 'text-teal-400'}`}>
             {aiStatus.journal_provider === 'rules'
               ? (t.journals.backendRules || 'Backend rules')
-              : aiStatus.journal_provider === 'llm_placeholder'
-                ? (t.journals.rulesFallback || 'Rules fallback')
-                : aiStatus.journal_provider}
+              : aiStatus.journal_provider === 'openai'
+                ? (aiStatus.llm_enabled
+                  ? (t.journals.openaiActive || 'OpenAI')
+                  : (t.journals.openaiRulesFallback || 'OpenAI fallback'))
+                : aiStatus.journal_provider === 'llm_placeholder'
+                  ? (t.journals.rulesFallback || 'Rules fallback')
+                  : aiStatus.journal_provider}
           </span>
         ) : (
           <span className="text-[10px] text-gray-600 animate-pulse">...</span>
@@ -175,6 +179,18 @@ export default function JournalAssistantPanel({ accounts, companyId, onApplySugg
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border bg-amber-500/10 text-amber-400 border-amber-500/20">
                   <Cpu className="w-2.5 h-2.5" />
                   {t.journals.assistantSourceLocal || 'Local fallback'}
+                </span>
+              )}
+              {(source === 'openai') && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border bg-violet-500/10 text-violet-400 border-violet-500/20">
+                  <Zap className="w-2.5 h-2.5" />
+                  {t.journals.openaiActive || 'OpenAI'}
+                </span>
+              )}
+              {(source === 'openai_fallback_rules') && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border bg-amber-500/10 text-amber-400 border-amber-500/20">
+                  <Zap className="w-2.5 h-2.5" />
+                  {t.journals.openaiRulesFallback || 'OpenAI fallback'}
                 </span>
               )}
               {/* Confidence Badge */}

@@ -234,6 +234,8 @@ export interface Translations {
     aiStatusUnavailable: string;
     llmNotConfigured: string;
     providerStatus: string;
+    openaiActive: string;
+    openaiRulesFallback: string;
   };
 
   // ── Create Journal Entry Modal ──

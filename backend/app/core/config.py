@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
     AI_JOURNAL_PROVIDER: str = "rules"
+    OPENAI_API_KEY: str = ""
+    OPENAI_MODEL: str = "gpt-4o-mini"
 
     CORS_ORIGINS: str = (
         "http://localhost:5173,"
