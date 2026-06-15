@@ -3,7 +3,7 @@ Unit tests for the AI provider factory and providers.
 
 These tests do not require a running backend server — they test
 the provider classes and factory logic directly.
-All OpenAI tests use mocking — no real API calls are made.
+All OpenAI and Gemini tests use mocking — no real API calls are made.
 """
 
 import json
@@ -25,6 +25,9 @@ from app.modules.accounting.services.ai_providers.openai_provider import (
     _validate_account_id,
     _validate_amount,
     _validate_confidence,
+)
+from app.modules.accounting.services.ai_providers.gemini_provider import (
+    GeminiJournalSuggestionProvider,
 )
 from app.modules.accounting.schemas.ai_suggestion_schemas import AccountInfo
 
@@ -107,6 +110,7 @@ def test_factory_known_providers_registry():
     assert "rules" in _PROVIDERS
     assert "llm_placeholder" in _PROVIDERS
     assert "openai" in _PROVIDERS
+    assert "gemini" in _PROVIDERS
 
 
 def test_provider_status_default_is_rules():
@@ -412,3 +416,252 @@ def test_validate_account_id_rejects_unknown_ids():
     assert result is None
     assert len(warnings) == 1
     assert "999" in warnings[0]
+
+
+# ── Gemini Provider Tests (All Mocked) ────────────────────────────────────────
+
+
+def test_gemini_provider_selected_when_configured():
+    """Gemini provider is returned when AI_JOURNAL_PROVIDER=gemini and key is set."""
+    mock_settings = MagicMock()
+    mock_settings.AI_JOURNAL_PROVIDER = "gemini"
+    mock_settings.GEMINI_API_KEY = "test-gemini-key-12345"
+    mock_settings.GEMINI_MODEL = "gemini-2.5-flash"
+
+    with patch(
+        "app.modules.accounting.services.ai_provider_factory.settings",
+        mock_settings,
+    ), patch(
+        "app.modules.accounting.services.ai_providers.gemini_provider.settings",
+        mock_settings,
+    ):
+        provider = get_journal_suggestion_provider()
+        assert provider.provider_name == "gemini"
+
+
+def test_gemini_provider_falls_back_when_key_missing():
+    """Gemini provider returns rules fallback when API key is empty."""
+    mock_settings = MagicMock()
+    mock_settings.AI_JOURNAL_PROVIDER = "gemini"
+    mock_settings.GEMINI_API_KEY = ""
+    mock_settings.GEMINI_MODEL = "gemini-2.5-flash"
+
+    with patch(
+        "app.modules.accounting.services.ai_provider_factory.settings",
+        mock_settings,
+    ), patch(
+        "app.modules.accounting.services.ai_providers.gemini_provider.settings",
+        mock_settings,
+    ):
+        provider = get_journal_suggestion_provider()
+        result = provider.suggest_journal_entry(
+            description="Paid rent from bank for 1000",
+            accounts=SAMPLE_ACCOUNTS,
+            language="en",
+        )
+
+        assert result["source"] == "gemini_fallback_rules"
+        assert result["detected_intent"] == "rent_lease"
+        assert result["amount"] == 1000.0
+        assert any("not configured" in w.lower() for w in result["warnings"])
+
+
+def test_gemini_provider_returns_validated_output_on_valid_response():
+    """Gemini provider returns validated output when mocked response is valid."""
+    mock_settings = MagicMock()
+    mock_settings.GEMINI_API_KEY = "test-gemini-key-12345"
+    mock_settings.GEMINI_MODEL = "gemini-2.5-flash"
+
+    valid_json = json.dumps({
+        "debit_account_id": 11,
+        "credit_account_id": 2,
+        "amount": 1000.0,
+        "confidence": "high",
+        "explanation": "Rent is an expense, debit Rent Expense, credit Main Bank.",
+        "warnings": [],
+        "detected_intent": "rent_lease",
+    })
+
+    mock_response = MagicMock()
+    mock_response.text = valid_json
+
+    with patch(
+        "app.modules.accounting.services.ai_providers.gemini_provider.settings",
+        mock_settings,
+    ):
+        provider = GeminiJournalSuggestionProvider()
+
+        with patch(
+            "app.modules.accounting.services.ai_providers.gemini_provider.genai"
+        ) as mock_genai:
+            mock_client = MagicMock()
+            mock_client.models.generate_content.return_value = mock_response
+            mock_genai.Client.return_value = mock_client
+
+            result = provider.suggest_journal_entry(
+                description="Paid rent from bank for 1000",
+                accounts=SAMPLE_ACCOUNTS,
+                language="en",
+            )
+
+    assert result["source"] == "gemini"
+    assert result["debit_account_id"] == 11
+    assert result["credit_account_id"] == 2
+    assert result["amount"] == 1000.0
+    assert result["confidence"] == "high"
+    assert result["detected_intent"] == "rent_lease"
+
+
+def test_gemini_provider_rejects_invalid_account_ids():
+    """Gemini provider rejects account IDs not in available accounts."""
+    mock_settings = MagicMock()
+    mock_settings.GEMINI_API_KEY = "test-gemini-key-12345"
+    mock_settings.GEMINI_MODEL = "gemini-2.5-flash"
+
+    invalid_json = json.dumps({
+        "debit_account_id": 999,
+        "credit_account_id": 2,
+        "amount": 500.0,
+        "confidence": "medium",
+        "explanation": "Some explanation.",
+        "warnings": [],
+        "detected_intent": "purchase_equipment",
+    })
+
+    mock_response = MagicMock()
+    mock_response.text = invalid_json
+
+    with patch(
+        "app.modules.accounting.services.ai_providers.gemini_provider.settings",
+        mock_settings,
+    ):
+        provider = GeminiJournalSuggestionProvider()
+
+        with patch(
+            "app.modules.accounting.services.ai_providers.gemini_provider.genai"
+        ) as mock_genai:
+            mock_client = MagicMock()
+            mock_client.models.generate_content.return_value = mock_response
+            mock_genai.Client.return_value = mock_client
+
+            result = provider.suggest_journal_entry(
+                description="Bought equipment for 500",
+                accounts=SAMPLE_ACCOUNTS,
+                language="en",
+            )
+
+    assert result["source"] == "gemini"
+    assert result["debit_account_id"] is None
+    assert result["credit_account_id"] == 2
+    assert any("999" in w and "not in" in w for w in result["warnings"])
+
+
+def test_gemini_provider_falls_back_on_invalid_json():
+    """Gemini provider falls back to rules when model returns invalid JSON."""
+    mock_settings = MagicMock()
+    mock_settings.GEMINI_API_KEY = "test-gemini-key-12345"
+    mock_settings.GEMINI_MODEL = "gemini-2.5-flash"
+
+    mock_response = MagicMock()
+    mock_response.text = "This is not valid JSON at all."
+
+    with patch(
+        "app.modules.accounting.services.ai_providers.gemini_provider.settings",
+        mock_settings,
+    ):
+        provider = GeminiJournalSuggestionProvider()
+
+        with patch(
+            "app.modules.accounting.services.ai_providers.gemini_provider.genai"
+        ) as mock_genai:
+            mock_client = MagicMock()
+            mock_client.models.generate_content.return_value = mock_response
+            mock_genai.Client.return_value = mock_client
+
+            result = provider.suggest_journal_entry(
+                description="Paid rent from bank for 1000",
+                accounts=SAMPLE_ACCOUNTS,
+                language="en",
+            )
+
+    assert result["source"] == "gemini_fallback_rules"
+    assert result["detected_intent"] == "rent_lease"
+    assert any("invalid output" in w.lower() or "fallback" in w.lower() for w in result["warnings"])
+
+
+def test_gemini_provider_falls_back_on_exception():
+    """Gemini provider falls back to rules when Gemini client raises exception."""
+    mock_settings = MagicMock()
+    mock_settings.GEMINI_API_KEY = "test-gemini-key-12345"
+    mock_settings.GEMINI_MODEL = "gemini-2.5-flash"
+
+    with patch(
+        "app.modules.accounting.services.ai_providers.gemini_provider.settings",
+        mock_settings,
+    ):
+        provider = GeminiJournalSuggestionProvider()
+
+        with patch(
+            "app.modules.accounting.services.ai_providers.gemini_provider.genai"
+        ) as mock_genai:
+            mock_client = MagicMock()
+            mock_client.models.generate_content.side_effect = Exception(
+                "Connection refused"
+            )
+            mock_genai.Client.return_value = mock_client
+
+            result = provider.suggest_journal_entry(
+                description="Paid rent from bank for 1000",
+                accounts=SAMPLE_ACCOUNTS,
+                language="en",
+            )
+
+    assert result["source"] == "gemini_fallback_rules"
+    assert result["detected_intent"] == "rent_lease"
+    assert result["amount"] == 1000.0
+    assert any("unavailable" in w.lower() or "fallback" in w.lower() for w in result["warnings"])
+
+
+def test_gemini_status_shows_llm_enabled_when_configured():
+    """GET /ai/status shows llm_enabled true when Gemini is configured."""
+    mock_settings = MagicMock()
+    mock_settings.AI_JOURNAL_PROVIDER = "gemini"
+    mock_settings.GEMINI_API_KEY = "test-gemini-key-12345"
+    mock_settings.GEMINI_MODEL = "gemini-2.5-flash"
+
+    with patch(
+        "app.modules.accounting.services.ai_provider_factory.settings",
+        mock_settings,
+    ), patch(
+        "app.modules.accounting.services.ai_providers.gemini_provider.settings",
+        mock_settings,
+    ):
+        status = get_provider_status()
+
+    assert status["journal_provider"] == "gemini"
+    assert status["llm_enabled"] is True
+    assert status["fallback_enabled"] is True
+    assert status["source"] == "gemini"
+    assert "Gemini provider is active" in status["message"]
+
+
+def test_gemini_status_shows_fallback_when_key_missing():
+    """GET /ai/status shows fallback when Gemini key is missing."""
+    mock_settings = MagicMock()
+    mock_settings.AI_JOURNAL_PROVIDER = "gemini"
+    mock_settings.GEMINI_API_KEY = ""
+    mock_settings.GEMINI_MODEL = "gemini-2.5-flash"
+
+    with patch(
+        "app.modules.accounting.services.ai_provider_factory.settings",
+        mock_settings,
+    ), patch(
+        "app.modules.accounting.services.ai_providers.gemini_provider.settings",
+        mock_settings,
+    ):
+        status = get_provider_status()
+
+    assert status["journal_provider"] == "gemini"
+    assert status["llm_enabled"] is False
+    assert status["source"] == "gemini_fallback_rules"
+    assert "not configured" in status["message"]

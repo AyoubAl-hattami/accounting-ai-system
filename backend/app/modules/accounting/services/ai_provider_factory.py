@@ -19,12 +19,16 @@ from app.modules.accounting.services.ai_providers.llm_placeholder_provider impor
 from app.modules.accounting.services.ai_providers.openai_provider import (
     OpenAIJournalSuggestionProvider,
 )
+from app.modules.accounting.services.ai_providers.gemini_provider import (
+    GeminiJournalSuggestionProvider,
+)
 
 
 _PROVIDERS: dict[str, type[BaseJournalSuggestionProvider]] = {
     "rules": RulesJournalSuggestionProvider,
     "llm_placeholder": LlmPlaceholderJournalSuggestionProvider,
     "openai": OpenAIJournalSuggestionProvider,
+    "gemini": GeminiJournalSuggestionProvider,
 }
 
 
@@ -76,6 +80,17 @@ def get_provider_status() -> dict:
         else:
             message = (
                 "OpenAI provider is selected but not configured. "
+                "Backend rules fallback is active."
+            )
+            llm_enabled = False
+    elif provider.provider_name == "gemini":
+        gemini_key = getattr(settings, "GEMINI_API_KEY", "").strip()
+        if gemini_key:
+            message = "Gemini provider is active with backend rules fallback."
+            llm_enabled = True
+        else:
+            message = (
+                "Gemini provider is selected but not configured. "
                 "Backend rules fallback is active."
             )
             llm_enabled = False

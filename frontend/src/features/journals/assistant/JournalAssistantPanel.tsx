@@ -109,9 +109,13 @@ export default function JournalAssistantPanel({ accounts, companyId, onApplySugg
                 ? (aiStatus.llm_enabled
                   ? (t.journals.openaiActive || 'OpenAI')
                   : (t.journals.openaiRulesFallback || 'OpenAI fallback'))
-                : aiStatus.journal_provider === 'llm_placeholder'
-                  ? (t.journals.rulesFallback || 'Rules fallback')
-                  : aiStatus.journal_provider}
+                : aiStatus.journal_provider === 'gemini'
+                  ? (aiStatus.llm_enabled
+                    ? (t.journals.geminiActive || 'Gemini')
+                    : (t.journals.geminiRulesFallback || 'Gemini fallback'))
+                  : aiStatus.journal_provider === 'llm_placeholder'
+                    ? (t.journals.rulesFallback || 'Rules fallback')
+                    : aiStatus.journal_provider}
           </span>
         ) : (
           <span className="text-[10px] text-gray-600 animate-pulse">...</span>
@@ -191,6 +195,18 @@ export default function JournalAssistantPanel({ accounts, companyId, onApplySugg
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border bg-amber-500/10 text-amber-400 border-amber-500/20">
                   <Zap className="w-2.5 h-2.5" />
                   {t.journals.openaiRulesFallback || 'OpenAI fallback'}
+                </span>
+              )}
+              {(source === 'gemini') && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border bg-violet-500/10 text-violet-400 border-violet-500/20">
+                  <Zap className="w-2.5 h-2.5" />
+                  {t.journals.geminiActive || 'Gemini'}
+                </span>
+              )}
+              {(source === 'gemini_fallback_rules') && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border bg-amber-500/10 text-amber-400 border-amber-500/20">
+                  <Zap className="w-2.5 h-2.5" />
+                  {t.journals.geminiRulesFallback || 'Gemini fallback'}
                 </span>
               )}
               {/* Confidence Badge */}

@@ -236,6 +236,8 @@ export const en: Translations = {
     providerStatus: 'Provider status',
     openaiActive: 'OpenAI',
     openaiRulesFallback: 'OpenAI fallback',
+    geminiActive: 'Gemini',
+    geminiRulesFallback: 'Gemini fallback',
   },
 
   // ── Create Journal Entry Modal ──
@@ -687,6 +689,8 @@ export const ar: Translations = {
     providerStatus: 'حالة المزود',
     openaiActive: 'OpenAI',
     openaiRulesFallback: 'احتياطي OpenAI',
+    geminiActive: 'Gemini',
+    geminiRulesFallback: 'احتياطي Gemini',
   },
 
   // ── Create Journal Entry Modal ──

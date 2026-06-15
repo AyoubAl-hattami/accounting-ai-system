@@ -3,7 +3,7 @@ import apiClient from '../../../api/client';
 import { suggestJournalEntry } from './journalAssistantRules';
 import type { Account, JournalAssistantSuggestion } from './types';
 
-export type SuggestionSource = 'backend_rules' | 'openai' | 'openai_fallback_rules' | 'llm_placeholder_fallback' | 'local_fallback' | null;
+export type SuggestionSource = 'backend_rules' | 'openai' | 'openai_fallback_rules' | 'gemini' | 'gemini_fallback_rules' | 'llm_placeholder_fallback' | 'local_fallback' | null;
 
 interface UseSuggestionResult {
   suggest: (description: string, accounts: Account[], language: 'en' | 'ar', companyId: number) => Promise<void>;

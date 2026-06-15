@@ -8,7 +8,7 @@ export interface JournalAssistantSuggestion {
   explanation: string;
   warnings: string[];
   detectedIntent: string;
-  source?: 'backend_rules' | 'openai' | 'openai_fallback_rules' | 'llm_placeholder_fallback' | 'local_fallback';
+  source?: 'backend_rules' | 'openai' | 'openai_fallback_rules' | 'gemini' | 'gemini_fallback_rules' | 'llm_placeholder_fallback' | 'local_fallback';
 }
 
 export interface JournalAssistantInput {

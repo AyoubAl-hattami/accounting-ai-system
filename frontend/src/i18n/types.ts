@@ -236,6 +236,8 @@ export interface Translations {
     providerStatus: string;
     openaiActive: string;
     openaiRulesFallback: string;
+    geminiActive: string;
+    geminiRulesFallback: string;
   };
 
   // ── Create Journal Entry Modal ──
