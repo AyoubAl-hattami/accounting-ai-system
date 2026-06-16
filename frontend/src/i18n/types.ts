@@ -238,6 +238,9 @@ export interface Translations {
     openaiRulesFallback: string;
     geminiActive: string;
     geminiRulesFallback: string;
+    assistantBackendFallbackWarning: string;
+    providerLabel: string;
+    fallbackLabel: string;
   };
 
   // ── Create Journal Entry Modal ──

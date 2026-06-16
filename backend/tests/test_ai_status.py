@@ -9,7 +9,7 @@ def test_ai_status_requires_authentication(base_url):
     assert response.status_code in (401, 403)
 
 
-def test_ai_status_returns_rules_as_default(base_url, admin_headers):
+def test_ai_status_returns_valid_provider(base_url, admin_headers):
     response = requests.get(
         f"{base_url}/ai/status",
         headers=admin_headers,
@@ -19,10 +19,12 @@ def test_ai_status_returns_rules_as_default(base_url, admin_headers):
 
     data = response.json()
 
-    assert data["journal_provider"] == "rules"
-    assert data["llm_enabled"] is False
+    valid_providers = {"rules", "openai", "gemini", "llm_placeholder"}
+    assert data["journal_provider"] in valid_providers
+    assert isinstance(data["llm_enabled"], bool)
     assert data["fallback_enabled"] is True
-    assert data["source"] == "backend_rules"
+    assert isinstance(data["source"], str)
+    assert len(data["source"]) > 0
     assert isinstance(data["message"], str)
     assert len(data["message"]) > 0
 

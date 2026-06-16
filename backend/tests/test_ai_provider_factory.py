@@ -102,8 +102,16 @@ def test_llm_placeholder_does_not_call_external_services():
 
 
 def test_factory_returns_rules_provider_by_default():
-    provider = get_journal_suggestion_provider()
-    assert provider.provider_name == "rules"
+    """With default config (rules), factory returns rules provider."""
+    mock_settings = MagicMock()
+    mock_settings.AI_JOURNAL_PROVIDER = "rules"
+
+    with patch(
+        "app.modules.accounting.services.ai_provider_factory.settings",
+        mock_settings,
+    ):
+        provider = get_journal_suggestion_provider()
+        assert provider.provider_name == "rules"
 
 
 def test_factory_known_providers_registry():
@@ -114,7 +122,16 @@ def test_factory_known_providers_registry():
 
 
 def test_provider_status_default_is_rules():
-    status = get_provider_status()
+    """With default config (rules), status shows rules."""
+    mock_settings = MagicMock()
+    mock_settings.AI_JOURNAL_PROVIDER = "rules"
+
+    with patch(
+        "app.modules.accounting.services.ai_provider_factory.settings",
+        mock_settings,
+    ):
+        status = get_provider_status()
+
     assert status["journal_provider"] == "rules"
     assert status["llm_enabled"] is False
     assert status["fallback_enabled"] is True

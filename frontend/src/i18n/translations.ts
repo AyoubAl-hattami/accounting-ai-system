@@ -238,6 +238,9 @@ export const en: Translations = {
     openaiRulesFallback: 'OpenAI fallback',
     geminiActive: 'Gemini',
     geminiRulesFallback: 'Gemini fallback',
+    assistantBackendFallbackWarning: 'AI provider unavailable. Using backend rules fallback.',
+    providerLabel: 'Provider',
+    fallbackLabel: 'Fallback',
   },
 
   // ── Create Journal Entry Modal ──
@@ -691,6 +694,9 @@ export const ar: Translations = {
     openaiRulesFallback: 'احتياطي OpenAI',
     geminiActive: 'Gemini',
     geminiRulesFallback: 'احتياطي Gemini',
+    assistantBackendFallbackWarning: 'مزود الذكاء غير متاح. يتم استخدام احتياطي قواعد الخادم.',
+    providerLabel: 'المزود',
+    fallbackLabel: 'الاحتياطي',
   },
 
   // ── Create Journal Entry Modal ──

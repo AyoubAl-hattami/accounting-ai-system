@@ -122,6 +122,36 @@ export default function JournalAssistantPanel({ accounts, companyId, onApplySugg
         )}
       </div>
 
+      {/* Example Prompt Chips */}
+      {!suggestion && (
+        <div className="flex flex-wrap gap-1.5">
+          {(language === 'ar'
+            ? [
+                'تم دفع الإيجار من البنك بمبلغ 1000',
+                'تم استلام إيراد مبيعات 2500 في البنك',
+                'استثمر المالك 5000 في البنك',
+                'تم شراء معدات من البنك بمبلغ 1200',
+              ]
+            : [
+                'Paid rent from bank for 1000',
+                'Received sales income 2500 into bank',
+                'Owner invested 5000 into bank',
+                'Bought equipment from bank for 1200',
+              ]
+          ).map((example) => (
+            <button
+              key={example}
+              type="button"
+              onClick={() => setDescription(example)}
+              className="px-2.5 py-1 rounded-lg text-[10px] font-medium text-gray-400 bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] hover:text-gray-200 hover:border-white/[0.10] transition-all cursor-pointer truncate max-w-[200px]"
+              title={example}
+            >
+              {example}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Input Textarea */}
       <div className="flex flex-col gap-1.5">
         <textarea
@@ -223,6 +253,12 @@ export default function JournalAssistantPanel({ accounts, companyId, onApplySugg
               <span>{t.journals.assistantFallbackWarning || 'Using local fallback suggestions.'}</span>
             </div>
           )}
+          {(source === 'gemini_fallback_rules' || source === 'openai_fallback_rules') && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/[0.06] border border-amber-500/15 text-amber-400 text-[11px]">
+              <Info className="w-3.5 h-3.5 flex-shrink-0" />
+              <span>{t.journals.assistantBackendFallbackWarning || 'AI provider unavailable. Using backend rules fallback.'}</span>
+            </div>
+          )}
 
           {suggestion.detectedIntent === 'unknown' ? (
             <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] flex items-start gap-2">
@@ -322,6 +358,19 @@ export default function JournalAssistantPanel({ accounts, companyId, onApplySugg
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Provider Footer */}
+      {aiStatus && (
+        <div className="flex items-center justify-center gap-1 pt-2 border-t border-white/[0.04]">
+          <span className="text-[9px] text-gray-600">
+            {t.journals.providerLabel || 'Provider'}: {aiStatus.journal_provider}
+          </span>
+          <span className="text-[9px] text-gray-700">·</span>
+          <span className="text-[9px] text-gray-600">
+            {t.journals.fallbackLabel || 'Fallback'}: {t.journals.backendRules || 'Backend rules'}
+          </span>
         </div>
       )}
     </div>

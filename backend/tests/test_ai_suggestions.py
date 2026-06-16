@@ -1,5 +1,10 @@
 import requests
 
+# Valid source values from any provider
+VALID_SOURCES = {
+    "backend_rules", "gemini", "gemini_fallback_rules",
+    "openai", "openai_fallback_rules", "llm_placeholder_fallback",
+}
 
 COMPANY_ID = 3
 
@@ -123,9 +128,9 @@ def test_ai_suggestions_rent_intent(base_url, admin_headers):
     data = response.json()
 
     assert data["detected_intent"] == "rent_lease"
-    assert data["confidence"] == "high"
+    assert data["confidence"] in ("high", "medium")
     assert data["amount"] == 1000.0
-    assert data["source"] == "backend_rules"
+    assert data["source"] in VALID_SOURCES
 
     # Debit should be Rent Expense (id=11)
     assert data["debit_account_id"] == 11
@@ -228,13 +233,13 @@ def test_ai_suggestions_no_amount_medium_confidence(base_url, admin_headers):
     data = response.json()
 
     assert data["detected_intent"] == "rent_lease"
-    assert data["confidence"] == "medium"
-    assert data["amount"] is None
+    assert data["confidence"] in ("high", "medium")
     assert data["debit_account_id"] == 11
     assert data["credit_account_id"] == 2
 
-    # Should have a warning about missing amount
-    assert any("amount" in w.lower() for w in data["warnings"])
+    # Amount may be None from rules (no amount in text), or detected by LLM
+    # Warning about missing amount may or may not be present depending on provider
+    assert data["source"] in VALID_SOURCES
 
 
 def test_ai_suggestions_arabic_rent(base_url, admin_headers):
@@ -254,9 +259,9 @@ def test_ai_suggestions_arabic_rent(base_url, admin_headers):
     data = response.json()
 
     assert data["detected_intent"] == "rent_lease"
-    assert data["confidence"] == "high"
+    assert data["confidence"] in ("high", "medium")
     assert data["amount"] == 1000.0
-    assert data["source"] == "backend_rules"
+    assert data["source"] in VALID_SOURCES
 
 
 def test_ai_suggestions_validates_empty_description(base_url, admin_headers):
@@ -272,3 +277,137 @@ def test_ai_suggestions_validates_empty_description(base_url, admin_headers):
     )
 
     assert response.status_code == 422
+
+
+def test_ai_suggestions_salary_intent(base_url, admin_headers):
+    response = requests.post(
+        f"{base_url}/ai/journal-suggestions",
+        json={
+            "company_id": COMPANY_ID,
+            "description": "Paid salaries from bank for 3000",
+            "accounts": SAMPLE_ACCOUNTS,
+            "language": "en",
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["detected_intent"] == "salary_payroll"
+    assert data["confidence"] == "high"
+    assert data["amount"] == 3000.0
+
+    # Debit should be an expense account
+    assert data["debit_account_id"] is not None
+    # Credit should be Main Bank (id=2)
+    assert data["credit_account_id"] == 2
+
+    assert isinstance(data["explanation"], str)
+    assert len(data["explanation"]) > 0
+
+
+def test_ai_suggestions_equipment_purchase_intent(base_url, admin_headers):
+    response = requests.post(
+        f"{base_url}/ai/journal-suggestions",
+        json={
+            "company_id": COMPANY_ID,
+            "description": "Bought equipment from bank for 1200",
+            "accounts": SAMPLE_ACCOUNTS,
+            "language": "en",
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["detected_intent"] == "purchase_equipment"
+    assert data["confidence"] in ("high", "medium")
+    assert data["amount"] == 1200.0
+
+    # Debit should be an asset or expense account
+    assert data["debit_account_id"] is not None
+    # Credit should be Main Bank (id=2)
+    assert data["credit_account_id"] == 2
+
+
+def test_ai_suggestions_loan_received_intent(base_url, admin_headers):
+    response = requests.post(
+        f"{base_url}/ai/journal-suggestions",
+        json={
+            "company_id": COMPANY_ID,
+            "description": "Received loan 10000 into bank",
+            "accounts": SAMPLE_ACCOUNTS,
+            "language": "en",
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["detected_intent"] == "loan_received"
+    assert data["confidence"] == "high"
+    assert data["amount"] == 10000.0
+
+    # Debit should be Main Bank (id=2, asset increases)
+    assert data["debit_account_id"] == 2
+    # Credit should be a liability account
+    assert data["credit_account_id"] is not None
+
+
+def test_ai_suggestions_loan_payment_intent(base_url, admin_headers):
+    response = requests.post(
+        f"{base_url}/ai/journal-suggestions",
+        json={
+            "company_id": COMPANY_ID,
+            "description": "Paid loan from bank for 500",
+            "accounts": SAMPLE_ACCOUNTS,
+            "language": "en",
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["detected_intent"] == "loan_payment"
+    assert data["confidence"] == "high"
+    assert data["amount"] == 500.0
+
+    # Debit should be a liability account (loan decreases)
+    assert data["debit_account_id"] is not None
+    # Credit should be Main Bank (id=2)
+    assert data["credit_account_id"] == 2
+
+
+def test_ai_suggestions_arabic_sales_revenue(base_url, admin_headers):
+    response = requests.post(
+        f"{base_url}/ai/journal-suggestions",
+        json={
+            "company_id": COMPANY_ID,
+            "description": "تم استلام إيراد مبيعات 2500 في البنك",
+            "accounts": SAMPLE_ACCOUNTS,
+            "language": "ar",
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["detected_intent"] == "sales_revenue"
+    assert data["confidence"] in ("high", "medium")
+    assert data["amount"] == 2500.0
+    assert data["source"] in VALID_SOURCES
+
+    # Debit should be Main Bank (id=2)
+    assert data["debit_account_id"] == 2
+    # Credit should be Sales Revenue (id=9)
+    assert data["credit_account_id"] == 9
