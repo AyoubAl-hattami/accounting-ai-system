@@ -23,6 +23,7 @@ import {
   Filter,
   Check,
   Download,
+  FileDown,
 } from 'lucide-react';
 
 function parseAmount(v: string): number {
@@ -68,6 +69,7 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
   const [expandedAccounts, setExpandedAccounts] = useState<Set<number>>(new Set());
   const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -176,6 +178,23 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
       alert(t.common.exportFailed);
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (!selectedCompanyId) return;
+    setExportingPdf(true);
+    try {
+      const { downloadFile } = await import('../../../lib/downloadFile');
+      await downloadFile('/reports/general-ledger/export.pdf', {
+        company_id: selectedCompanyId,
+        start_date: startDate,
+        end_date: endDate,
+      }, 'general-ledger.pdf');
+    } catch {
+      alert(t.common.pdfExportFailed);
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -392,6 +411,16 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
             >
               <Download className="w-4 h-4" />
               {exporting ? t.common.exporting : t.common.exportCsv}
+            </button>
+
+            {/* Export PDF */}
+            <button
+              onClick={handleExportPdf}
+              disabled={exportingPdf}
+              className="inline-flex items-center gap-1.5 px-4 h-[46px] rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-semibold hover:bg-red-500/20 transition-colors disabled:opacity-50"
+            >
+              <FileDown className="w-4 h-4" />
+              {exportingPdf ? t.common.exportingPdf : t.common.exportPdf}
             </button>
           </motion.div>
 

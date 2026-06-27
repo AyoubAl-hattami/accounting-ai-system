@@ -92,6 +92,10 @@ export interface Translations {
     exportFailed: string;
     exportSucceeded: string;
     downloadReport: string;
+    exportPdf: string;
+    exportingPdf: string;
+    pdfExportFailed: string;
+    pdfExportSucceeded: string;
   };
 
   // ── Login ──

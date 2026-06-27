@@ -11,6 +11,7 @@ from app.modules.accounting.routes.fiscal_routes import router as fiscal_router
 from app.modules.accounting.routes.journal_routes import router as journal_router
 from app.modules.accounting.routes.report_routes import router as report_router
 from app.modules.accounting.routes.report_export_routes import router as report_export_router
+from app.modules.accounting.routes.report_pdf_routes import router as report_pdf_router
 from app.modules.accounting.routes.audit_routes import router as audit_router
 from app.modules.accounting.routes.ai_routes import router as ai_router
 
@@ -39,6 +40,7 @@ app.include_router(fiscal_router)
 app.include_router(journal_router)
 app.include_router(report_router)
 app.include_router(report_export_router)
+app.include_router(report_pdf_router)
 app.include_router(audit_router)
 app.include_router(ai_router)
 

@@ -20,6 +20,7 @@ import {
   ArrowUpRight,
   Hash,
   Download,
+  FileDown,
 } from 'lucide-react';
 
 function parseAmount(v: string): number {
@@ -72,6 +73,7 @@ function AccountLedgerContent({ selectedCompanyId, companiesLoading }: AccountLe
   const [endDate, setEndDate] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   // ── Fetch accounts for selector ──
   useEffect(() => {
@@ -190,6 +192,24 @@ function AccountLedgerContent({ selectedCompanyId, companiesLoading }: AccountLe
       alert(t.common.exportFailed);
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (!selectedCompanyId || !selectedAccountId) return;
+    setExportingPdf(true);
+    try {
+      const { downloadFile } = await import('../../../lib/downloadFile');
+      await downloadFile('/reports/account-ledger/export.pdf', {
+        company_id: selectedCompanyId,
+        account_id: selectedAccountId,
+        start_date: startDate,
+        end_date: endDate,
+      }, 'account-ledger.pdf');
+    } catch {
+      alert(t.common.pdfExportFailed);
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -410,6 +430,14 @@ function AccountLedgerContent({ selectedCompanyId, companiesLoading }: AccountLe
                   >
                     <Download className="w-3.5 h-3.5" />
                     {exporting ? t.common.exporting : t.common.exportCsv}
+                  </button>
+                  <button
+                    onClick={handleExportPdf}
+                    disabled={exportingPdf}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                  >
+                    <FileDown className="w-3.5 h-3.5" />
+                    {exportingPdf ? t.common.exportingPdf : t.common.exportPdf}
                   </button>
                 </div>
               </motion.div>

@@ -92,6 +92,10 @@ export const en: Translations = {
     exportFailed: 'Export failed. Please try again.',
     exportSucceeded: 'Report exported successfully.',
     downloadReport: 'Download Report',
+    exportPdf: 'Export PDF',
+    exportingPdf: 'Exporting PDF...',
+    pdfExportFailed: 'PDF export failed. Please try again.',
+    pdfExportSucceeded: 'PDF exported successfully.',
   },
 
   // ── Login ──
@@ -553,6 +557,10 @@ export const ar: Translations = {
     exportFailed: 'فشل التصدير. يرجى المحاولة مرة أخرى.',
     exportSucceeded: 'تم تصدير التقرير بنجاح.',
     downloadReport: 'تحميل التقرير',
+    exportPdf: 'تصدير PDF',
+    exportingPdf: 'جاري تصدير PDF...',
+    pdfExportFailed: 'فشل تصدير PDF. يرجى المحاولة مرة أخرى.',
+    pdfExportSucceeded: 'تم تصدير PDF بنجاح.',
   },
 
   // ── Login ──

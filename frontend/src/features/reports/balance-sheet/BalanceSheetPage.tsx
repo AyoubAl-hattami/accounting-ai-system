@@ -23,6 +23,7 @@ import {
   TrendingDown,
   Equal,
   Download,
+  FileDown,
 } from 'lucide-react';
 
 function parseAmount(v: string): number {
@@ -62,6 +63,7 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
   const [asOfDate, setAsOfDate] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const {
     data,
@@ -124,6 +126,22 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
       alert(t.common.exportFailed);
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (!selectedCompanyId) return;
+    setExportingPdf(true);
+    try {
+      const { downloadFile } = await import('../../../lib/downloadFile');
+      await downloadFile('/reports/balance-sheet/export.pdf', {
+        company_id: selectedCompanyId,
+        as_of_date: asOfDate,
+      }, 'balance-sheet.pdf');
+    } catch {
+      alert(t.common.pdfExportFailed);
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -322,6 +340,14 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
               >
                 <Download className="w-3.5 h-3.5" />
                 {exporting ? t.common.exporting : t.common.exportCsv}
+              </button>
+              <button
+                onClick={handleExportPdf}
+                disabled={exportingPdf}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold hover:bg-red-500/20 transition-colors disabled:opacity-50"
+              >
+                <FileDown className="w-3.5 h-3.5" />
+                {exportingPdf ? t.common.exportingPdf : t.common.exportPdf}
               </button>
             </div>
           </motion.div>
