@@ -98,6 +98,26 @@ export interface Translations {
     pdfExportSucceeded: string;
   };
 
+  // ── Charts ──
+  charts: {
+    revenueVsExpenses: string;
+    financialComposition: string;
+    topAccountBalances: string;
+    runningBalance: string;
+    noChartData: string;
+    revenue: string;
+    expenses: string;
+    netIncome: string;
+    assets: string;
+    liabilities: string;
+    equity: string;
+    currentYearEarnings: string;
+    debit: string;
+    credit: string;
+    balance: string;
+    date: string;
+  };
+
   // ── Login ──
   login: {
     title: string;

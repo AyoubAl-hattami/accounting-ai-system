@@ -98,6 +98,26 @@ export const en: Translations = {
     pdfExportSucceeded: 'PDF exported successfully.',
   },
 
+  // ── Charts ──
+  charts: {
+    revenueVsExpenses: 'Revenue vs Expenses',
+    financialComposition: 'Financial Composition',
+    topAccountBalances: 'Top Account Balances',
+    runningBalance: 'Running Balance',
+    noChartData: 'No chart data available',
+    revenue: 'Revenue',
+    expenses: 'Expenses',
+    netIncome: 'Net Income',
+    assets: 'Assets',
+    liabilities: 'Liabilities',
+    equity: 'Equity',
+    currentYearEarnings: 'Current Year Earnings',
+    debit: 'Debit',
+    credit: 'Credit',
+    balance: 'Balance',
+    date: 'Date',
+  },
+
   // ── Login ──
   login: {
     title: 'Accounting AI',
@@ -561,6 +581,26 @@ export const ar: Translations = {
     exportingPdf: 'جاري تصدير PDF...',
     pdfExportFailed: 'فشل تصدير PDF. يرجى المحاولة مرة أخرى.',
     pdfExportSucceeded: 'تم تصدير PDF بنجاح.',
+  },
+
+  // ── Charts ──
+  charts: {
+    revenueVsExpenses: 'الإيرادات مقابل المصروفات',
+    financialComposition: 'التركيبة المالية',
+    topAccountBalances: 'أعلى أرصدة الحسابات',
+    runningBalance: 'الرصيد المتحرك',
+    noChartData: 'لا توجد بيانات للرسم البياني',
+    revenue: 'الإيرادات',
+    expenses: 'المصروفات',
+    netIncome: 'صافي الدخل',
+    assets: 'الأصول',
+    liabilities: 'الالتزامات',
+    equity: 'حقوق الملكية',
+    currentYearEarnings: 'أرباح السنة الحالية',
+    debit: 'مدين',
+    credit: 'دائن',
+    balance: 'الرصيد',
+    date: 'التاريخ',
   },
 
   // ── Login ──

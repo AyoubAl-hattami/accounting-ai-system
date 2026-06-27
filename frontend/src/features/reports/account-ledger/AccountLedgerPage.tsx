@@ -1,6 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import {
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Area,
+  AreaChart,
+} from 'recharts';
 import PageLayout from '../../../components/layout/PageLayout';
+import ChartCard from '../../../components/charts/ChartCard';
 import LoadingState from '../../../components/feedback/LoadingState';
 import ErrorState from '../../../components/feedback/ErrorState';
 import EmptyState from '../../../components/feedback/EmptyState';
@@ -365,6 +375,11 @@ function AccountLedgerContent({ selectedCompanyId, companiesLoading }: AccountLe
                 </div>
               </motion.div>
 
+              {/* Running Balance chart */}
+              {data.lines.length > 1 && (
+                <RunningBalanceChart lines={data.lines} t={t} />
+              )}
+
               {/* Toolbar: dates + search */}
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
@@ -623,5 +638,69 @@ function AccountLedgerContent({ selectedCompanyId, companiesLoading }: AccountLe
         </>
       )}
     </>
+  );
+}
+
+// ── Running Balance line chart ──
+import type { AccountLedgerLine } from '../../../api/types';
+import type { Translations } from '../../../i18n/types';
+
+function RunningBalanceChart({ lines, t }: { lines: AccountLedgerLine[]; t: Translations }) {
+  const chartData = useMemo(() => {
+    // Aggregate by date: keep the last running balance per date
+    const byDate = new Map<string, number>();
+    for (const l of lines) {
+      byDate.set(l.entry_date, parseFloat(l.running_balance) || 0);
+    }
+    return Array.from(byDate.entries()).map(([date, balance]) => ({ date, balance }));
+  }, [lines]);
+
+  // Generate evenly-spaced tick values to avoid crowding
+  const ticks = useMemo(() => {
+    if (chartData.length <= 8) return chartData.map((d) => d.date);
+    const step = Math.ceil(chartData.length / 7);
+    const result: string[] = [];
+    for (let i = 0; i < chartData.length; i += step) {
+      result.push(chartData[i].date);
+    }
+    // Always include last date
+    const last = chartData[chartData.length - 1].date;
+    if (result[result.length - 1] !== last) result.push(last);
+    return result;
+  }, [chartData]);
+
+  if (chartData.length < 2) return null;
+
+  return (
+    <ChartCard title={t.charts.runningBalance} delay={0.2} height={200}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+          <defs>
+            <linearGradient id="balanceGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+          <XAxis
+            dataKey="date"
+            tick={{ fill: '#9ca3af', fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+            ticks={ticks}
+            interval="preserveStartEnd"
+          />
+          <YAxis tick={{ fill: '#9ca3af', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+          <Tooltip
+            contentStyle={{ background: 'rgba(17,24,39,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+            itemStyle={{ color: '#818cf8' }}
+            labelStyle={{ color: '#9ca3af' }}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            formatter={(value: any) => [Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), t.charts.balance]}
+          />
+          <Area type="monotone" dataKey="balance" stroke="#818cf8" strokeWidth={2} fill="url(#balanceGrad)" dot={chartData.length <= 20} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </ChartCard>
   );
 }

@@ -1,6 +1,18 @@
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts';
 import PageLayout from '../../components/layout/PageLayout';
 import DashboardMetricCard from '../../components/ui/DashboardMetricCard';
+import ChartCard from '../../components/charts/ChartCard';
 import LoadingState from '../../components/feedback/LoadingState';
 import ErrorState from '../../components/feedback/ErrorState';
 import { useDashboardData } from './useDashboardData';
@@ -17,7 +29,6 @@ import {
   BookOpen,
   Receipt,
   BarChart3,
-  FileText,
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -207,42 +218,13 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
             />
           </div>
 
-          {/* Reports & recent data */}
+          {/* Charts section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Income vs Expenses */}
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.5 }}
-              className="glass-panel p-6"
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <FileText className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-sm font-semibold text-white">{t.dashboard.plBreakdown}</h3>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                    <span className="text-sm text-gray-300">{t.dashboard.totalIncome}</span>
-                  </div>
-                  <span className="text-sm font-semibold text-emerald-400">{formatCurrency(pl?.total_income ?? 0)}</span>
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-red-400" />
-                    <span className="text-sm text-gray-300">{t.dashboard.totalExpenses}</span>
-                  </div>
-                  <span className="text-sm font-semibold text-red-400">{formatCurrency(pl?.total_expenses ?? 0)}</span>
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                  <span className="text-sm font-medium text-white">{t.dashboard.netResult}</span>
-                  <span className={`text-sm font-bold ${netIncome >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {formatCurrency(netIncome)}
-                  </span>
-                </div>
-              </div>
-            </motion.div>
+            {/* Revenue vs Expenses chart */}
+            <RevenueExpensesChart pl={pl} t={t} />
+
+            {/* Financial Composition chart */}
+            <FinancialCompositionChart bs={bs} t={t} />
 
             {/* Recent journal entries */}
             <motion.div
@@ -288,5 +270,95 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
         </>
       )}
     </>
+  );
+}
+
+// ── Chart tooltip ──
+function ChartTooltipContent({ active, payload, label }: { active?: boolean; payload?: { value: number; fill: string; name: string }[]; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-gray-900/95 border border-white/10 rounded-lg px-3 py-2 shadow-xl">
+      <p className="text-xs text-gray-400 mb-1">{label}</p>
+      {payload.map((p, i) => (
+        <p key={i} className="text-sm font-semibold" style={{ color: p.fill }}>
+          {p.name}: {p.value?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+// ── Revenue vs Expenses chart ──
+function RevenueExpensesChart({ pl, t }: { pl: DashboardContentProps['selectedCompany'] extends never ? never : ReturnType<typeof useDashboardData>['data']['profitLoss']; t: ReturnType<typeof useI18n>['t'] }) {
+  const chartData = useMemo(() => {
+    if (!pl) return [];
+    const income = parseFloat(String(pl.total_income)) || 0;
+    const expenses = parseFloat(String(pl.total_expenses)) || 0;
+    const net = parseFloat(String(pl.net_income)) || 0;
+    return [
+      { name: t.charts.revenue, value: income, fill: '#34d399' },
+      { name: t.charts.expenses, value: Math.abs(expenses), fill: '#f87171' },
+      { name: t.charts.netIncome, value: net, fill: net >= 0 ? '#34d399' : '#f87171' },
+    ];
+  }, [pl, t]);
+
+  return (
+    <ChartCard
+      title={t.charts.revenueVsExpenses}
+      isEmpty={chartData.length === 0}
+      emptyMessage={t.charts.noChartData}
+      delay={0.5}
+      height={240}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }} barSize={48}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+          <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+          <Tooltip content={<ChartTooltipContent />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+          <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+            {chartData.map((entry, index) => (
+              <Cell key={index} fill={entry.fill} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartCard>
+  );
+}
+
+// ── Financial Composition chart ──
+function FinancialCompositionChart({ bs, t }: { bs: ReturnType<typeof useDashboardData>['data']['balanceSheet']; t: ReturnType<typeof useI18n>['t'] }) {
+  const chartData = useMemo(() => {
+    if (!bs) return [];
+    return [
+      { name: t.charts.assets, value: parseFloat(String(bs.total_assets)) || 0, fill: '#60a5fa' },
+      { name: t.charts.liabilities, value: parseFloat(String(bs.total_liabilities)) || 0, fill: '#fbbf24' },
+      { name: t.charts.equity, value: parseFloat(String(bs.total_equity)) || 0, fill: '#a78bfa' },
+    ];
+  }, [bs, t]);
+
+  return (
+    <ChartCard
+      title={t.charts.financialComposition}
+      isEmpty={chartData.length === 0}
+      emptyMessage={t.charts.noChartData}
+      delay={0.6}
+      height={240}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }} barSize={48}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+          <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+          <Tooltip content={<ChartTooltipContent />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+          <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+            {chartData.map((entry, index) => (
+              <Cell key={index} fill={entry.fill} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartCard>
   );
 }

@@ -1,6 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 import PageLayout from '../../../components/layout/PageLayout';
+import ChartCard from '../../../components/charts/ChartCard';
 import LoadingState from '../../../components/feedback/LoadingState';
 import ErrorState from '../../../components/feedback/ErrorState';
 import EmptyState from '../../../components/feedback/EmptyState';
@@ -212,6 +222,11 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
               </div>
             </div>
           </motion.div>
+
+          {/* Top Account Balances chart */}
+          {data.lines.length > 0 && (
+            <TopAccountsChart lines={data.lines} t={t} />
+          )}
 
           {/* Toolbar: date + search */}
           <motion.div
@@ -452,5 +467,50 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
         </>
       )}
     </>
+  );
+}
+
+// ── Top Accounts horizontal bar chart ──
+import type { TrialBalanceLine } from '../../../api/types';
+import type { Translations } from '../../../i18n/types';
+
+function TopAccountsChart({ lines, t }: { lines: TrialBalanceLine[]; t: Translations }) {
+  const chartData = useMemo(() => {
+    return [...lines]
+      .map((l) => ({
+        name: `${l.account_code} ${l.account_name}`.slice(0, 28),
+        debit: parseAmount(l.debit_balance),
+        credit: parseAmount(l.credit_balance),
+      }))
+      .filter((a) => a.debit !== 0 || a.credit !== 0)
+      .sort((a, b) => Math.max(b.debit, b.credit) - Math.max(a.debit, a.credit))
+      .slice(0, 10);
+  }, [lines]);
+
+  if (chartData.length === 0) return null;
+
+  return (
+    <ChartCard
+      title={t.charts.topAccountBalances}
+      delay={0.15}
+      height={Math.max(200, chartData.length * 36)}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 20, left: 8, bottom: 4 }} barSize={14}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
+          <XAxis type="number" tick={{ fill: '#9ca3af', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+          <YAxis dataKey="name" type="category" tick={{ fill: '#d1d5db', fontSize: 10 }} axisLine={false} tickLine={false} width={150} />
+          <Tooltip
+            cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+            contentStyle={{ background: 'rgba(17,24,39,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+            itemStyle={{ color: '#e5e7eb' }}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            formatter={(value: any) => Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          />
+          <Bar dataKey="debit" name={t.charts.debit} fill="#34d399" radius={[0, 4, 4, 0]} />
+          <Bar dataKey="credit" name={t.charts.credit} fill="#818cf8" radius={[0, 4, 4, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartCard>
   );
 }

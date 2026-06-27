@@ -1,6 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts';
 import PageLayout from '../../../components/layout/PageLayout';
+import ChartCard from '../../../components/charts/ChartCard';
 import LoadingState from '../../../components/feedback/LoadingState';
 import ErrorState from '../../../components/feedback/ErrorState';
 import EmptyState from '../../../components/feedback/EmptyState';
@@ -285,6 +296,9 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
             </div>
           </motion.div>
 
+          {/* Balance Sheet composition chart */}
+          <BSChart data={data} t={t} />
+
           {/* Toolbar: date + search */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
@@ -543,5 +557,54 @@ function SectionTable({ title, icon, dotColor, amountColor, lines, totalLabel, t
         </>
       )}
     </motion.div>
+  );
+}
+
+// ── Balance Sheet composition chart ──
+import type { Translations } from '../../../i18n/types';
+
+function BSChart({ data, t }: { data: { total_assets: string; total_liabilities: string; total_equity: string; current_year_earnings: string }; t: Translations }) {
+  const parseAmt = (v: string) => parseFloat(v) || 0;
+
+  const chartData = useMemo(() => {
+    const assets = parseAmt(data.total_assets);
+    const liab = parseAmt(data.total_liabilities);
+    const equity = parseAmt(data.total_equity);
+    const cye = parseAmt(data.current_year_earnings);
+    if (assets === 0 && liab === 0 && equity === 0) return [];
+    const items = [
+      { name: t.charts.assets, value: assets, fill: '#60a5fa' },
+      { name: t.charts.liabilities, value: liab, fill: '#fbbf24' },
+      { name: t.charts.equity, value: equity, fill: '#a78bfa' },
+      { name: t.charts.currentYearEarnings, value: cye, fill: cye >= 0 ? '#34d399' : '#f87171' },
+    ];
+    // Filter out zero values for a cleaner chart
+    return items.filter((item) => item.value !== 0);
+  }, [data, t]);
+
+  if (chartData.length === 0) return null;
+
+  return (
+    <ChartCard title={t.charts.financialComposition} delay={0.15} height={220}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }} barSize={44}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+          <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 10 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+          <Tooltip
+            cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+            contentStyle={{ background: 'rgba(17,24,39,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+            itemStyle={{ color: '#e5e7eb' }}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            formatter={(value: any) => Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          />
+          <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+            {chartData.map((entry, index) => (
+              <Cell key={index} fill={entry.fill} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartCard>
   );
 }

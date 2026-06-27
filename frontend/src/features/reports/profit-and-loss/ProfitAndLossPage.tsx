@@ -1,6 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts';
 import PageLayout from '../../../components/layout/PageLayout';
+import ChartCard from '../../../components/charts/ChartCard';
 import LoadingState from '../../../components/feedback/LoadingState';
 import ErrorState from '../../../components/feedback/ErrorState';
 import EmptyState from '../../../components/feedback/EmptyState';
@@ -229,6 +240,9 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
               </div>
             </div>
           </motion.div>
+
+          {/* Revenue vs Expenses chart */}
+          <PLChart data={data} t={t} />
 
           {/* Toolbar: dates + search */}
           <motion.div
@@ -586,5 +600,48 @@ function MobileLineCard({ line, color, index }: MobileLineCardProps) {
         <span className={`text-sm font-mono font-semibold ${amountColor}`}>{fmtAmt(line.amount)}</span>
       </div>
     </motion.div>
+  );
+}
+
+// ── P&L Revenue vs Expenses chart ──
+import type { Translations } from '../../../i18n/types';
+
+function PLChart({ data, t }: { data: { total_income: string; total_expenses: string; net_profit: string }; t: Translations }) {
+  const chartData = useMemo(() => {
+    const income = parseAmount(data.total_income);
+    const expenses = Math.abs(parseAmount(data.total_expenses));
+    const net = parseAmount(data.net_profit);
+    if (income === 0 && expenses === 0) return [];
+    return [
+      { name: t.charts.revenue, value: income, fill: '#34d399' },
+      { name: t.charts.expenses, value: expenses, fill: '#f87171' },
+      { name: t.charts.netIncome, value: net, fill: net >= 0 ? '#34d399' : '#f87171' },
+    ];
+  }, [data, t]);
+
+  if (chartData.length === 0) return null;
+
+  return (
+    <ChartCard title={t.charts.revenueVsExpenses} delay={0.15} height={220}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }} barSize={48}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+          <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+          <Tooltip
+            cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+            contentStyle={{ background: 'rgba(17,24,39,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+            itemStyle={{ color: '#e5e7eb' }}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            formatter={(value: any) => Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          />
+          <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+            {chartData.map((entry, index) => (
+              <Cell key={index} fill={entry.fill} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartCard>
   );
 }
