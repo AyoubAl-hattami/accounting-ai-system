@@ -19,6 +19,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Hash,
+  Download,
 } from 'lucide-react';
 
 function parseAmount(v: string): number {
@@ -70,6 +71,7 @@ function AccountLedgerContent({ selectedCompanyId, companiesLoading }: AccountLe
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   // ── Fetch accounts for selector ──
   useEffect(() => {
@@ -171,6 +173,24 @@ function AccountLedgerContent({ selectedCompanyId, companiesLoading }: AccountLe
   const clearDates = () => {
     setStartDate(null);
     setEndDate(null);
+  };
+
+  const handleExportCsv = async () => {
+    if (!selectedCompanyId || !selectedAccountId) return;
+    setExporting(true);
+    try {
+      const { downloadFile } = await import('../../../lib/downloadFile');
+      await downloadFile('/reports/account-ledger/export.csv', {
+        company_id: selectedCompanyId,
+        account_id: selectedAccountId,
+        start_date: startDate,
+        end_date: endDate,
+      }, 'account-ledger.csv');
+    } catch {
+      alert(t.common.exportFailed);
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -379,10 +399,18 @@ function AccountLedgerContent({ selectedCompanyId, companiesLoading }: AccountLe
                   />
                 </div>
 
-                <div className="flex items-center h-[38px] px-1">
+                <div className="flex items-center gap-3 h-[38px] px-1">
                   <span className="text-xs text-gray-500 font-medium whitespace-nowrap">
                     {filteredLines.length} of {data.lines.length} entr{data.lines.length !== 1 ? 'ies' : 'y'}
                   </span>
+                  <button
+                    onClick={handleExportCsv}
+                    disabled={exporting}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-400 text-xs font-semibold hover:bg-brand-500/20 transition-colors disabled:opacity-50"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    {exporting ? t.common.exporting : t.common.exportCsv}
+                  </button>
                 </div>
               </motion.div>
 

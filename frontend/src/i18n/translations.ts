@@ -87,6 +87,11 @@ export const en: Translations = {
     originalEntrySummary: 'Original Entry Summary',
     searchByAccountPlaceholder: 'Search by account code, name, or type...',
     searchByEntryPlaceholder: 'Search by entry no, description, or date...',
+    exportCsv: 'Export CSV',
+    exporting: 'Exporting...',
+    exportFailed: 'Export failed. Please try again.',
+    exportSucceeded: 'Report exported successfully.',
+    downloadReport: 'Download Report',
   },
 
   // ── Login ──
@@ -543,6 +548,11 @@ export const ar: Translations = {
     originalEntrySummary: 'ملخص القيد الأصلي',
     searchByAccountPlaceholder: 'بحث برمز الحساب، الاسم، أو النوع...',
     searchByEntryPlaceholder: 'بحث برقم القيد، الوصف، أو التاريخ...',
+    exportCsv: 'تصدير CSV',
+    exporting: 'جاري التصدير...',
+    exportFailed: 'فشل التصدير. يرجى المحاولة مرة أخرى.',
+    exportSucceeded: 'تم تصدير التقرير بنجاح.',
+    downloadReport: 'تحميل التقرير',
   },
 
   // ── Login ──

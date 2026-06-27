@@ -87,6 +87,11 @@ export interface Translations {
     originalEntrySummary: string;
     searchByAccountPlaceholder: string;
     searchByEntryPlaceholder: string;
+    exportCsv: string;
+    exporting: string;
+    exportFailed: string;
+    exportSucceeded: string;
+    downloadReport: string;
   };
 
   // ── Login ──

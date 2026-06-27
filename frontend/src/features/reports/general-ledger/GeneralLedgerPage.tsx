@@ -22,6 +22,7 @@ import {
   ArrowUpRight,
   Filter,
   Check,
+  Download,
 } from 'lucide-react';
 
 function parseAmount(v: string): number {
@@ -66,6 +67,7 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [expandedAccounts, setExpandedAccounts] = useState<Set<number>>(new Set());
   const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -158,6 +160,23 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
 
   const collapseAll = () => {
     setExpandedAccounts(new Set());
+  };
+
+  const handleExportCsv = async () => {
+    if (!selectedCompanyId) return;
+    setExporting(true);
+    try {
+      const { downloadFile } = await import('../../../lib/downloadFile');
+      await downloadFile('/reports/general-ledger/export.csv', {
+        company_id: selectedCompanyId,
+        start_date: startDate,
+        end_date: endDate,
+      }, 'general-ledger.csv');
+    } catch {
+      alert(t.common.exportFailed);
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -364,6 +383,16 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
                 {t.common.collapseAll}
               </button>
             </div>
+
+            {/* Export CSV */}
+            <button
+              onClick={handleExportCsv}
+              disabled={exporting}
+              className="inline-flex items-center gap-1.5 px-4 h-[46px] rounded-xl bg-brand-500/10 border border-brand-500/20 text-brand-400 text-sm font-semibold hover:bg-brand-500/20 transition-colors disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+              {exporting ? t.common.exporting : t.common.exportCsv}
+            </button>
           </motion.div>
 
           {/* Empty state */}

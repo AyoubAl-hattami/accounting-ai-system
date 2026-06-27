@@ -22,6 +22,7 @@ import {
   TrendingUp,
   TrendingDown,
   Equal,
+  Download,
 } from 'lucide-react';
 
 function parseAmount(v: string): number {
@@ -60,6 +61,7 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
   const { t } = useI18n();
   const [asOfDate, setAsOfDate] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   const {
     data,
@@ -108,6 +110,22 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
   const totalLines = data ? data.asset_lines.length + data.liability_lines.length + data.equity_lines.length : 0;
 
   const isLoading = companiesLoading || reportLoading;
+
+  const handleExportCsv = async () => {
+    if (!selectedCompanyId) return;
+    setExporting(true);
+    try {
+      const { downloadFile } = await import('../../../lib/downloadFile');
+      await downloadFile('/reports/balance-sheet/export.csv', {
+        company_id: selectedCompanyId,
+        as_of_date: asOfDate,
+      }, 'balance-sheet.csv');
+    } catch {
+      alert(t.common.exportFailed);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <>
@@ -293,10 +311,18 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
               </div>
             </div>
 
-            <div className="flex items-end px-3 pb-1">
+            <div className="flex items-end gap-3 px-3 pb-1">
               <span className="text-xs text-gray-500 font-medium whitespace-nowrap">
                 {totalFiltered} of {totalLines} account{totalLines !== 1 ? 's' : ''}
               </span>
+              <button
+                onClick={handleExportCsv}
+                disabled={exporting}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-400 text-xs font-semibold hover:bg-brand-500/20 transition-colors disabled:opacity-50"
+              >
+                <Download className="w-3.5 h-3.5" />
+                {exporting ? t.common.exporting : t.common.exportCsv}
+              </button>
             </div>
           </motion.div>
 
