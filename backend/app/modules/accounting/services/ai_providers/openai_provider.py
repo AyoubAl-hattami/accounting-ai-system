@@ -245,6 +245,12 @@ class OpenAIJournalSuggestionProvider(BaseJournalSuggestionProvider):
         explanation = str(parsed.get("explanation", ""))
         detected_intent = str(parsed.get("detected_intent", "unknown"))
 
+        # Normalize confidence based on validated fields, matching rules engine logic.
+        # When we have a known intent + both accounts + amount, confidence is "high".
+        # When we have a known intent + both accounts but no amount, confidence is "medium".
+        if detected_intent != "unknown" and debit_id is not None and credit_id is not None:
+            confidence = "high" if amount is not None else "medium"
+
         return {
             "debit_account_id": debit_id,
             "credit_account_id": credit_id,
