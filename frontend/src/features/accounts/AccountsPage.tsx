@@ -8,6 +8,8 @@ import ErrorState from '../../components/feedback/ErrorState';
 import EmptyState from '../../components/feedback/EmptyState';
 import { useAccounts } from './useAccounts';
 import { useI18n } from '../../i18n';
+import { canManageAccounts } from '../../auth/permissions';
+import type { CompanyUserRole } from '../../api/types';
 import {
   Receipt,
   Search,
@@ -30,10 +32,11 @@ export default function AccountsPage() {
       pageSubtitle={t.accountsPage.pageSubtitle}
       activePath="/accounts"
     >
-      {({ selectedCompanyId, companiesLoading }) => (
+      {({ selectedCompanyId, companiesLoading, userRole }) => (
         <AccountsContent
           selectedCompanyId={selectedCompanyId}
           companiesLoading={companiesLoading}
+          userRole={userRole}
         />
       )}
     </PageLayout>
@@ -43,9 +46,10 @@ export default function AccountsPage() {
 interface AccountsContentProps {
   selectedCompanyId: number | null;
   companiesLoading: boolean;
+  userRole: CompanyUserRole | null;
 }
 
-function AccountsContent({ selectedCompanyId, companiesLoading }: AccountsContentProps) {
+function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: AccountsContentProps) {
   const { t } = useI18n();
   // ── Pagination ──
   const [skip, setSkip] = useState(0);
@@ -166,18 +170,20 @@ function AccountsContent({ selectedCompanyId, companiesLoading }: AccountsConten
               <span className="text-xs text-gray-500 font-medium">
                 {total} account{total !== 1 ? 's' : ''} total
               </span>
-              <button
-                onClick={handleSeed}
-                disabled={isSeeding}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-600/20 border border-brand-500/30 text-brand-300 text-xs font-semibold hover:bg-brand-600/30 hover:border-brand-500/40 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSeeding ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Sprout className="w-3.5 h-3.5" />
-                )}
-                {isSeeding ? t.accountsPage.seeding : t.accountsPage.seedDefaults}
-              </button>
+              {canManageAccounts(userRole) && (
+                <button
+                  onClick={handleSeed}
+                  disabled={isSeeding}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-600/20 border border-brand-500/30 text-brand-300 text-xs font-semibold hover:bg-brand-600/30 hover:border-brand-500/40 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSeeding ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Sprout className="w-3.5 h-3.5" />
+                  )}
+                  {isSeeding ? t.accountsPage.seeding : t.accountsPage.seedDefaults}
+                </button>
+              )}
             </div>
           </motion.div>
 
@@ -262,14 +268,16 @@ function AccountsContent({ selectedCompanyId, companiesLoading }: AccountsConten
               title={t.accountsPage.noAccountsTitle}
               description={t.accountsPage.noAccountsDescription}
               action={
-                <button
-                  onClick={handleSeed}
-                  disabled={isSeeding}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 text-white text-sm font-semibold hover:from-brand-500 hover:to-brand-400 hover:shadow-lg hover:shadow-brand-500/25 transition-all duration-300 disabled:opacity-50"
-                >
-                  {isSeeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sprout className="w-4 h-4" />}
-                  {t.accountsPage.seedDefaults}
-                </button>
+                canManageAccounts(userRole) ? (
+                  <button
+                    onClick={handleSeed}
+                    disabled={isSeeding}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 text-white text-sm font-semibold hover:from-brand-500 hover:to-brand-400 hover:shadow-lg hover:shadow-brand-500/25 transition-all duration-300 disabled:opacity-50"
+                  >
+                    {isSeeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sprout className="w-4 h-4" />}
+                    {t.accountsPage.seedDefaults}
+                  </button>
+                ) : undefined
               }
             />
           )}

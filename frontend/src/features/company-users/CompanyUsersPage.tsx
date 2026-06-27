@@ -10,6 +10,7 @@ import { useCompanyUsers } from './useCompanyUsers';
 import CompanyUserRoleBadge from './CompanyUserRoleBadge';
 import AddCompanyUserModal from './AddCompanyUserModal';
 import UpdateCompanyUserModal from './UpdateCompanyUserModal';
+import { canManageCompanyUsers } from '../../auth/permissions';
 import type { CompanyUser, CompanyUserRole } from '../../api/types';
 import { useI18n } from '../../i18n';
 
@@ -21,10 +22,11 @@ export default function CompanyUsersPage() {
       pageSubtitle={t.companyUsersPage.pageSubtitle}
       activePath="/company-users"
     >
-      {({ selectedCompanyId, companiesLoading }) => (
+      {({ selectedCompanyId, companiesLoading, userRole }) => (
         <CompanyUsersContent
           selectedCompanyId={selectedCompanyId}
           companiesLoading={companiesLoading}
+          userRole={userRole}
         />
       )}
     </PageLayout>
@@ -34,9 +36,10 @@ export default function CompanyUsersPage() {
 interface CompanyUsersContentProps {
   selectedCompanyId: number | null;
   companiesLoading: boolean;
+  userRole: CompanyUserRole | null;
 }
 
-function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUsersContentProps) {
+function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: CompanyUsersContentProps) {
   const { t } = useI18n();
   const [skip, setSkip] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
@@ -281,13 +284,15 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUse
           </button>
           
           {/* Note: In backend creation requires "admin" role. Let's allow users to trigger it. If it fails, they will see backend error detail */}
-          <button
-            onClick={handleOpenAddModal}
-            className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 active:scale-[0.98] transition-all"
-          >
-            <UserPlus className="w-4 h-4" />
-            {t.companyUsersPage.addUser}
-          </button>
+          {canManageCompanyUsers(userRole) && (
+            <button
+              onClick={handleOpenAddModal}
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-sm font-semibold rounded-xl shadow-lg shadow-indigo-500/25 active:scale-[0.98] transition-all"
+            >
+              <UserPlus className="w-4 h-4" />
+              {t.companyUsersPage.addUser}
+            </button>
+          )}
         </div>
       </div>
 
@@ -358,13 +363,15 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUse
                         </td>
                         <td className="py-4 px-6 text-sm text-right whitespace-nowrap">
                           {/* Note: updateCompanyUser requires "admin" role. Action will try and display errors if unauthorized */}
-                          <button
-                            onClick={() => handleOpenEditModal(user)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-white/[0.06] hover:border-white/[0.12] text-xs font-medium text-gray-300 hover:text-white bg-white/[0.02] hover:bg-white/[0.04] transition-all"
-                          >
-                            <Edit2 className="w-3 h-3" />
-                            {t.common.edit}
-                          </button>
+                          {canManageCompanyUsers(userRole) && (
+                            <button
+                              onClick={() => handleOpenEditModal(user)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-white/[0.06] hover:border-white/[0.12] text-xs font-medium text-gray-300 hover:text-white bg-white/[0.02] hover:bg-white/[0.04] transition-all"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                              {t.common.edit}
+                            </button>
+                          )}
                         </td>
                       </motion.tr>
                     ))}
@@ -390,13 +397,15 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading }: CompanyUse
                       <User className="w-4 h-4 text-indigo-400 shrink-0" />
                       User #{user.user_id}
                     </span>
-                    <button
-                      onClick={() => handleOpenEditModal(user)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-white/[0.06] hover:border-white/[0.12] text-xs font-medium text-gray-300 hover:text-white bg-white/[0.02] transition-colors"
-                    >
-                      <Edit2 className="w-3 h-3" />
-                      {t.common.edit}
-                    </button>
+                    {canManageCompanyUsers(userRole) && (
+                      <button
+                        onClick={() => handleOpenEditModal(user)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-white/[0.06] hover:border-white/[0.12] text-xs font-medium text-gray-300 hover:text-white bg-white/[0.02] transition-colors"
+                      >
+                        <Edit2 className="w-3 h-3" />
+                        {t.common.edit}
+                      </button>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-sm pt-1">

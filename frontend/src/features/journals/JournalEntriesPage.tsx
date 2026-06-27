@@ -2,6 +2,14 @@ import { useState, useEffect, useMemo, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageLayout from '../../components/layout/PageLayout';
 import { useI18n } from '../../i18n';
+import {
+  canCreateJournal,
+  canReviewJournal,
+  canPostJournal,
+  canVoidJournal,
+  canReverseJournal,
+} from '../../auth/permissions';
+import type { CompanyUserRole } from '../../api/types';
 import { useToast } from '../../components/feedback/useToast';
 import JournalStatusBadge from './JournalStatusBadge';
 import JournalEntryLines from './JournalEntryLines';
@@ -50,10 +58,11 @@ export default function JournalEntriesPage() {
       pageSubtitle={t.journals.pageSubtitle}
       activePath="/journal-entries"
     >
-      {({ selectedCompanyId, companiesLoading }) => (
+      {({ selectedCompanyId, companiesLoading, userRole }) => (
         <JournalEntriesContent
           selectedCompanyId={selectedCompanyId}
           companiesLoading={companiesLoading}
+          userRole={userRole}
         />
       )}
     </PageLayout>
@@ -63,9 +72,10 @@ export default function JournalEntriesPage() {
 interface JournalEntriesContentProps {
   selectedCompanyId: number | null;
   companiesLoading: boolean;
+  userRole: CompanyUserRole | null;
 }
 
-function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalEntriesContentProps) {
+function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }: JournalEntriesContentProps) {
   const { t } = useI18n();
   const toast = useToast();
   const [skip, setSkip] = useState(0);
@@ -241,7 +251,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
               <span className="text-xs text-gray-500 font-medium">
                 {total} entr{total !== 1 ? 'ies' : 'y'} total
               </span>
-              {selectedCompanyId && (
+              {selectedCompanyId && canCreateJournal(userRole) && (
                 <button
                   onClick={() => setIsCreateModalOpen(true)}
                   className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white text-sm font-semibold rounded-xl shadow-lg shadow-brand-500/25 active:scale-[0.98] transition-all"
@@ -391,21 +401,25 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                                 <div className="flex items-center justify-end gap-2">
                                   {entry.status === 'draft' && (
                                     <>
-                                      <button
-                                        onClick={() => handleOpenReviewModal(entry)}
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
-                                      >
-                                        Review
-                                      </button>
-                                      <button
-                                        onClick={() => handleOpenVoidModal(entry)}
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
-                                      >
-                                        {t.journals.void}
-                                      </button>
+                                      {canReviewJournal(userRole) && (
+                                        <button
+                                          onClick={() => handleOpenReviewModal(entry)}
+                                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                                        >
+                                          Review
+                                        </button>
+                                      )}
+                                      {canVoidJournal(userRole) && (
+                                        <button
+                                          onClick={() => handleOpenVoidModal(entry)}
+                                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                                        >
+                                          {t.journals.void}
+                                        </button>
+                                      )}
                                     </>
                                   )}
-                                  {entry.status === 'reviewed' && (
+                                  {entry.status === 'reviewed' && canPostJournal(userRole) && (
                                     <button
                                       onClick={() => handleOpenPostModal(entry)}
                                       className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/30 text-amber-400 hover:text-amber-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
@@ -413,7 +427,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                                       Post
                                     </button>
                                   )}
-                                  {entry.status === 'posted' && (
+                                  {entry.status === 'posted' && canReverseJournal(userRole) && (
                                     <button
                                       onClick={() => handleOpenReverseModal(entry)}
                                       className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/30 text-purple-400 hover:text-purple-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
@@ -510,21 +524,25 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                           <div className="flex items-center gap-2">
                             {entry.status === 'draft' && (
                               <>
-                                <button
-                                  onClick={() => handleOpenReviewModal(entry)}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
-                                >
-                                  Review
-                                </button>
-                                <button
-                                  onClick={() => handleOpenVoidModal(entry)}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
-                                >
-                                  Void
-                                </button>
+                                {canReviewJournal(userRole) && (
+                                  <button
+                                    onClick={() => handleOpenReviewModal(entry)}
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                                  >
+                                    Review
+                                  </button>
+                                )}
+                                {canVoidJournal(userRole) && (
+                                  <button
+                                    onClick={() => handleOpenVoidModal(entry)}
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                                  >
+                                    Void
+                                  </button>
+                                )}
                               </>
                             )}
-                            {entry.status === 'reviewed' && (
+                            {entry.status === 'reviewed' && canPostJournal(userRole) && (
                               <button
                                 onClick={() => handleOpenPostModal(entry)}
                                 className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/30 text-amber-400 hover:text-amber-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
@@ -532,7 +550,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading }: JournalE
                                 Post
                               </button>
                             )}
-                            {entry.status === 'posted' && (
+                            {entry.status === 'posted' && canReverseJournal(userRole) && (
                               <button
                                 onClick={() => handleOpenReverseModal(entry)}
                                 className="inline-flex items-center gap-1 px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/30 text-purple-400 hover:text-purple-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"

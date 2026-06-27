@@ -97,7 +97,7 @@ export default function AppRoutes() {
           <Route
             path="/audit-logs"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredPagePath="/audit-logs">
                 <AuditLogsPage />
               </ProtectedRoute>
             }
@@ -105,7 +105,7 @@ export default function AppRoutes() {
           <Route
             path="/company-users"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredPagePath="/company-users">
                 <CompanyUsersPage />
               </ProtectedRoute>
             }
@@ -113,7 +113,7 @@ export default function AppRoutes() {
           <Route
             path="/settings"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredPagePath="/settings">
                 <SettingsPage />
               </ProtectedRoute>
             }

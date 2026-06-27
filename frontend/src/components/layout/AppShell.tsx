@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../auth/AuthContext';
+import { canViewPage, canManageSettings } from '../../auth/permissions';
 import { useI18n } from '../../i18n';
 import CompanySelector from './CompanySelector';
-import type { Company } from '../../api/types';
+import type { Company, CompanyUserRole } from '../../api/types';
 import {
   LayoutDashboard,
   BookOpen,
@@ -31,6 +32,7 @@ interface AppShellProps {
   pageTitle?: string;
   pageSubtitle?: string;
   activePath?: string;
+  userRole?: CompanyUserRole | null;
 }
 
 export default function AppShell({
@@ -41,6 +43,7 @@ export default function AppShell({
   pageTitle,
   pageSubtitle,
   activePath = '/dashboard',
+  userRole = null,
 }: AppShellProps) {
   const { user, logout } = useAuth();
   const { t, dir, language, setLanguage } = useI18n();
@@ -56,7 +59,7 @@ export default function AppShell({
   const displayTitle = pageTitle || t.dashboard.pageTitle;
   const displaySubtitle = pageSubtitle || t.dashboard.pageSubtitle;
 
-  const navItems = [
+  const allNavItems = [
     { icon: LayoutDashboard, label: t.nav.dashboard, path: '/dashboard' },
     { icon: BookOpen, label: t.nav.journalEntries, path: '/journal-entries' },
     { icon: Receipt, label: t.nav.accounts, path: '/accounts' },
@@ -69,12 +72,20 @@ export default function AppShell({
     { icon: Library, label: t.nav.generalLedger, path: '/reports/general-ledger' },
   ];
 
+  // Filter nav items based on user role
+  const navItems = allNavItems.filter((item) => canViewPage(userRole, item.path));
+
   const handleNav = (path: string) => {
     navigate(path);
     setMobileOpen(false);
   };
 
   const isRtl = dir === 'rtl';
+
+  // Role display label
+  const roleLabel = userRole
+    ? userRole.charAt(0).toUpperCase() + userRole.slice(1)
+    : null;
 
   return (
     <div className="min-h-screen bg-surface-900 flex">
@@ -168,19 +179,21 @@ export default function AppShell({
 
         {/* Bottom area */}
         <div className="px-3 py-3 border-t border-white/[0.06] space-y-1">
-          <button
-            onClick={() => handleNav('/settings')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group
-              ${activePath === '/settings'
-                ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
-              }
-              ${collapsed ? 'justify-center' : ''}
-            `}
-          >
-            <Settings className={`w-[18px] h-[18px] flex-shrink-0 ${activePath === '/settings' ? 'text-brand-400' : 'group-hover:text-gray-200'}`} />
-            {!collapsed && <span className="text-sm font-medium">{t.nav.settings}</span>}
-          </button>
+          {canManageSettings(userRole) && (
+            <button
+              onClick={() => handleNav('/settings')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group
+                ${activePath === '/settings'
+                  ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
+                }
+                ${collapsed ? 'justify-center' : ''}
+              `}
+            >
+              <Settings className={`w-[18px] h-[18px] flex-shrink-0 ${activePath === '/settings' ? 'text-brand-400' : 'group-hover:text-gray-200'}`} />
+              {!collapsed && <span className="text-sm font-medium">{t.nav.settings}</span>}
+            </button>
+          )}
           <button
             onClick={logout}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-red-400 hover:bg-red-500/[0.06] transition-all duration-200 ${collapsed ? 'justify-center' : ''}`}
@@ -240,7 +253,11 @@ export default function AppShell({
 
             <div className={`${isRtl ? 'text-left' : 'text-right'} hidden sm:block`}>
               <p className="text-sm font-medium text-gray-200">{user?.full_name || user?.email}</p>
-              <p className="text-[11px] text-gray-500">{user?.is_superuser ? t.common.administrator : t.common.user}</p>
+              <p className="text-[11px] text-gray-500">
+                {user?.is_superuser
+                  ? t.common.administrator
+                  : roleLabel || t.common.user}
+              </p>
             </div>
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-violet-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-brand-500/20">
               {(user?.full_name || user?.email || 'U')[0].toUpperCase()}

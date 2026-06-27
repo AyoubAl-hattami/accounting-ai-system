@@ -118,6 +118,14 @@ export interface Translations {
     date: string;
   };
 
+  // ── Permissions ──
+  permissions: {
+    accessDenied: string;
+    noPermissionForPage: string;
+    readOnlyMode: string;
+    backToDashboard: string;
+  };
+
   // ── Login ──
   login: {
     title: string;

@@ -2,15 +2,17 @@ import { type ReactNode } from 'react';
 import AppShell from './AppShell';
 import EmptyState from '../feedback/EmptyState';
 import { useCompanies } from '../../features/companies/useCompanies';
+import { useCompanyRole } from '../../auth/useCompanyRole';
 import { useI18n } from '../../i18n';
 import { Building2 } from 'lucide-react';
-import type { Company } from '../../api/types';
+import type { Company, CompanyUserRole } from '../../api/types';
 
 interface PageLayoutChildProps {
   selectedCompanyId: number | null;
   selectedCompany: Company | null;
   companies: Company[];
   companiesLoading: boolean;
+  userRole: CompanyUserRole | null;
 }
 
 interface PageLayoutProps {
@@ -34,6 +36,7 @@ export default function PageLayout({
     selectCompany,
     isLoading: companiesLoading,
   } = useCompanies();
+  const { role: userRole } = useCompanyRole(selectedCompanyId);
 
   // No companies guard
   if (!companiesLoading && companies.length === 0) {
@@ -45,6 +48,7 @@ export default function PageLayout({
         pageTitle={pageTitle}
         pageSubtitle={pageSubtitle}
         activePath={activePath}
+        userRole={userRole}
       >
         <EmptyState
           icon={<Building2 className="w-7 h-7 text-brand-400" />}
@@ -64,12 +68,14 @@ export default function PageLayout({
       pageTitle={pageTitle}
       pageSubtitle={pageSubtitle}
       activePath={activePath}
+      userRole={userRole}
     >
       {children({
         selectedCompanyId,
         selectedCompany,
         companies,
         companiesLoading,
+        userRole,
       })}
     </AppShell>
   );

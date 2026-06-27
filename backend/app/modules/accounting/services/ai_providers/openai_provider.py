@@ -11,6 +11,7 @@ No API keys are logged or exposed to the frontend.
 import json
 import logging
 
+# pyrefly: ignore [missing-import]
 from openai import OpenAI
 
 from app.core.config import settings

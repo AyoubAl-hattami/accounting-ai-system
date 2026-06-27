@@ -118,6 +118,14 @@ export const en: Translations = {
     date: 'Date',
   },
 
+  // ── Permissions ──
+  permissions: {
+    accessDenied: 'Access Denied',
+    noPermissionForPage: 'You do not have permission to access this page.',
+    readOnlyMode: 'Read-only',
+    backToDashboard: 'Back to Dashboard',
+  },
+
   // ── Login ──
   login: {
     title: 'Accounting AI',
@@ -601,6 +609,14 @@ export const ar: Translations = {
     credit: 'دائن',
     balance: 'الرصيد',
     date: 'التاريخ',
+  },
+
+  // ── Permissions ──
+  permissions: {
+    accessDenied: 'الوصول مرفوض',
+    noPermissionForPage: 'ليس لديك صلاحية للوصول إلى هذه الصفحة.',
+    readOnlyMode: 'للقراءة فقط',
+    backToDashboard: 'العودة إلى لوحة التحكم',
   },
 
   // ── Login ──
