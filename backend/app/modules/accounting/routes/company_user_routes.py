@@ -163,6 +163,23 @@ def create_company_user_endpoint(
 
 
 @router.get(
+    "/me",
+    response_model=CompanyUserRead,
+)
+def get_my_company_user_endpoint(
+    company_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CompanyUser:
+    company_user = ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_id,
+    )
+    return company_user
+
+
+@router.get(
     "",
     response_model=PaginatedResponse[CompanyUserRead],
 )

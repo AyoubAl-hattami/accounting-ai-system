@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../api/client';
 import { useAuth } from './AuthContext';
-import type { CompanyUser, CompanyUserRole, PaginatedResponse } from '../api/types';
+import type { CompanyUser, CompanyUserRole } from '../api/types';
 
 interface UseCompanyRoleResult {
   role: CompanyUserRole | null;
@@ -36,11 +36,10 @@ export function useCompanyRole(companyId: number | null): UseCompanyRoleResult {
     setIsLoading(true);
 
     apiClient
-      .get<PaginatedResponse<CompanyUser>>(`/company-users?company_id=${companyId}&skip=0&limit=200`)
+      .get<CompanyUser>(`/company-users/me?company_id=${companyId}`)
       .then((res) => {
         if (cancelled) return;
-        const match = res.data.items.find((cu) => cu.user_id === user.id && cu.is_active);
-        setRole(match ? match.role : null);
+        setRole(res.data.is_active ? res.data.role : null);
       })
       .catch(() => {
         if (!cancelled) setRole(null);

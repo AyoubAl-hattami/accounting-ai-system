@@ -512,4 +512,107 @@ def test_reactivate_user_account_flow(base_url, admin_headers, default_company_i
     audit_events = [ev for ev in audit.json()["items"] if ev["action"] == "reactivate_user_account"]
     assert len(audit_events) > 0
     assert audit_events[0]["entity_id"] == user_id
+
+
+def test_current_user_company_role_resolutions(base_url, admin_headers, default_company_id):
+    import time
+    password = "Password123"
+
+    # 1. Create accountant user
+    acc_email = f"accountant_{int(time.time())}@example.com"
+    reg1 = requests.post(
+        f"{base_url}/auth/register",
+        json={"email": acc_email, "password": password, "full_name": "Acc User"},
+    )
+    assert reg1.status_code == 201
+    
+    # Add to company as accountant
+    requests.post(
+        f"{base_url}/company-users/invitations",
+        json={"company_id": default_company_id, "email": acc_email, "role": "accountant"},
+        headers=admin_headers,
+    )
+    
+    # Login accountant
+    login1 = requests.post(
+        f"{base_url}/auth/login",
+        json={"email": acc_email, "password": password},
+    )
+    acc_headers = {"Authorization": f"Bearer {login1.json()['access_token']}"}
+
+    # 2. Accountant can call current-role /me endpoint
+    me_res1 = requests.get(
+        f"{base_url}/company-users/me?company_id={default_company_id}",
+        headers=acc_headers,
+    )
+    assert me_res1.status_code == 200
+    assert me_res1.json()["role"] == "accountant"
+    assert me_res1.json()["is_active"] is True
+
+    # 3. Create viewer user
+    view_email = f"viewer_{int(time.time())}@example.com"
+    reg2 = requests.post(
+        f"{base_url}/auth/register",
+        json={"email": view_email, "password": password, "full_name": "View User"},
+    )
+    # Add to company as viewer
+    requests.post(
+        f"{base_url}/company-users/invitations",
+        json={"company_id": default_company_id, "email": view_email, "role": "viewer"},
+        headers=admin_headers,
+    )
+    # Login viewer
+    login2 = requests.post(
+        f"{base_url}/auth/login",
+        json={"email": view_email, "password": password},
+    )
+    view_headers = {"Authorization": f"Bearer {login2.json()['access_token']}"}
+
+    # Viewer can call current-role /me endpoint
+    me_res2 = requests.get(
+        f"{base_url}/company-users/me?company_id={default_company_id}",
+        headers=view_headers,
+    )
+    assert me_res2.status_code == 200
+    assert me_res2.json()["role"] == "viewer"
+    assert me_res2.json()["is_active"] is True
+
+    # 4. Inactive member receives 403
+    cu_list = requests.get(
+        f"{base_url}/company-users?company_id={default_company_id}",
+        headers=admin_headers,
+    )
+    company_user_rec = next((item for item in cu_list.json()["items"] if item["user_id"] == reg2.json()["id"]), None)
+    company_user_id = company_user_rec["id"]
+
+    # Remove access
+    requests.patch(
+        f"{base_url}/company-users/{company_user_id}/remove-access",
+        headers=admin_headers,
+    )
+    
+    # Now viewer /me returns 403
+    me_res3 = requests.get(
+        f"{base_url}/company-users/me?company_id={default_company_id}",
+        headers=view_headers,
+    )
+    assert me_res3.status_code == 403
+
+    # 5. Non-member user receives 403
+    non_member_email = f"non_member_{int(time.time())}@example.com"
+    reg3 = requests.post(
+        f"{base_url}/auth/register",
+        json={"email": non_member_email, "password": password, "full_name": "Non Member"},
+    )
+    login3 = requests.post(
+        f"{base_url}/auth/login",
+        json={"email": non_member_email, "password": password},
+    )
+    non_member_headers = {"Authorization": f"Bearer {login3.json()['access_token']}"}
+
+    me_res4 = requests.get(
+        f"{base_url}/company-users/me?company_id={default_company_id}",
+        headers=non_member_headers,
+    )
+    assert me_res4.status_code == 403
 
