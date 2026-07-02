@@ -51,3 +51,29 @@ def get_current_user(
         )
 
     return user
+
+
+bearer_scheme_optional = HTTPBearer(auto_error=False)
+
+def get_current_user_optional(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme_optional),
+    db: Session = Depends(get_db),
+) -> User | None:
+    if not credentials:
+        return None
+        
+    try:
+        payload = decode_access_token(credentials.credentials)
+        user_id_raw = payload.get("sub")
+        if not user_id_raw:
+            return None
+            
+        user_id = int(user_id_raw)
+        user = get_user_by_id(db=db, user_id=user_id)
+        
+        if user and user.is_active:
+            return user
+    except Exception:
+        return None
+        
+    return None

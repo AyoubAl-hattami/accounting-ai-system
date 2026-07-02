@@ -11,6 +11,7 @@ import CompanyUserRoleBadge from './CompanyUserRoleBadge';
 import AddCompanyUserModal from './AddCompanyUserModal';
 import UpdateCompanyUserModal from './UpdateCompanyUserModal';
 import { canManageCompanyUsers } from '../../auth/permissions';
+import { useAuth } from '../../auth/AuthContext';
 import type { CompanyUser, CompanyUserRole } from '../../api/types';
 import { useI18n } from '../../i18n';
 
@@ -41,6 +42,7 @@ interface CompanyUsersContentProps {
 
 function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: CompanyUsersContentProps) {
   const { t } = useI18n();
+  const { user: authUser } = useAuth();
   const [skip, setSkip] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('');
@@ -59,7 +61,7 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
     statusCode,
     fetchUsers,
     pageSize,
-    addCompanyUser,
+    inviteCompanyUser,
     updateCompanyUser,
     isSubmitting,
     submitError,
@@ -84,6 +86,10 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
   }, [successToast]);
 
   const ROLES: CompanyUserRole[] = ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'];
+
+  const isOnlyAdmin = useMemo(() => {
+    return users.filter(u => u.role === 'admin' && u.is_active).length <= 1;
+  }, [users]);
 
   // Client-side search and filters
   const filteredUsers = useMemo(() => {
@@ -137,17 +143,27 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
     setIsAddModalOpen(true);
   };
 
-  const handleConfirmAdd = async (payload: { user_id: number; role: CompanyUserRole; is_active: boolean }) => {
+  const handleConfirmAdd = async (payload: { email: string; role: CompanyUserRole }) => {
     if (!selectedCompanyId) return;
-    const added = await addCompanyUser({
+    const response = await inviteCompanyUser({
       company_id: selectedCompanyId,
-      ...payload,
+      email: payload.email,
+      role: payload.role,
     });
-    if (added) {
-      setIsAddModalOpen(false);
-      setSuccessToast(`Added user #${payload.user_id} successfully.`);
-      fetchUsers();
+    
+    if (response) {
+      if (response.status === 'added_existing') {
+        setIsAddModalOpen(false);
+        setSuccessToast(`Added ${payload.email} successfully.`);
+        fetchUsers();
+      } else if (response.status === 'invited' && response.invite_url) {
+        // We will let the modal handle showing the invite URL, 
+        // but for now we can keep the modal open and pass the invite URL to it.
+        // Let's modify the AddCompanyUserModal to display the link instead of closing immediately.
+        return response.invite_url;
+      }
     }
+    return undefined;
   };
 
   const handleOpenEditModal = (user: CompanyUser) => {
@@ -485,6 +501,8 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
         isSubmitting={isSubmitting}
         error={submitError}
         setError={setSubmitError}
+        isOnlyAdmin={isOnlyAdmin}
+        currentUserId={authUser?.id}
       />
     </div>
   );

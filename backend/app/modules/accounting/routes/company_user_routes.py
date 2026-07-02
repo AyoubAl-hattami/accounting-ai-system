@@ -1,11 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Session
+# pyrefly: ignore [missing-import]
+from sqlalchemy import func, select
 
-from app.core.auth_dependencies import get_current_user
+from app.core.auth_dependencies import get_current_user, get_current_user_optional
 from app.core.company_access import ensure_company_access
 from app.core.database import get_db
 from app.core.pagination import PaginatedResponse
 from app.modules.accounting.models.user import User
+from app.modules.accounting.models.company_user import CompanyUser
 from app.modules.accounting.schemas.company_user import (
     CompanyUserCreate,
     CompanyUserRead,
@@ -21,6 +25,17 @@ from app.modules.accounting.services.company_user_service import (
     list_company_users,
     update_company_user,
 )
+from app.modules.accounting.schemas.company_user_invitation import (
+    CompanyUserInvitationCreate,
+    CompanyUserInvitationResponse,
+    CompanyUserInvitationValidateResponse,
+    CompanyUserInvitationAccept,
+)
+from app.modules.accounting.services.company_user_invitation_service import (
+    create_invitation,
+    validate_invitation,
+    accept_invitation,
+)
 from app.modules.accounting.services.audit_service import create_audit_log
 
 
@@ -28,6 +43,43 @@ router = APIRouter(
     prefix="/company-users",
     tags=["Company Users"],
 )
+
+
+@router.post("/invitations", response_model=CompanyUserInvitationResponse)
+def create_invitation_endpoint(
+    invitation_in: CompanyUserInvitationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CompanyUserInvitationResponse:
+    # Ensure current_user is an admin in the target company
+    ensure_company_access(db, current_user, invitation_in.company_id, allowed_roles=["admin"])
+    
+    return create_invitation(
+        db=db,
+        invitation_in=invitation_in,
+        invited_by_user_id=current_user.id,
+    )
+
+
+@router.get("/invitations/validate", response_model=CompanyUserInvitationValidateResponse)
+def validate_invitation_endpoint(
+    token: str = Query(...),
+    db: Session = Depends(get_db),
+) -> CompanyUserInvitationValidateResponse:
+    return validate_invitation(db=db, token=token)
+
+
+@router.post("/invitations/accept")
+def accept_invitation_endpoint(
+    payload: CompanyUserInvitationAccept,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+) -> dict:
+    return accept_invitation(
+        db=db,
+        payload=payload,
+        current_user=current_user,
+    )
 
 
 @router.post(
@@ -191,6 +243,25 @@ def update_company_user_endpoint(
         company_id=company_user.company_id,
         allowed_roles={"admin"},
     )
+
+    # Prevent the last active admin from removing or demoting themselves
+    if company_user.user_id == current_user.id and company_user.role == "admin":
+        is_demoting = payload.role is not None and payload.role != "admin"
+        is_removing = payload.is_active is not None and not payload.is_active
+
+        if is_demoting or is_removing:
+            stmt = select(func.count()).select_from(CompanyUser).where(
+                CompanyUser.company_id == company_user.company_id,
+                CompanyUser.role == "admin",
+                CompanyUser.is_active == True,
+            )
+            admin_count = db.scalar(stmt) or 0
+
+            if admin_count <= 1:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot demote or remove the only admin in the company.",
+                )
 
     updated = update_company_user(
         db=db,

@@ -14,6 +14,7 @@ const AccountLedgerPage = lazy(() => import('../features/reports/account-ledger/
 const GeneralLedgerPage = lazy(() => import('../features/reports/general-ledger/GeneralLedgerPage'));
 const AuditLogsPage = lazy(() => import('../features/audit/AuditLogsPage'));
 const CompanyUsersPage = lazy(() => import('../features/company-users/CompanyUsersPage'));
+const AcceptInvitePage = lazy(() => import('../features/company-users/AcceptInvitePage'));
 const SettingsPage = lazy(() => import('../features/settings/SettingsPage'));
 
 function RouteLoader() {
@@ -30,6 +31,7 @@ export default function AppRoutes() {
       <Suspense fallback={<RouteLoader />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/accept-invite" element={<AcceptInvitePage />} />
           <Route
             path="/dashboard"
             element={

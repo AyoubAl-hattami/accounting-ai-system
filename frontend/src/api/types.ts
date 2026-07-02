@@ -266,4 +266,19 @@ export interface CompanyUser {
   updated_at: string;
 }
 
+export interface CompanyUserInvitationResponse {
+  status: string;
+  message: string;
+  invite_url: string | null;
+  token: string | null;
+}
+
+export interface CompanyUserInvitationValidateResponse {
+  valid: boolean;
+  email: string;
+  role: CompanyUserRole;
+  company_name: string;
+  user_exists: boolean;
+}
+
 

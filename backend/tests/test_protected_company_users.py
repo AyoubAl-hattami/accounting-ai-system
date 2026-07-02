@@ -63,3 +63,40 @@ def test_company_users_pagination_metadata(
     assert data["total"] >= len(data["items"])
     assert data["skip"] == 0
     assert data["limit"] == 5
+
+
+def test_cannot_remove_last_admin(
+    base_url,
+    admin_headers,
+    default_company_id,
+):
+    response = requests.get(
+        f"{base_url}/company-users?company_id={default_company_id}",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    admin_user = next((u for u in data["items"] if u["role"] == "admin"), None)
+    assert admin_user is not None
+
+    company_user_id = admin_user["id"]
+
+    # Try to demote
+    patch_response = requests.patch(
+        f"{base_url}/company-users/{company_user_id}",
+        headers=admin_headers,
+        json={"role": "accountant"},
+    )
+    assert patch_response.status_code == 400
+    assert "Cannot demote or remove the only admin" in patch_response.text
+
+    # Try to remove
+    patch_response_2 = requests.patch(
+        f"{base_url}/company-users/{company_user_id}",
+        headers=admin_headers,
+        json={"is_active": False},
+    )
+    assert patch_response_2.status_code == 400
+    assert "Cannot demote or remove the only admin" in patch_response_2.text

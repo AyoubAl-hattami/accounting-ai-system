@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import axios from 'axios';
 import apiClient from '../../api/client';
-import type { CompanyUser, CompanyUserRole, PaginatedResponse } from '../../api/types';
+import type { CompanyUser, CompanyUserRole, PaginatedResponse, CompanyUserInvitationResponse } from '../../api/types';
 
 const USERS_PAGE_SIZE = 20;
 
@@ -85,6 +85,34 @@ export function useCompanyUsers({ companyId, skip }: UseCompanyUsersOptions) {
     }
   }, []);
 
+  const inviteCompanyUser = useCallback(async (payload: {
+    company_id: number;
+    email: string;
+    role: CompanyUserRole;
+  }): Promise<CompanyUserInvitationResponse | null> => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      const response = await apiClient.post<CompanyUserInvitationResponse>('/company-users/invitations', payload);
+      return response.data;
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const detail = err.response?.data?.detail;
+        if (typeof detail === 'string') {
+          setSubmitError(detail);
+        } else {
+          setSubmitError('Failed to invite user. Please check your inputs.');
+        }
+      } else {
+        setSubmitError('Failed to invite user. An unexpected error occurred.');
+      }
+      return null;
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, []);
+
   const updateCompanyUser = useCallback(async (
     companyUserId: number,
     payload: {
@@ -124,6 +152,7 @@ export function useCompanyUsers({ companyId, skip }: UseCompanyUsersOptions) {
     fetchUsers,
     pageSize: USERS_PAGE_SIZE,
     addCompanyUser,
+    inviteCompanyUser,
     updateCompanyUser,
     isSubmitting,
     submitError,

@@ -454,6 +454,22 @@ export interface Translations {
     noUsersTitle: string;
     noUsersDescription: string;
     editUser: string;
+    inviteUser: string;
+    inviteEmail: string;
+    inviteRole: string;
+    sendInvite: string;
+    copyInviteLink: string;
+    inviteCreated: string;
+    pendingInvitations: string;
+    acceptInvite: string;
+    invitationExpired: string;
+    invalidInvitation: string;
+    setPassword: string;
+    confirmPassword: string;
+    invitationAccepted: string;
+    goToLogin: string;
+    passwordMismatch: string;
+    passwordTooShort: string;
   };
 
   // ── Settings ──

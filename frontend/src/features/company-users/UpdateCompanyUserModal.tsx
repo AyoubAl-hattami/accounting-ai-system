@@ -11,6 +11,8 @@ interface UpdateCompanyUserModalProps {
   isSubmitting: boolean;
   error: string | null;
   setError: (err: string | null) => void;
+  isOnlyAdmin?: boolean;
+  currentUserId?: number;
 }
 
 const ROLES: CompanyUserRole[] = ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'];
@@ -23,6 +25,8 @@ export default function UpdateCompanyUserModal({
   isSubmitting,
   error,
   setError,
+  isOnlyAdmin,
+  currentUserId,
 }: UpdateCompanyUserModalProps) {
   const [role, setRole] = useState<CompanyUserRole>('viewer');
   const [isActive, setIsActive] = useState<boolean>(true);
@@ -40,6 +44,9 @@ export default function UpdateCompanyUserModal({
     e.preventDefault();
     await onConfirm(role, isActive);
   };
+
+  const isCurrentUser = user && currentUserId ? user.user_id === currentUserId : false;
+  const preventDemoteOrRemove = isCurrentUser && isOnlyAdmin && user?.role === 'admin';
 
   return (
     <AnimatePresence>
@@ -87,6 +94,12 @@ export default function UpdateCompanyUserModal({
                   </span>
                 </div>
 
+                {preventDemoteOrRemove && (
+                  <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 text-xs flex items-start gap-2">
+                    <span className="flex-1">You are the only active admin in this company. You cannot demote or remove your own account.</span>
+                  </div>
+                )}
+
                 {/* Role Field */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-gray-400 block">
@@ -95,7 +108,8 @@ export default function UpdateCompanyUserModal({
                   <select
                     value={role}
                     onChange={(e) => setRole(e.target.value as CompanyUserRole)}
-                    className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] px-3.5 py-2.5 text-sm text-white focus:border-indigo-500/50 focus:outline-none transition-all cursor-pointer"
+                    disabled={preventDemoteOrRemove}
+                    className={`w-full rounded-xl border border-white/[0.06] bg-white/[0.03] px-3.5 py-2.5 text-sm text-white focus:border-indigo-500/50 focus:outline-none transition-all ${preventDemoteOrRemove ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                   >
                     {ROLES.map((r) => (
                       <option key={r} value={r} className="bg-slate-950 text-white">
@@ -116,9 +130,10 @@ export default function UpdateCompanyUserModal({
                       type="checkbox"
                       checked={isActive}
                       onChange={(e) => setIsActive(e.target.checked)}
+                      disabled={preventDemoteOrRemove}
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-white/[0.08] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                    <div className={`w-11 h-6 bg-white/[0.08] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600 ${preventDemoteOrRemove ? 'opacity-50 cursor-not-allowed' : ''}`}></div>
                   </label>
                 </div>
 
