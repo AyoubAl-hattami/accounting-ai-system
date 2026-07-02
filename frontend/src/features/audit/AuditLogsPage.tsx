@@ -232,7 +232,14 @@ function AuditLogsContent({ selectedCompanyId, companiesLoading }: AuditLogsCont
                           {formatDateTime(log.created_at)}
                         </td>
                         <td className="py-4 px-6 text-sm font-medium text-white whitespace-nowrap">
-                          {log.actor}
+                          <div className="flex flex-col">
+                            <span className="text-sm font-semibold text-white">
+                              {log.actor_name || log.actor_email || log.actor}
+                            </span>
+                            {log.actor_name && log.actor_email && (
+                              <span className="text-xs text-gray-400 mt-0.5">{log.actor_email}</span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-4 px-6 whitespace-nowrap">
                           <AuditActionBadge action={log.action} />
@@ -249,6 +256,12 @@ function AuditLogsContent({ selectedCompanyId, companiesLoading }: AuditLogsCont
                         </td>
                         <td className="py-4 px-6 text-sm text-gray-400 max-w-xs truncate" title={log.description || ''}>
                           {log.description || '—'}
+                          {(log.old_values || log.new_values) && (
+                            <div className="mt-2 text-xs font-mono bg-black/20 p-2 rounded max-h-24 overflow-y-auto whitespace-pre">
+                              {log.old_values && <div>Old: {JSON.stringify(log.old_values)}</div>}
+                              {log.new_values && <div>New: {JSON.stringify(log.new_values)}</div>}
+                            </div>
+                          )}
                         </td>
                       </motion.tr>
                     ))}
@@ -282,7 +295,7 @@ function AuditLogsContent({ selectedCompanyId, companiesLoading }: AuditLogsCont
                       <span className="text-xs text-gray-500 block">{t.auditLogs.actor}</span>
                       <span className="text-white font-medium break-all flex items-center gap-1 mt-0.5">
                         <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                        {log.actor}
+                        {log.actor_name || log.actor_email || log.actor}
                       </span>
                     </div>
 
@@ -300,6 +313,14 @@ function AuditLogsContent({ selectedCompanyId, companiesLoading }: AuditLogsCont
                     <div className="bg-black/10 border border-white/[0.04] p-3 rounded-lg text-xs text-gray-400">
                       <div className="text-[10px] text-gray-500 font-semibold mb-1 uppercase tracking-wider">{t.common.description}</div>
                       {log.description}
+                    </div>
+                  )}
+
+                  {(log.old_values || log.new_values) && (
+                    <div className="bg-black/10 border border-white/[0.04] p-3 rounded-lg text-xs text-gray-400 font-mono overflow-x-auto">
+                      <div className="text-[10px] text-gray-500 font-semibold mb-1 uppercase tracking-wider">Changes</div>
+                      {log.old_values && <div>Old: {JSON.stringify(log.old_values)}</div>}
+                      {log.new_values && <div className="mt-1">New: {JSON.stringify(log.new_values)}</div>}
                     </div>
                   )}
                 </motion.div>

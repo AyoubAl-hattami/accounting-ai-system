@@ -38,4 +38,8 @@ class CompanyUserRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    user_email: str | None = None
+    user_full_name: str | None = None
+    user_is_active: bool = True
+
     model_config = ConfigDict(from_attributes=True)

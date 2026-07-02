@@ -38,6 +38,7 @@ export default function AcceptInvitePage() {
           `/company-users/invitations/validate?token=${token}`
         );
         setInviteData(response.data);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         const detail = err.response?.data?.detail;
         setError(detail || t.companyUsersPage.invalidInvitation || 'Failed to validate invitation.');
@@ -74,6 +75,7 @@ export default function AcceptInvitePage() {
         password: password,
       });
       setSuccess(true);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const detail = err.response?.data?.detail;
       setError(detail || 'Failed to accept invitation.');

@@ -1,5 +1,5 @@
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.modules.accounting.models.company import Company
 from app.modules.accounting.models.company_user import CompanyUser
@@ -24,7 +24,7 @@ def get_company_user(
     db: Session,
     company_user_id: int,
 ) -> CompanyUser | None:
-    statement = select(CompanyUser).where(CompanyUser.id == company_user_id)
+    statement = select(CompanyUser).options(joinedload(CompanyUser.user)).where(CompanyUser.id == company_user_id)
     return db.scalar(statement)
 
 
@@ -47,7 +47,7 @@ def list_company_users(
     skip: int = 0,
     limit: int = 100,
 ) -> list[CompanyUser]:
-    statement = select(CompanyUser).order_by(CompanyUser.id.asc())
+    statement = select(CompanyUser).options(joinedload(CompanyUser.user)).order_by(CompanyUser.id.asc())
 
     if company_id is not None:
         statement = statement.where(CompanyUser.company_id == company_id)

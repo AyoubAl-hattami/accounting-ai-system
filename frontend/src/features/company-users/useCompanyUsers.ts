@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import axios from 'axios';
 import apiClient from '../../api/client';
-import type { CompanyUser, CompanyUserRole, PaginatedResponse, CompanyUserInvitationResponse } from '../../api/types';
+import type { CompanyUser, CompanyUserRole, PaginatedResponse, CompanyUserInvitationResponse, CompanyUserInvitationRead } from '../../api/types';
 
 const USERS_PAGE_SIZE = 20;
 
@@ -28,11 +28,42 @@ export function useCompanyUsers({ companyId, skip }: UseCompanyUsersOptions) {
     setStatusCode(null);
 
     try {
-      const response = await apiClient.get<PaginatedResponse<CompanyUser>>(
+      const usersResponse = await apiClient.get<PaginatedResponse<CompanyUser>>(
         `/company-users?company_id=${companyId}&skip=${skip}&limit=${USERS_PAGE_SIZE}`
       );
-      setUsers(response.data.items);
-      setTotal(response.data.total);
+      
+      let items = [...usersResponse.data.items];
+      
+      // Also fetch pending invitations if we are on the first page
+      if (skip === 0) {
+        try {
+          const invResponse = await apiClient.get<CompanyUserInvitationRead[]>(
+            `/company-users/invitations?company_id=${companyId}`
+          );
+          
+          const pendingUsers: CompanyUser[] = invResponse.data.map(inv => ({
+            id: -inv.id, // Negative ID to distinguish from real users
+            company_id: inv.company_id,
+            user_id: 0,
+            role: inv.role,
+            is_active: false,
+            user_email: inv.email,
+            user_full_name: '(Pending Invitation)',
+            is_invitation: true,
+            expires_at: inv.expires_at,
+            created_at: inv.created_at,
+            updated_at: inv.created_at,
+          }));
+          
+          items = [...pendingUsers, ...items];
+        } catch (invErr) {
+          // If invitations fail (e.g., non-admin user), just ignore and show regular users
+          console.error("Failed to fetch pending invitations", invErr);
+        }
+      }
+
+      setUsers(items);
+      setTotal(usersResponse.data.total);
     } catch (err) {
       let status: number | undefined;
       if (axios.isAxiosError(err)) {
@@ -143,6 +174,138 @@ export function useCompanyUsers({ companyId, skip }: UseCompanyUsersOptions) {
     }
   }, []);
 
+  const removeCompanyAccess = useCallback(async (
+    companyUserId: number
+  ): Promise<boolean> => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      await apiClient.patch(`/company-users/${companyUserId}/remove-access`);
+      return true;
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const detail = err.response?.data?.detail;
+        if (typeof detail === 'string') {
+          setSubmitError(detail);
+        } else {
+          setSubmitError('Failed to remove company access.');
+        }
+      } else {
+        setSubmitError('Failed to remove company access. An unexpected error occurred.');
+      }
+      return false;
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, []);
+
+  const deactivateUserAccount = useCallback(async (
+    userId: number,
+    companyId: number
+  ): Promise<boolean> => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      await apiClient.patch(`/company-users/users/${userId}/deactivate?company_id=${companyId}`);
+      return true;
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const detail = err.response?.data?.detail;
+        if (typeof detail === 'string') {
+          setSubmitError(detail);
+        } else {
+          setSubmitError('Failed to deactivate user account.');
+        }
+      } else {
+        setSubmitError('Failed to deactivate user account. An unexpected error occurred.');
+      }
+      return false;
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, []);
+
+  const cancelInvitation = useCallback(async (
+    invitationId: number
+  ): Promise<boolean> => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      await apiClient.delete(`/company-users/invitations/${invitationId}`);
+      return true;
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const detail = err.response?.data?.detail;
+        if (typeof detail === 'string') {
+          setSubmitError(detail);
+        } else {
+          setSubmitError('Failed to cancel invitation.');
+        }
+      } else {
+        setSubmitError('Failed to cancel invitation. An unexpected error occurred.');
+      }
+      return false;
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, []);
+
+  const restoreCompanyAccess = useCallback(async (
+    companyUserId: number
+  ): Promise<boolean> => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      await apiClient.patch(`/company-users/${companyUserId}/restore-access`);
+      return true;
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const detail = err.response?.data?.detail;
+        if (typeof detail === 'string') {
+          setSubmitError(detail);
+        } else {
+          setSubmitError('Failed to restore company access.');
+        }
+      } else {
+        setSubmitError('Failed to restore company access. An unexpected error occurred.');
+      }
+      return false;
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, []);
+
+  const reactivateUserAccount = useCallback(async (
+    userId: number,
+    companyId: number
+  ): Promise<boolean> => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      await apiClient.patch(`/company-users/users/${userId}/reactivate?company_id=${companyId}`);
+      return true;
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const detail = err.response?.data?.detail;
+        if (typeof detail === 'string') {
+          setSubmitError(detail);
+        } else {
+          setSubmitError('Failed to reactivate user account.');
+        }
+      } else {
+        setSubmitError('Failed to reactivate user account. An unexpected error occurred.');
+      }
+      return false;
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, []);
+
   return {
     users,
     total,
@@ -154,6 +317,11 @@ export function useCompanyUsers({ companyId, skip }: UseCompanyUsersOptions) {
     addCompanyUser,
     inviteCompanyUser,
     updateCompanyUser,
+    removeCompanyAccess,
+    deactivateUserAccount,
+    cancelInvitation,
+    restoreCompanyAccess,
+    reactivateUserAccount,
     isSubmitting,
     submitError,
     setSubmitError,

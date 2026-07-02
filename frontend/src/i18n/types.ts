@@ -470,6 +470,36 @@ export interface Translations {
     goToLogin: string;
     passwordMismatch: string;
     passwordTooShort: string;
+    removeAccess: string;
+    removeAccessConfirm: string;
+    accessRemoved: string;
+    deleteAccount: string;
+    deleteAccountConfirm: string;
+    accountDeleted: string;
+    deactivateAccount: string;
+    deactivatedUser: string;
+    deletedUser: string;
+    typeDeleteToConfirm: string;
+    cannotRemoveLastAdmin: string;
+    cannotDeleteLastAdmin: string;
+    dangerZone: string;
+    activeUsers: string;
+    inactiveUsers: string;
+    deactivatedUsers: string;
+    allUsers: string;
+    cancelInvite: string;
+    deleteInvite: string;
+    inviteCancelled: string;
+    restoreAccess: string;
+    accessRestored: string;
+    reactivateAccount: string;
+    accountReactivated: string;
+    cannotRestoreDeactivatedAccount: string;
+    showingActiveUsersOnly: string;
+    filterUsers: string;
+    confirmCancelInvite: string;
+    confirmRestoreAccess: string;
+    confirmReactivateAccount: string;
   };
 
   // ── Settings ──

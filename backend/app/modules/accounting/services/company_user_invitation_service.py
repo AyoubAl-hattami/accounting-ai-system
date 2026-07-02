@@ -22,7 +22,7 @@ from app.modules.accounting.services.audit_service import create_audit_log
 def create_invitation(
     db: Session,
     invitation_in: CompanyUserInvitationCreate,
-    invited_by_user_id: int,
+    current_user: User,
 ) -> CompanyUserInvitationResponse:
     # Check if company exists
     company = db.execute(select(Company).where(Company.id == invitation_in.company_id)).scalar_one_or_none()
@@ -59,7 +59,10 @@ def create_invitation(
 
         create_audit_log(
             db=db,
-            actor=str(invited_by_user_id),
+            actor=current_user.email,
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            actor_name=current_user.full_name,
             action="ADD_COMPANY_USER_DIRECT",
             entity_type="COMPANY_USER",
             entity_id=new_cu.id,
@@ -99,7 +102,7 @@ def create_invitation(
         role=invitation_in.role,
         token_hash=hashed_token,
         expires_at=expires_at,
-        invited_by_user_id=invited_by_user_id,
+        invited_by_user_id=current_user.id,
     )
     db.add(new_invite)
     db.commit()
@@ -109,7 +112,10 @@ def create_invitation(
 
     create_audit_log(
         db=db,
-        actor=str(invited_by_user_id),
+        actor=current_user.email,
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        actor_name=current_user.full_name,
         action="CREATE_INVITATION",
         entity_type="INVITATION",
         entity_id=new_invite.id,
@@ -248,7 +254,10 @@ def accept_invitation(
     
     create_audit_log(
         db=db,
-        actor=str(user_to_add.id),
+        actor=user_to_add.email,
+        actor_user_id=user_to_add.id,
+        actor_email=user_to_add.email,
+        actor_name=user_to_add.full_name,
         action="ACCEPT_INVITATION",
         entity_type="INVITATION",
         entity_id=invite.id,
@@ -257,3 +266,18 @@ def accept_invitation(
     )
 
     return {"status": "success", "message": "Invitation accepted successfully."}
+
+
+def list_pending_invitations(
+    db: Session,
+    company_id: int,
+) -> list[CompanyUserInvitation]:
+    return list(
+        db.execute(
+            select(CompanyUserInvitation).where(
+                CompanyUserInvitation.company_id == company_id,
+                CompanyUserInvitation.accepted_at.is_(None),
+                CompanyUserInvitation.expires_at > datetime.now(timezone.utc),
+            )
+        ).scalars().all()
+    )

@@ -246,10 +246,17 @@ export interface AuditLog {
   id: number;
   company_id: number | null;
   actor: string;
+  actor_user_id: number | null;
+  actor_email: string | null;
+  actor_name: string | null;
   action: string;
   entity_type: string;
   entity_id: number | null;
   description: string | null;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  ip_address: string | null;
+  user_agent: string | null;
   created_at: string;
 }
 
@@ -262,6 +269,11 @@ export interface CompanyUser {
   user_id: number;
   role: CompanyUserRole;
   is_active: boolean;
+  user_email?: string;
+  user_full_name?: string;
+  user_is_active?: boolean;
+  is_invitation?: boolean;
+  expires_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -281,4 +293,14 @@ export interface CompanyUserInvitationValidateResponse {
   user_exists: boolean;
 }
 
-
+export interface CompanyUserInvitationRead {
+  id: number;
+  company_id: number;
+  email: string;
+  role: CompanyUserRole;
+  invited_by_user_id: number;
+  expires_at: string;
+  accepted_at: string | null;
+  accepted_by_user_id: number | null;
+  created_at: string;
+}

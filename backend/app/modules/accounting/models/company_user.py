@@ -9,7 +9,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -43,6 +43,8 @@ class CompanyUser(Base):
         index=True,
     )
 
+    user: Mapped["User"] = relationship()
+
     role: Mapped[str] = mapped_column(String(50), nullable=False, default="viewer")
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -59,3 +61,15 @@ class CompanyUser(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+    @property
+    def user_email(self) -> str | None:
+        return self.user.email if self.user else None
+
+    @property
+    def user_full_name(self) -> str | None:
+        return self.user.full_name if self.user else None
+
+    @property
+    def user_is_active(self) -> bool:
+        return self.user.is_active if self.user else True

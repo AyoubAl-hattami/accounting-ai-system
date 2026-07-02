@@ -29,3 +29,17 @@ class CompanyUserInvitationAccept(BaseModel):
     token: str
     full_name: str | None = None
     password: str | None = None
+
+
+class CompanyUserInvitationRead(BaseModel):
+    id: int
+    company_id: int
+    email: EmailStr
+    role: CompanyRole
+    invited_by_user_id: int
+    expires_at: datetime
+    accepted_at: datetime | None = None
+    accepted_by_user_id: int | None = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

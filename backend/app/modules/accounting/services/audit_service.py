@@ -11,14 +11,28 @@ def create_audit_log(
     entity_id: int | None = None,
     company_id: int | None = None,
     actor: str = "system",
+    actor_user_id: int | None = None,
+    actor_email: str | None = None,
+    actor_name: str | None = None,
+    old_values: dict | None = None,
+    new_values: dict | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
     description: str | None = None,
 ) -> AuditLog:
     audit_log = AuditLog(
         company_id=company_id,
         actor=actor,
+        actor_user_id=actor_user_id,
+        actor_email=actor_email,
+        actor_name=actor_name,
         action=action,
         entity_type=entity_type,
         entity_id=entity_id,
+        old_values=old_values,
+        new_values=new_values,
+        ip_address=ip_address,
+        user_agent=user_agent,
         description=description,
     )
 
