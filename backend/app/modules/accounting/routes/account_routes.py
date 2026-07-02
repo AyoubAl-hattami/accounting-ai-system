@@ -293,6 +293,12 @@ def update_account_endpoint(
                 detail="Parent account must belong to the same company",
             )
 
+    old_values = {
+        "name": account.name,
+        "code": account.code,
+        "is_active": account.is_active,
+    }
+
     updated = update_account(db=db, account=account, payload=payload)
 
     create_audit_log(
@@ -306,6 +312,12 @@ def update_account_endpoint(
         entity_type="account",
         entity_id=updated.id,
         description=f"Updated account {updated.code} - {updated.name}",
+        old_values=old_values,
+        new_values={
+            "name": updated.name,
+            "code": updated.code,
+            "is_active": updated.is_active,
+        },
     )
 
     return updated

@@ -297,6 +297,9 @@ def update_company_user_endpoint(
                     detail="Cannot demote or remove the only admin in the company.",
                 )
 
+    old_role = company_user.role
+    old_is_active = company_user.is_active
+
     updated = update_company_user(
         db=db,
         company_user=company_user,
@@ -314,6 +317,8 @@ def update_company_user_endpoint(
         entity_type="company_user",
         entity_id=updated.id,
         description=f"Updated company user {updated.id} in company {updated.company_id}",
+        old_values={"role": old_role, "is_active": old_is_active},
+        new_values={"role": updated.role, "is_active": updated.is_active},
     )
 
     return updated

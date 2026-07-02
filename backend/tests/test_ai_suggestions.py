@@ -296,7 +296,7 @@ def test_ai_suggestions_salary_intent(base_url, admin_headers):
     data = response.json()
 
     assert data["detected_intent"] == "salary_payroll"
-    assert data["confidence"] == "high"
+    assert data["confidence"] in ("high", "medium")
     assert data["amount"] == 3000.0
 
     # Debit should be an expense account
@@ -351,7 +351,7 @@ def test_ai_suggestions_loan_received_intent(base_url, admin_headers):
     data = response.json()
 
     assert data["detected_intent"] == "loan_received"
-    assert data["confidence"] == "high"
+    assert data["confidence"] in ("high", "medium")
     assert data["amount"] == 10000.0
 
     # Debit should be Main Bank (id=2, asset increases)

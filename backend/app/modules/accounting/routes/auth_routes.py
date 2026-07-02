@@ -120,6 +120,19 @@ def login_endpoint(
     if not user:
         record_attempt(login_key, settings.AUTH_FAILED_LOGIN_WINDOW_SECONDS)
 
+        create_audit_log(
+            db=db,
+            company_id=None,
+            actor=payload.email,
+            actor_user_id=None,
+            actor_email=payload.email,
+            actor_name=None,
+            action="login_failure",
+            entity_type="user",
+            entity_id=None,
+            description=f"Failed login attempt for {payload.email}",
+        )
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -128,6 +141,19 @@ def login_endpoint(
     reset_attempts(login_key)
 
     token = create_user_token(user)
+
+    create_audit_log(
+        db=db,
+        company_id=None,
+        actor=user.email,
+        actor_user_id=user.id,
+        actor_email=user.email,
+        actor_name=user.full_name,
+        action="login_success",
+        entity_type="user",
+        entity_id=user.id,
+        description=f"User {user.email} logged in successfully",
+    )
 
     return TokenRead(
         access_token=token,

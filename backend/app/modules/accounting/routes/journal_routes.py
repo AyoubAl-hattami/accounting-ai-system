@@ -170,6 +170,11 @@ def create_journal_entry_endpoint(
         entity_type="journal_entry",
         entity_id=journal_entry.id,
         description=f"Created journal entry {journal_entry.entry_no}",
+        new_values={
+            "entry_no": journal_entry.entry_no,
+            "status": journal_entry.status,
+            "entry_date": str(journal_entry.entry_date),
+        },
     )
 
     return journal_entry
@@ -459,6 +464,8 @@ def update_journal_entry_endpoint(
         entity_type="journal_entry",
         entity_id=updated_entry.id,
         description=f"Updated draft journal entry {updated_entry.entry_no}",
+        old_values={"status": "draft", "entry_no": updated_entry.entry_no},
+        new_values={"status": "draft", "entry_no": updated_entry.entry_no},
     )
 
     return updated_entry
@@ -527,6 +534,8 @@ def review_journal_entry_endpoint(
         entity_type="journal_entry",
         entity_id=reviewed_entry.id,
         description=f"Reviewed journal entry {reviewed_entry.entry_no}",
+        old_values={"status": "draft"},
+        new_values={"status": "reviewed"},
     )
 
     return reviewed_entry
@@ -619,6 +628,8 @@ def post_journal_entry_endpoint(
         entity_type="journal_entry",
         entity_id=posted_entry.id,
         description=f"Posted journal entry {posted_entry.entry_no}",
+        old_values={"status": "reviewed"},
+        new_values={"status": "posted"},
     )
 
     return posted_entry
@@ -735,6 +746,8 @@ def reverse_journal_entry_endpoint(
             f"Created reversal journal entry "
             f"{reversal_entry.entry_no} for {original_entry.entry_no}"
         ),
+        old_values={"original_entry_no": original_entry.entry_no, "status": "posted"},
+        new_values={"reversal_entry_no": reversal_entry.entry_no, "status": "posted"},
     )
 
     return reversal_entry
@@ -789,6 +802,8 @@ def void_journal_entry_endpoint(
         entity_type="journal_entry",
         entity_id=voided_entry.id,
         description=f"Voided draft journal entry {voided_entry.entry_no}",
+        old_values={"status": "draft"},
+        new_values={"status": "void"},
     )
 
     return voided_entry

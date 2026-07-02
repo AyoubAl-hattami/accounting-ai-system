@@ -252,6 +252,13 @@ def update_fiscal_year_endpoint(
             status_code=status.HTTP_409_CONFLICT,
             detail="Fiscal year dates overlap with an existing fiscal year",
         )
+    old_fiscal_year_values = {
+        "name": fiscal_year.name,
+        "status": fiscal_year.status,
+        "start_date": str(fiscal_year.start_date),
+        "end_date": str(fiscal_year.end_date),
+    }
+
     updated = update_fiscal_year(
         db=db,
         fiscal_year=fiscal_year,
@@ -269,6 +276,13 @@ def update_fiscal_year_endpoint(
         entity_type="fiscal_year",
         entity_id=updated.id,
         description=f"Updated fiscal year {updated.name}",
+        old_values=old_fiscal_year_values,
+        new_values={
+            "name": updated.name,
+            "status": updated.status,
+            "start_date": str(updated.start_date),
+            "end_date": str(updated.end_date),
+        },
     )
 
     return updated
@@ -508,6 +522,13 @@ def update_fiscal_period_endpoint(
                 detail="Fiscal period name already exists for this fiscal year",
             )
 
+    old_period_values = {
+        "name": fiscal_period.name,
+        "status": fiscal_period.status,
+        "start_date": str(fiscal_period.start_date),
+        "end_date": str(fiscal_period.end_date),
+    }
+
     updated = update_fiscal_period(
         db=db,
         fiscal_period=fiscal_period,
@@ -525,6 +546,13 @@ def update_fiscal_period_endpoint(
         entity_type="fiscal_period",
         entity_id=updated.id,
         description=f"Updated fiscal period {updated.name}",
+        old_values=old_period_values,
+        new_values={
+            "name": updated.name,
+            "status": updated.status,
+            "start_date": str(updated.start_date),
+            "end_date": str(updated.end_date),
+        },
     )
 
     return updated

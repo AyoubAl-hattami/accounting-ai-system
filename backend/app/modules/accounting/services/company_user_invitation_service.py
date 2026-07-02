@@ -63,11 +63,12 @@ def create_invitation(
             actor_user_id=current_user.id,
             actor_email=current_user.email,
             actor_name=current_user.full_name,
-            action="ADD_COMPANY_USER_DIRECT",
-            entity_type="COMPANY_USER",
+            action="add_company_user_direct",
+            entity_type="company_user",
             entity_id=new_cu.id,
             company_id=invitation_in.company_id,
             description=f"Added {invitation_in.email} directly",
+            new_values={"role": invitation_in.role, "email": invitation_in.email},
         )
 
         return CompanyUserInvitationResponse(
@@ -116,11 +117,12 @@ def create_invitation(
         actor_user_id=current_user.id,
         actor_email=current_user.email,
         actor_name=current_user.full_name,
-        action="CREATE_INVITATION",
-        entity_type="INVITATION",
+        action="create_invitation",
+        entity_type="invitation",
         entity_id=new_invite.id,
         company_id=invitation_in.company_id,
         description=f"Invited {invitation_in.email}",
+        new_values={"email": invitation_in.email, "role": invitation_in.role},
     )
 
     return CompanyUserInvitationResponse(
@@ -258,11 +260,12 @@ def accept_invitation(
         actor_user_id=user_to_add.id,
         actor_email=user_to_add.email,
         actor_name=user_to_add.full_name,
-        action="ACCEPT_INVITATION",
-        entity_type="INVITATION",
+        action="accept_invitation",
+        entity_type="invitation",
         entity_id=invite.id,
         company_id=invite.company_id,
         description="Invitation accepted",
+        new_values={"email": user_to_add.email, "role": invite.role},
     )
 
     return {"status": "success", "message": "Invitation accepted successfully."}
