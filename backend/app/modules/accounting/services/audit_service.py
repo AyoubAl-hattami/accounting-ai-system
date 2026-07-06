@@ -48,6 +48,7 @@ def list_audit_logs(
     company_id: int | None = None,
     entity_type: str | None = None,
     entity_id: int | None = None,
+    action: str | None = None,
     skip: int = 0,
     limit: int = 100,
 ) -> list[AuditLog]:
@@ -62,6 +63,9 @@ def list_audit_logs(
     if entity_id is not None:
         statement = statement.where(AuditLog.entity_id == entity_id)
 
+    if action is not None:
+        statement = statement.where(AuditLog.action == action)
+
     statement = statement.offset(skip).limit(limit)
 
     return list(db.scalars(statement).all())
@@ -72,6 +76,7 @@ def count_audit_logs(
     company_id: int | None = None,
     entity_type: str | None = None,
     entity_id: int | None = None,
+    action: str | None = None,
 ) -> int:
     statement = select(func.count()).select_from(AuditLog)
 
@@ -83,5 +88,8 @@ def count_audit_logs(
 
     if entity_id is not None:
         statement = statement.where(AuditLog.entity_id == entity_id)
+
+    if action is not None:
+        statement = statement.where(AuditLog.action == action)
 
     return int(db.scalar(statement) or 0)

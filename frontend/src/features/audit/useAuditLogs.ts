@@ -9,9 +9,10 @@ interface UseAuditLogsOptions {
   companyId: number | null;
   skip: number;
   entityType?: string | null;
+  action?: string | null;
 }
 
-export function useAuditLogs({ companyId, skip, entityType }: UseAuditLogsOptions) {
+export function useAuditLogs({ companyId, skip, entityType, action }: UseAuditLogsOptions) {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -29,6 +30,9 @@ export function useAuditLogs({ companyId, skip, entityType }: UseAuditLogsOption
       let url = `/audit-logs?company_id=${companyId}&skip=${skip}&limit=${AUDIT_LOGS_PAGE_SIZE}`;
       if (entityType) {
         url += `&entity_type=${encodeURIComponent(entityType)}`;
+      }
+      if (action) {
+        url += `&action=${encodeURIComponent(action)}`;
       }
       
       const response = await apiClient.get<PaginatedResponse<AuditLog>>(url);
@@ -50,7 +54,7 @@ export function useAuditLogs({ companyId, skip, entityType }: UseAuditLogsOption
     } finally {
       setIsLoading(false);
     }
-  }, [companyId, skip, entityType]);
+  }, [companyId, skip, entityType, action]);
 
   return { 
     logs, 

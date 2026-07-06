@@ -4,7 +4,9 @@ import os
 # Add backend directory to sys.path so we can import app
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# pyrefly: ignore [missing-import]
 from sqlalchemy import create_engine, select
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.modules.accounting.models.user import User

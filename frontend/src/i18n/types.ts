@@ -432,10 +432,44 @@ export interface Translations {
     timestamp: string;
     actor: string;
     action: string;
+    entity: string;
     entityType: string;
     entityId: string;
     noLogsTitle: string;
     noLogsDescription: string;
+    // Details panel
+    auditDetails: string;
+    before: string;
+    after: string;
+    field: string;
+    value: string;
+    previousValue: string;
+    changedFields: string;
+    noDetails: string;
+    changed: string;
+    // Filters
+    filterByAction: string;
+    filterByEntity: string;
+    clearFilters: string;
+    // Action labels
+    loginSuccess: string;
+    loginFailure: string;
+    createJournalEntry: string;
+    reviewJournalEntry: string;
+    postJournalEntry: string;
+    voidJournalEntry: string;
+    reverseJournalEntry: string;
+    updateCompanyUser: string;
+    removeCompanyAccess: string;
+    restoreCompanyAccess: string;
+    deactivateUserAccount: string;
+    reactivateUserAccount: string;
+    createInvitation: string;
+    cancelInvitation: string;
+    acceptInvitation: string;
+    updateAccount: string;
+    updateFiscalYear: string;
+    updateFiscalPeriod: string;
   };
 
   // ── Company Users ──

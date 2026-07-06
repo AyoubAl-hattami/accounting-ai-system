@@ -1,5 +1,6 @@
 from datetime import datetime
 
+# pyrefly: ignore [missing-import]
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -9,6 +10,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base

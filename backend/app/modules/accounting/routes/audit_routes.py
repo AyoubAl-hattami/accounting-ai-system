@@ -27,6 +27,7 @@ def list_audit_logs_endpoint(
     company_id: int = Query(..., ge=1),
     entity_type: str | None = Query(default=None),
     entity_id: int | None = Query(default=None, ge=1),
+    action: str | None = Query(default=None),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -44,6 +45,7 @@ def list_audit_logs_endpoint(
         company_id=company_id,
         entity_type=entity_type,
         entity_id=entity_id,
+        action=action,
         skip=skip,
         limit=limit,
     )
@@ -53,6 +55,7 @@ def list_audit_logs_endpoint(
         company_id=company_id,
         entity_type=entity_type,
         entity_id=entity_id,
+        action=action,
     )
 
     return PaginatedResponse[AuditLogRead](
