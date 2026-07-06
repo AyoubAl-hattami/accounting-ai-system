@@ -572,4 +572,44 @@ export interface Translations {
     english: string;
     arabic: string;
   };
+  // ── Gemini Assistant ──
+  geminiAssistant: {
+    askAI: string;
+    assistant: string;
+    typeYourQuestion: string;
+    send: string;
+    thinking: string;
+    suggestedAction: string;
+    confirmAction: string;
+    cancelAction: string;
+    createDraftJournalEntry: string;
+    draftCreated: string;
+    aiAccessDenied: string;
+    aiCouldNotAnswer: string;
+    aiNeedsMoreInfo: string;
+    currentPageContext: string;
+    poweredByAI: string;
+    confirmCreateEntry: string;
+    aiActionPreview: string;
+    noCompanyForAI: string;
+    clearChat: string;
+    debit: string;
+    credit: string;
+    entryDate: string;
+    confirmWarning: string;
+    // Fiscal period error keys
+    fiscalPeriodNotFound: string;
+    fiscalPeriodClosed: string;
+    fiscalYearNotFound: string;
+    fiscalYearClosed: string;
+    cannotCreateEntryForDate: string;
+    chooseOpenFiscalDate: string;
+    confirmFailed: string;
+    tryDifferentDate: string;
+    suggestedDate: string;
+    // Date editing
+    useSuggestedDate: string;
+    editEntryDate: string;
+    confirmDisabledFiscal: string;
+  };
 }

@@ -358,7 +358,94 @@ def suggest_journal_entry(
             "Bank/Cash decreases by credit."
         )
 
-    # 7. Unknown Intent
+    # 7. Receipt / Collection (Arabic: استلام، تحصيل، وصلنا، قبضنا)
+    elif (
+        re.search(
+            r"\b(received|collected|receipt|collection)\b",
+            text,
+            re.IGNORECASE,
+        )
+        or any(
+            kw in text
+            for kw in [
+                "استلام", "استلمنا", "وصلنا", "قبضنا", "تحصيل",
+                "تم استلام", "تم تحصيل", "دخل البنك",
+            ]
+        )
+    ):
+        # Check if the phrase also contains explicit revenue/sales keywords
+        has_revenue_keyword = any(
+            kw in text
+            for kw in [
+                "مبيعات", "بيع", "إيراد", "ايراد", "إيرادات", "ايرادات",
+                "دخل", "خدمات", "revenue", "sales", "income", "service",
+            ]
+        )
+
+        if has_revenue_keyword:
+            # Clearly a revenue receipt → Debit Bank, Credit Sales Revenue
+            detected_intent = "sales_revenue"
+            debit_account = find_bank_cash_account(accounts)
+            credit_account = find_account_by_type_and_keywords(
+                accounts,
+                "income",
+                [
+                    "sales", "sale", "revenue", "income", "service",
+                    "مبيعات", "بيع", "إيراد", "ايراد", "إيرادات", "خدمات",
+                ],
+                ["income", "revenue", "إيراد", "ايراد"],
+            )
+            explanation = (
+                "تم استلام إيراد مبيعات، مما يزيد البنك/النقدية (أصل) بالجانب المدين. "
+                "المبيعات/الإيرادات تزيد بالجانب الدائن."
+                if language == "ar"
+                else "Received sales income, which increases Bank/Cash (asset) by debit. "
+                "Sales/Revenue increases by credit."
+            )
+        else:
+            # Ambiguous: could be revenue or A/R collection.
+            # Default safely to revenue with a warning.
+            detected_intent = "receipt_collection"
+            debit_account = find_bank_cash_account(accounts)
+            credit_account = find_account_by_type_and_keywords(
+                accounts,
+                "income",
+                [
+                    "sales", "sale", "revenue", "income",
+                    "مبيعات", "بيع", "إيراد", "ايراد", "إيرادات",
+                ],
+                ["income", "revenue", "إيراد", "ايراد"],
+            )
+            # Extract counterparty name from "من ..." if present
+            counterparty_match = re.search(r"من\s+(.+?)(?:\s*$)", description.strip())
+            counterparty = counterparty_match.group(1).strip() if counterparty_match else None
+
+            if counterparty:
+                warnings.append(
+                    f"تم افتراض أن المبلغ إيراد مبيعات (استلام من {counterparty}). "
+                    "إذا كان تحصيل فاتورة قديمة، اختر حساب العملاء بدلاً من الإيرادات."
+                    if language == "ar"
+                    else f"Assumed as sales revenue (received from {counterparty}). "
+                    "If this is a receivable collection, use Accounts Receivable instead of Revenue."
+                )
+            else:
+                warnings.append(
+                    "تم افتراض أن المبلغ إيراد مبيعات. "
+                    "إذا كان تحصيل فاتورة قديمة، اختر حساب العملاء بدلاً من الإيرادات."
+                    if language == "ar"
+                    else "Assumed as sales revenue. "
+                    "If this is a receivable collection, use Accounts Receivable instead of Revenue."
+                )
+
+            explanation = (
+                "تم استلام مبلغ، افترضنا أنه إيراد مبيعات جديد. "
+                "البنك/النقدية يزيد بالجانب المدين، والإيراد يزيد بالجانب الدائن."
+                if language == "ar"
+                else "Received amount, assumed as new sales revenue. "
+                "Bank/Cash increases by debit, Revenue increases by credit."
+            )
+
+    # 8. Unknown Intent
     else:
         detected_intent = "unknown"
         explanation = (

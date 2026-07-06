@@ -123,24 +123,14 @@ def test_remove_company_access_flow(base_url, admin_headers, default_company_id)
     assert login.status_code == 200
     user_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
-    # 3. Add to company
+    # 3. Add to company directly
     add_member = requests.post(
-        f"{base_url}/company-users/invitations",
-        json={"company_id": default_company_id, "email": unique_email, "role": "viewer"},
+        f"{base_url}/company-users",
+        json={"company_id": default_company_id, "user_id": user_id, "role": "viewer"},
         headers=admin_headers,
     )
-    assert add_member.status_code == 200
-    assert add_member.json()["status"] == "added_existing"
-
-    # Get company user ID
-    cu_list = requests.get(
-        f"{base_url}/company-users?company_id={default_company_id}",
-        headers=admin_headers,
-    )
-    assert cu_list.status_code == 200
-    company_user_rec = next((item for item in cu_list.json()["items"] if item["user_id"] == user_id), None)
-    assert company_user_rec is not None
-    company_user_id = company_user_rec["id"]
+    assert add_member.status_code == 201
+    company_user_id = add_member.json()["id"]
 
     # 4. User can access company
     acc_check = requests.get(
@@ -372,21 +362,14 @@ def test_restore_company_access_flow(base_url, admin_headers, default_company_id
     )
     user_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
-    # 2. Add to company
+    # 2. Add to company directly
     add_member = requests.post(
-        f"{base_url}/company-users/invitations",
-        json={"company_id": default_company_id, "email": unique_email, "role": "viewer"},
+        f"{base_url}/company-users",
+        json={"company_id": default_company_id, "user_id": user_id, "role": "viewer"},
         headers=admin_headers,
     )
-    assert add_member.status_code == 200
-
-    # Get company user ID
-    cu_list = requests.get(
-        f"{base_url}/company-users?company_id={default_company_id}",
-        headers=admin_headers,
-    )
-    company_user_rec = next((item for item in cu_list.json()["items"] if item["user_id"] == user_id), None)
-    company_user_id = company_user_rec["id"]
+    assert add_member.status_code == 201
+    company_user_id = add_member.json()["id"]
 
     # 3. Remove Access
     requests.patch(
@@ -525,14 +508,16 @@ def test_current_user_company_role_resolutions(base_url, admin_headers, default_
         json={"email": acc_email, "password": password, "full_name": "Acc User"},
     )
     assert reg1.status_code == 201
-    
-    # Add to company as accountant
-    requests.post(
-        f"{base_url}/company-users/invitations",
-        json={"company_id": default_company_id, "email": acc_email, "role": "accountant"},
+    acc_user_id = reg1.json()["id"]
+
+    # Add to company as accountant via direct endpoint
+    add1 = requests.post(
+        f"{base_url}/company-users",
+        json={"company_id": default_company_id, "user_id": acc_user_id, "role": "accountant"},
         headers=admin_headers,
     )
-    
+    assert add1.status_code == 201, f"Failed to add accountant: {add1.text}"
+
     # Login accountant
     login1 = requests.post(
         f"{base_url}/auth/login",
@@ -550,17 +535,23 @@ def test_current_user_company_role_resolutions(base_url, admin_headers, default_
     assert me_res1.json()["is_active"] is True
 
     # 3. Create viewer user
-    view_email = f"viewer_{int(time.time())}@example.com"
+    view_email = f"viewer_{int(time.time())}_2@example.com"
     reg2 = requests.post(
         f"{base_url}/auth/register",
         json={"email": view_email, "password": password, "full_name": "View User"},
     )
-    # Add to company as viewer
-    requests.post(
-        f"{base_url}/company-users/invitations",
-        json={"company_id": default_company_id, "email": view_email, "role": "viewer"},
+    assert reg2.status_code == 201
+    view_user_id = reg2.json()["id"]
+
+    # Add to company as viewer via direct endpoint
+    add2 = requests.post(
+        f"{base_url}/company-users",
+        json={"company_id": default_company_id, "user_id": view_user_id, "role": "viewer"},
         headers=admin_headers,
     )
+    assert add2.status_code == 201, f"Failed to add viewer: {add2.text}"
+    view_company_user_id = add2.json()["id"]
+
     # Login viewer
     login2 = requests.post(
         f"{base_url}/auth/login",
@@ -578,19 +569,12 @@ def test_current_user_company_role_resolutions(base_url, admin_headers, default_
     assert me_res2.json()["is_active"] is True
 
     # 4. Inactive member receives 403
-    cu_list = requests.get(
-        f"{base_url}/company-users?company_id={default_company_id}",
-        headers=admin_headers,
-    )
-    company_user_rec = next((item for item in cu_list.json()["items"] if item["user_id"] == reg2.json()["id"]), None)
-    company_user_id = company_user_rec["id"]
-
-    # Remove access
+    # Remove access using the company_user_id from the add response
     requests.patch(
-        f"{base_url}/company-users/{company_user_id}/remove-access",
+        f"{base_url}/company-users/{view_company_user_id}/remove-access",
         headers=admin_headers,
     )
-    
+
     # Now viewer /me returns 403
     me_res3 = requests.get(
         f"{base_url}/company-users/me?company_id={default_company_id}",
@@ -615,4 +599,5 @@ def test_current_user_company_role_resolutions(base_url, admin_headers, default_
         headers=non_member_headers,
     )
     assert me_res4.status_code == 403
+
 

@@ -23,6 +23,7 @@ import {
   Users,
   Globe,
 } from 'lucide-react';
+import GlobalGeminiAssistant from '../../features/ai/GlobalGeminiAssistant';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -270,6 +271,13 @@ export default function AppShell({
           {children}
         </main>
       </div>
+
+      {/* Gemini Assistant — visible on all authenticated pages */}
+      <GlobalGeminiAssistant
+        companyId={selectedCompany?.id ?? null}
+        userRole={userRole}
+        companyName={selectedCompany?.name ?? null}
+      />
     </div>
   );
 }
