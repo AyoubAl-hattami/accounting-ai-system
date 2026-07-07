@@ -6,6 +6,7 @@ import LoadingState from '../../components/feedback/LoadingState';
 import ErrorState from '../../components/feedback/ErrorState';
 import EmptyState from '../../components/feedback/EmptyState';
 import { useCompanySettings } from './useCompanySettings';
+import FiscalSettingsSection from './FiscalSettingsSection';
 import { useI18n } from '../../i18n';
 import { useToast } from '../../components/feedback/useToast';
 import type { Language } from '../../i18n/types';
@@ -348,6 +349,9 @@ function SettingsContent({ selectedCompanyId, companiesLoading }: SettingsConten
           </div>
         </motion.div>
       </form>
+
+      {/* ── Fiscal Years & Periods Section ── */}
+      <FiscalSettingsSection companyId={selectedCompanyId} />
 
       {/* ── Language & Appearance Section ── */}
       <motion.div

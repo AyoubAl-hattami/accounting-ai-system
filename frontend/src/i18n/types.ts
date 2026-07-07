@@ -571,6 +571,22 @@ export interface Translations {
     languageHelp: string;
     english: string;
     arabic: string;
+    // Fiscal management section
+    fiscalYearsAndPeriods: string;
+    fiscalYearsDesc: string;
+    fiscalYearName: string;
+    createFiscalYear: string;
+    createFiscalPeriod: string;
+    createFiscalPeriodForToday: string;
+    startDate: string;
+    endDate: string;
+    periodName: string;
+    periodNo: string;
+    noFiscalYears: string;
+    noFiscalYearsHelp: string;
+    noFiscalPeriods: string;
+    fiscalSetupComplete: string;
+    periodCreatedForToday: string;
   };
   // ── Gemini Assistant ──
   geminiAssistant: {

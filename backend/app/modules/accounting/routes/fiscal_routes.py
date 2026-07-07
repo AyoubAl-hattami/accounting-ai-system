@@ -556,3 +556,200 @@ def update_fiscal_period_endpoint(
     )
 
     return updated
+
+
+# -------------------------
+# Quick Setup — Fiscal Period for Today
+# -------------------------
+
+@router.post(
+    "/fiscal/quick-setup-today",
+    status_code=status.HTTP_200_OK,
+)
+def quick_setup_fiscal_period_for_today(
+    company_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Idempotently create/open a fiscal year + fiscal period covering today.
+    Returns what was created vs. what already existed.
+    """
+    from datetime import date as _date, timedelta
+    from app.core.clock import get_today_date
+
+    company = get_company_or_none(db=db, company_id=company_id)
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found",
+        )
+
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_id,
+        allowed_roles={"admin"},
+    )
+
+    today = get_today_date()
+    year_start = _date(today.year, 1, 1)
+    year_end = _date(today.year, 12, 31)
+    month_start = _date(today.year, today.month, 1)
+    if today.month == 12:
+        month_end = _date(today.year, 12, 31)
+    else:
+        month_end = _date(today.year, today.month + 1, 1) - timedelta(days=1)
+
+    result = {
+        "today": today.isoformat(),
+        "fiscal_year_created": False,
+        "fiscal_year_opened": False,
+        "fiscal_period_created": False,
+        "fiscal_period_opened": False,
+        "fiscal_year": None,
+        "fiscal_period": None,
+    }
+
+    # ── Find or create fiscal year ──────────────────────────────────
+    fiscal_years = list_fiscal_years(db=db, company_id=company_id, skip=0, limit=500)
+    fiscal_year = None
+    for fy in fiscal_years:
+        if fy.start_date <= today <= fy.end_date:
+            fiscal_year = fy
+            break
+
+    if fiscal_year is None:
+        # Check for overlap first
+        overlapping = find_overlapping_fiscal_year(
+            db=db, company_id=company_id,
+            start_date=year_start, end_date=year_end,
+        )
+        if overlapping:
+            # Use overlapping year instead of creating duplicate
+            fiscal_year = overlapping
+        else:
+            fy_payload = FiscalYearCreate(
+                company_id=company_id,
+                name=f"FY {today.year}",
+                start_date=year_start,
+                end_date=year_end,
+                status="open",
+            )
+            # Check name collision
+            existing_name = get_fiscal_year_by_name(db=db, company_id=company_id, name=fy_payload.name)
+            if existing_name:
+                fiscal_year = existing_name
+            else:
+                fiscal_year = create_fiscal_year(db=db, payload=fy_payload)
+                result["fiscal_year_created"] = True
+
+                create_audit_log(
+                    db=db,
+                    company_id=company_id,
+                    actor=current_user.email,
+                    actor_user_id=current_user.id,
+                    actor_email=current_user.email,
+                    actor_name=current_user.full_name,
+                    action="create_fiscal_year",
+                    entity_type="fiscal_year",
+                    entity_id=fiscal_year.id,
+                    description=f"Quick setup: Created fiscal year {fiscal_year.name}",
+                )
+
+    # Ensure fiscal year is open
+    if fiscal_year.status != "open":
+        update_fiscal_year(
+            db=db,
+            fiscal_year=fiscal_year,
+            payload=FiscalYearUpdate(status="open"),
+        )
+        result["fiscal_year_opened"] = True
+        db.refresh(fiscal_year)
+
+    result["fiscal_year"] = {
+        "id": fiscal_year.id,
+        "name": fiscal_year.name,
+        "start_date": fiscal_year.start_date.isoformat(),
+        "end_date": fiscal_year.end_date.isoformat(),
+        "status": fiscal_year.status,
+    }
+
+    # ── Find or create fiscal period ────────────────────────────────
+    periods = list_fiscal_periods(
+        db=db, company_id=company_id,
+        fiscal_year_id=fiscal_year.id, skip=0, limit=500,
+    )
+    fiscal_period = None
+    for fp in periods:
+        if fp.start_date <= today <= fp.end_date:
+            fiscal_period = fp
+            break
+
+    if fiscal_period is None:
+        period_name = today.strftime("%B %Y")
+        # Check name collision
+        existing_name = get_fiscal_period_by_name(
+            db=db, fiscal_year_id=fiscal_year.id, name=period_name,
+        )
+        if existing_name:
+            fiscal_period = existing_name
+        else:
+            # Determine period_no — use month number, but avoid collisions
+            desired_no = today.month
+            existing_no = get_fiscal_period_by_no(
+                db=db, fiscal_year_id=fiscal_year.id, period_no=desired_no,
+            )
+            if existing_no:
+                # Period number taken but doesn't cover today — use next available
+                used_nos = {fp.period_no for fp in periods}
+                for n in range(1, 13):
+                    if n not in used_nos:
+                        desired_no = n
+                        break
+
+            fp_payload = FiscalPeriodCreate(
+                company_id=company_id,
+                fiscal_year_id=fiscal_year.id,
+                period_no=desired_no,
+                name=period_name,
+                start_date=month_start,
+                end_date=month_end,
+                status="open",
+            )
+            fiscal_period = create_fiscal_period(db=db, payload=fp_payload)
+            result["fiscal_period_created"] = True
+
+            create_audit_log(
+                db=db,
+                company_id=company_id,
+                actor=current_user.email,
+                actor_user_id=current_user.id,
+                actor_email=current_user.email,
+                actor_name=current_user.full_name,
+                action="create_fiscal_period",
+                entity_type="fiscal_period",
+                entity_id=fiscal_period.id,
+                description=f"Quick setup: Created fiscal period {fiscal_period.name}",
+            )
+
+    # Ensure fiscal period is open
+    if fiscal_period.status != "open":
+        update_fiscal_period(
+            db=db,
+            fiscal_period=fiscal_period,
+            payload=FiscalPeriodUpdate(status="open"),
+        )
+        result["fiscal_period_opened"] = True
+        db.refresh(fiscal_period)
+
+    result["fiscal_period"] = {
+        "id": fiscal_period.id,
+        "name": fiscal_period.name,
+        "start_date": fiscal_period.start_date.isoformat(),
+        "end_date": fiscal_period.end_date.isoformat(),
+        "status": fiscal_period.status,
+        "period_no": fiscal_period.period_no,
+    }
+
+    return result
