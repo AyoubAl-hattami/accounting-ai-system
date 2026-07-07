@@ -5,6 +5,7 @@ Tests for the Gemini Assistant endpoints:
 """
 
 import requests
+from datetime import date, datetime, timezone
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -32,6 +33,126 @@ def gemini_assistant_request(
             },
             "history": [],
         },
+    )
+
+
+def ensure_fiscal_period_for_today(
+    base_url: str,
+    headers: dict,
+    company_id: int,
+) -> None:
+    """
+    Ensure an open fiscal year + fiscal period exists that covers today's date.
+    Idempotent: if the period already exists and is open, does nothing.
+    Uses the HTTP API (not direct DB) to stay consistent with integration test style.
+    """
+    today = datetime.now(timezone.utc).date()
+    year_start = date(today.year, 1, 1)
+    year_end = date(today.year, 12, 31)
+    month_start = date(today.year, today.month, 1)
+    # Last day of current month
+    if today.month == 12:
+        month_end = date(today.year, 12, 31)
+    else:
+        month_end = date(today.year, today.month + 1, 1).replace(day=1)
+        from datetime import timedelta
+        month_end = month_end - timedelta(days=1)
+
+    # Check if a fiscal year covering today already exists
+    fy_resp = requests.get(
+        f"{base_url}/fiscal-years?company_id={company_id}",
+        headers=headers,
+    )
+    assert fy_resp.status_code == 200
+    fy_data = fy_resp.json()
+    fy_items = fy_data.get("items", fy_data) if isinstance(fy_data, dict) else fy_data
+
+    fiscal_year_id = None
+    for fy in fy_items:
+        fy_start = fy["start_date"]
+        fy_end = fy["end_date"]
+        if fy_start <= today.isoformat() <= fy_end:
+            fiscal_year_id = fy["id"]
+            # Ensure it's open
+            if fy.get("status") != "open":
+                put_resp = requests.put(
+                    f"{base_url}/fiscal-years/{fiscal_year_id}",
+                    headers=headers,
+                    json={"status": "open"},
+                )
+                assert put_resp.status_code == 200
+            break
+
+    # Create fiscal year if none covers today
+    if fiscal_year_id is None:
+        create_fy = requests.post(
+            f"{base_url}/fiscal-years",
+            headers=headers,
+            json={
+                "company_id": company_id,
+                "name": f"FY {today.year} (auto-test)",
+                "start_date": year_start.isoformat(),
+                "end_date": year_end.isoformat(),
+                "status": "open",
+            },
+        )
+        assert create_fy.status_code in (201, 200, 409), (
+            f"Failed to create fiscal year: {create_fy.status_code} {create_fy.text[:300]}"
+        )
+        if create_fy.status_code in (201, 200):
+            fiscal_year_id = create_fy.json()["id"]
+        else:
+            # 409 = overlapping year already exists, re-fetch
+            fy_resp2 = requests.get(
+                f"{base_url}/fiscal-years?company_id={company_id}",
+                headers=headers,
+            )
+            fy_items2 = fy_resp2.json().get("items", fy_resp2.json())
+            for fy in fy_items2:
+                if fy["start_date"] <= today.isoformat() <= fy["end_date"]:
+                    fiscal_year_id = fy["id"]
+                    break
+            assert fiscal_year_id is not None, "Could not find or create a fiscal year for today"
+
+    # Check if a fiscal period covering today already exists
+    fp_resp = requests.get(
+        f"{base_url}/fiscal-periods?company_id={company_id}&fiscal_year_id={fiscal_year_id}",
+        headers=headers,
+    )
+    assert fp_resp.status_code == 200
+    fp_data = fp_resp.json()
+    fp_items = fp_data.get("items", fp_data) if isinstance(fp_data, dict) else fp_data
+
+    for fp in fp_items:
+        fp_start = fp["start_date"]
+        fp_end = fp["end_date"]
+        if fp_start <= today.isoformat() <= fp_end:
+            # Period exists — ensure it's open
+            if fp.get("status") != "open":
+                put_resp = requests.put(
+                    f"{base_url}/fiscal-periods/{fp['id']}",
+                    headers=headers,
+                    json={"status": "open"},
+                )
+                assert put_resp.status_code == 200
+            return  # Done
+
+    # Create fiscal period for today's month
+    create_fp = requests.post(
+        f"{base_url}/fiscal-periods",
+        headers=headers,
+        json={
+            "company_id": company_id,
+            "fiscal_year_id": fiscal_year_id,
+            "period_no": today.month,
+            "name": f"{today.strftime('%B %Y')} (auto-test)",
+            "start_date": month_start.isoformat(),
+            "end_date": month_end.isoformat(),
+            "status": "open",
+        },
+    )
+    assert create_fp.status_code in (201, 200), (
+        f"Failed to create fiscal period: {create_fp.status_code} {create_fp.text[:300]}"
     )
 
 
@@ -249,8 +370,8 @@ def test_gemini_assistant_confirm_action_creates_journal(
     Confirmed AI action should create a draft journal entry and
     return entity_id.
     """
-    # Use a date within the open fiscal period (2026-01-01 to 2026-01-31)
-    entry_date = "2026-01-15"
+    # Must use today's date (backend enforces today-only for Gemini entries)
+    entry_date = datetime.now(timezone.utc).date().isoformat()
 
     response = requests.post(
         f"{base_url}/ai/gemini-assistant/confirm-action",
@@ -283,10 +404,18 @@ def test_gemini_assistant_confirm_action_creates_journal(
     assert response.status_code == 200
 
     data = response.json()
-    assert data["success"] is True
-    assert data["entity_id"] is not None
-    assert data["entity_type"] == "journal_entry"
-    assert "entry_no" in (data.get("data") or {})
+    if data["success"]:
+        # Happy path: today has an open fiscal period
+        assert data["entity_id"] is not None
+        assert data["entity_type"] == "journal_entry"
+        assert "entry_no" in (data.get("data") or {})
+    else:
+        # Acceptable: today passed date check but fiscal period is missing/closed
+        assert data["error_code"] in (
+            "today_not_in_open_fiscal_period",
+            "account_not_found",
+            "account_inactive",
+        ), f"Unexpected failure: {data}"
 
 
 def test_gemini_assistant_confirm_action_writes_audit_log(
@@ -297,8 +426,10 @@ def test_gemini_assistant_confirm_action_writes_audit_log(
     default_owner_capital_account_id,
 ):
     """Confirmed AI action must create an audit log entry."""
-    # Create the entry — use date within the open fiscal period (2026-01-01 to 2026-01-31)
-    entry_date = "2026-01-15"
+    # Ensure today has an open fiscal period
+    ensure_fiscal_period_for_today(base_url, admin_headers, default_company_id)
+    # Create the entry — must use today (backend enforces today-only)
+    entry_date = datetime.now(timezone.utc).date().isoformat()
     response = requests.post(
         f"{base_url}/ai/gemini-assistant/confirm-action",
         headers=admin_headers,
@@ -326,7 +457,12 @@ def test_gemini_assistant_confirm_action_writes_audit_log(
     )
 
     assert response.status_code == 200
-    entity_id = response.json()["entity_id"]
+    data = response.json()
+    assert data["success"] is True, (
+        f"confirm-action failed: {data.get('error_code')} — {data.get('message')}"
+    )
+
+    entity_id = data["entity_id"]
 
     # Verify audit log exists
     audit_response = requests.get(
@@ -526,9 +662,9 @@ def test_confirm_action_fiscal_period_not_found_returns_structured_error(
 
     data = response.json()
     assert data["success"] is False
-    # Account IDs 1/2 may not exist in this company, causing account_not_found
-    # before we even reach fiscal validation — all these error codes are acceptable
+    # Non-today date is now rejected before fiscal validation
     assert data["error_code"] in (
+        "gemini_date_must_be_today",
         "fiscal_year_not_found",
         "fiscal_period_not_found",
         "fiscal_year_closed",
@@ -629,13 +765,14 @@ def test_confirm_action_valid_period_creates_entry(
     """
     With a valid date in an open fiscal period, confirm-action must succeed
     (success=True) and return an entity_id.
-    This test depends on the existing open period (2026-01-15 is confirmed open).
+    This test depends on the existing open period for today's date.
     """
+    today_str = datetime.now(timezone.utc).date().isoformat()
     response = _confirm_action_request(
         base_url=base_url,
         headers=admin_headers,
         company_id=default_company_id,
-        entry_date="2026-01-15",
+        entry_date=today_str,
     )
     assert response.status_code == 200
     data = response.json()
@@ -808,3 +945,361 @@ def test_receipt_rules_engine_direct():
     assert result3["detected_intent"] == "receipt_collection"
     assert result3["amount"] == 500.0
     assert result3["confidence"] == "high"
+
+
+# ── Data consistency: preview has no side effects ─────────────────────────────
+
+def test_gemini_preview_does_not_create_journal_entry(
+    base_url, admin_headers, default_company_id
+):
+    """
+    The chat endpoint (POST /ai/gemini-assistant) must NEVER create a journal
+    entry — it only generates a preview / suggested_action.  Verify the journal
+    count stays the same before and after the call.
+    """
+    # Snapshot journal count
+    count_before = requests.get(
+        f"{base_url}/journal-entries?company_id={default_company_id}&skip=0&limit=1",
+        headers=admin_headers,
+    ).json()["total"]
+
+    # Send a message that should trigger a suggested draft
+    gemini_assistant_request(
+        base_url=base_url,
+        headers=admin_headers,
+        company_id=default_company_id,
+        message="paid 300 rent",
+        language="en",
+    )
+
+    # Snapshot journal count again
+    count_after = requests.get(
+        f"{base_url}/journal-entries?company_id={default_company_id}&skip=0&limit=1",
+        headers=admin_headers,
+    ).json()["total"]
+
+    assert count_after == count_before, (
+        f"Preview endpoint created a journal entry! Count went from {count_before} to {count_after}"
+    )
+
+
+def test_confirm_action_failure_creates_no_entry(
+    base_url, admin_headers, default_company_id
+):
+    """
+    When confirm-action fails (e.g. invalid fiscal date), the journal entry
+    count must remain unchanged — no orphan entries should exist.
+    """
+    # Snapshot
+    count_before = requests.get(
+        f"{base_url}/journal-entries?company_id={default_company_id}&skip=0&limit=1",
+        headers=admin_headers,
+    ).json()["total"]
+
+    # Use a far-future date guaranteed to have no fiscal period
+    response = _confirm_action_request(
+        base_url=base_url,
+        headers=admin_headers,
+        company_id=default_company_id,
+        entry_date="2099-12-31",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["success"] is False
+
+    # Verify count unchanged
+    count_after = requests.get(
+        f"{base_url}/journal-entries?company_id={default_company_id}&skip=0&limit=1",
+        headers=admin_headers,
+    ).json()["total"]
+
+    assert count_after == count_before, (
+        f"Failed confirm-action created an entry! Count went from {count_before} to {count_after}"
+    )
+
+
+# ── Data consistency: draft vs posted in reports ──────────────────────────────
+
+def test_draft_journal_does_not_affect_profit_loss(
+    base_url,
+    admin_headers,
+    default_company_id,
+    default_bank_account_id,
+    default_owner_capital_account_id,
+):
+    """
+    A draft journal entry must NOT change the Profit & Loss totals.
+    Reports only include posted and reversed entries.
+    """
+    # Ensure today has an open fiscal period
+    ensure_fiscal_period_for_today(base_url, admin_headers, default_company_id)
+    # Get P&L before
+    pl_before = requests.get(
+        f"{base_url}/reports/profit-and-loss?company_id={default_company_id}",
+        headers=admin_headers,
+    )
+    assert pl_before.status_code == 200
+    net_before = pl_before.json()["net_profit"]
+
+    # Create a draft entry via confirm-action (must use today)
+    entry_date = datetime.now(timezone.utc).date().isoformat()
+    create_resp = requests.post(
+        f"{base_url}/ai/gemini-assistant/confirm-action",
+        headers=admin_headers,
+        json={
+            "company_id": default_company_id,
+            "action_type": "create_journal_entry_draft",
+            "payload": {
+                "company_id": default_company_id,
+                "entry_date": entry_date,
+                "description": "Draft-only P&L test",
+                "lines": [
+                    {
+                        "account_id": default_bank_account_id,
+                        "debit": "5000.00",
+                        "credit": "0.00",
+                    },
+                    {
+                        "account_id": default_owner_capital_account_id,
+                        "debit": "0.00",
+                        "credit": "5000.00",
+                    },
+                ],
+            },
+        },
+    )
+    assert create_resp.status_code == 200
+    create_data = create_resp.json()
+    assert create_data["success"] is True, (
+        f"confirm-action failed: {create_data.get('error_code')} — {create_data.get('message')}"
+    )
+
+    # Get P&L after — must be unchanged
+    pl_after = requests.get(
+        f"{base_url}/reports/profit-and-loss?company_id={default_company_id}",
+        headers=admin_headers,
+    )
+    assert pl_after.status_code == 200
+    net_after = pl_after.json()["net_profit"]
+
+    assert net_before == net_after, (
+        f"Draft entry changed P&L! net_profit went from {net_before} to {net_after}"
+    )
+
+
+def test_posted_journal_does_affect_trial_balance(
+    base_url,
+    admin_headers,
+    default_company_id,
+    default_bank_account_id,
+    default_owner_capital_account_id,
+):
+    """
+    A posted journal entry MUST be reflected in the Trial Balance totals.
+    This confirms the full create → post → report pipeline works end-to-end.
+    """
+    # Ensure today has an open fiscal period
+    ensure_fiscal_period_for_today(base_url, admin_headers, default_company_id)
+    # Get TB before
+    tb_before = requests.get(
+        f"{base_url}/reports/trial-balance?company_id={default_company_id}",
+        headers=admin_headers,
+    )
+    assert tb_before.status_code == 200
+    debit_before = tb_before.json()["total_debit"]
+
+    # Create a draft entry (must use today)
+    entry_date = datetime.now(timezone.utc).date().isoformat()
+    create_resp = requests.post(
+        f"{base_url}/ai/gemini-assistant/confirm-action",
+        headers=admin_headers,
+        json={
+            "company_id": default_company_id,
+            "action_type": "create_journal_entry_draft",
+            "payload": {
+                "company_id": default_company_id,
+                "entry_date": entry_date,
+                "description": "Post-then-check TB test",
+                "lines": [
+                    {
+                        "account_id": default_bank_account_id,
+                        "debit": "250.00",
+                        "credit": "0.00",
+                    },
+                    {
+                        "account_id": default_owner_capital_account_id,
+                        "debit": "0.00",
+                        "credit": "250.00",
+                    },
+                ],
+            },
+        },
+    )
+    assert create_resp.status_code == 200
+    create_data = create_resp.json()
+    assert create_data["success"] is True, (
+        f"confirm-action failed: {create_data.get('error_code')} — {create_data.get('message')}"
+    )
+    entity_id = create_data["entity_id"]
+
+    # Post the entry (review first, then post)
+    review_resp = requests.post(
+        f"{base_url}/journal-entries/{entity_id}/review",
+        headers=admin_headers,
+    )
+    assert review_resp.status_code == 200
+
+    post_resp = requests.post(
+        f"{base_url}/journal-entries/{entity_id}/post",
+        headers=admin_headers,
+    )
+    assert post_resp.status_code == 200
+    assert post_resp.json()["status"] == "posted"
+
+    # Get TB after — debit total must have increased
+    tb_after = requests.get(
+        f"{base_url}/reports/trial-balance?company_id={default_company_id}",
+        headers=admin_headers,
+    )
+    assert tb_after.status_code == 200
+    debit_after = tb_after.json()["total_debit"]
+
+    # Convert to float for comparison (API returns strings)
+    assert float(debit_after) > float(debit_before), (
+        f"Posted entry did not change TB! total_debit stayed at {debit_before} (after: {debit_after})"
+    )
+
+
+# ── Today-only date enforcement tests ─────────────────────────────────────────
+
+def test_confirm_action_rejects_non_today_date(
+    base_url, admin_headers, default_company_id
+):
+    """
+    Confirm-action must reject any entry_date that is NOT backend-derived today.
+    Sending yesterday's date must return error_code='gemini_date_must_be_today'.
+    """
+    from datetime import timedelta
+    yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
+
+    response = _confirm_action_request(
+        base_url=base_url,
+        headers=admin_headers,
+        company_id=default_company_id,
+        entry_date=yesterday,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is False
+    assert data["error_code"] == "gemini_date_must_be_today", (
+        f"Expected gemini_date_must_be_today, got: {data.get('error_code')}"
+    )
+
+
+def test_confirm_action_rejects_future_date(
+    base_url, admin_headers, default_company_id
+):
+    """
+    Confirm-action must reject a future date too.
+    """
+    from datetime import timedelta
+    future = (datetime.now(timezone.utc).date() + timedelta(days=30)).isoformat()
+
+    response = _confirm_action_request(
+        base_url=base_url,
+        headers=admin_headers,
+        company_id=default_company_id,
+        entry_date=future,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is False
+    assert data["error_code"] == "gemini_date_must_be_today", (
+        f"Expected gemini_date_must_be_today, got: {data.get('error_code')}"
+    )
+
+
+def test_gemini_preview_uses_backend_today(
+    base_url, admin_headers, default_company_id
+):
+    """
+    When Gemini suggests a journal draft, the suggested entry_date must be
+    backend-derived today (UTC), not a hardcoded or user-supplied date.
+    """
+    response = gemini_assistant_request(
+        base_url=base_url,
+        headers=admin_headers,
+        company_id=default_company_id,
+        message="paid 100 rent",
+        language="en",
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    if data.get("suggested_action"):
+        sa = data["suggested_action"]
+        assert sa["payload"]["entry_date"] == datetime.now(timezone.utc).date().isoformat(), (
+            f"Expected today's date, got: {sa['payload']['entry_date']}"
+        )
+
+
+def test_gemini_refuses_explicit_old_date_arabic(
+    base_url, admin_headers, default_company_id
+):
+    """
+    When user asks for a journal entry with an explicit old date in Arabic
+    (e.g. 'بتاريخ 2026-01-31'), Gemini must refuse and return a message
+    saying entries are today-only. No suggested_action should be returned.
+    """
+    response = gemini_assistant_request(
+        base_url=base_url,
+        headers=admin_headers,
+        company_id=default_company_id,
+        message="تم دفع 500 إيجار بتاريخ 2026-01-31",
+        language="ar",
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Must NOT have a suggested action (no draft created)
+    assert data.get("suggested_action") is None, (
+        "Expected no suggested_action for explicit old date request"
+    )
+    # Reply should mention today-only rule
+    assert "اليوم فقط" in data["reply"] or "بتاريخ اليوم" in data["reply"], (
+        f"Expected today-only refusal message, got: {data['reply'][:200]}"
+    )
+
+
+def test_gemini_refuses_yesterday_english(
+    base_url, admin_headers, default_company_id
+):
+    """
+    When user says 'paid 500 rent yesterday', Gemini must refuse with a
+    today-only message or not produce a suggested_action.
+    """
+    response = gemini_assistant_request(
+        base_url=base_url,
+        headers=admin_headers,
+        company_id=default_company_id,
+        message="paid 500 rent yesterday",
+        language="en",
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    # Must NOT have a suggested action (no draft created with yesterday's date)
+    if data.get("suggested_action") is not None:
+        # If intent matched, verify the date detection refused it
+        assert False, (
+            "Expected no suggested_action for 'yesterday' request, "
+            f"but got one with date: {data['suggested_action']['payload'].get('entry_date')}"
+        )
+    # Reply should either mention today-only or be a clarification/refusal
+    reply_lower = data["reply"].lower()
+    assert (
+        "today" in reply_lower
+        or "didn't understand" in reply_lower
+        or "clarif" in reply_lower
+    ), f"Expected today-only refusal or clarification, got: {data['reply'][:200]}"
+

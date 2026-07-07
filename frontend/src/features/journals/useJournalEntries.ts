@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import apiClient from '../../api/client';
 import type { JournalEntry, PaginatedResponse } from '../../api/types';
+import { dataEvents } from '../../lib/dataEvents';
 
 const JE_PAGE_SIZE = 10;
 
@@ -35,6 +36,12 @@ export function useJournalEntries({ companyId, skip }: UseJournalEntriesOptions)
       setIsLoading(false);
     }
   }, [companyId, skip]);
+
+  // ── Auto-refetch when Gemini creates a journal entry ──
+  useEffect(() => {
+    const unsub = dataEvents.on('journal:created', fetchEntries);
+    return () => unsub();
+  }, [fetchEntries]);
 
   return { entries, total, isLoading, error, fetchEntries, pageSize: JE_PAGE_SIZE };
 }

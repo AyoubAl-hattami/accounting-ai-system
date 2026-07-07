@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import apiClient from '../../../api/client';
 import type { GeneralLedgerRead } from '../../../api/types';
+import { dataEvents } from '../../../lib/dataEvents';
 
 interface UseGeneralLedgerOptions {
   companyId: number | null;
@@ -32,6 +33,12 @@ export function useGeneralLedger({ companyId, startDate, endDate }: UseGeneralLe
       setIsLoading(false);
     }
   }, [companyId, startDate, endDate]);
+
+  // Auto-refetch when posted journal data changes (post/review/void/reverse)
+  useEffect(() => {
+    const unsub = dataEvents.on('journal:mutated', fetchReport);
+    return () => unsub();
+  }, [fetchReport]);
 
   return { data, isLoading, error, fetchReport };
 }

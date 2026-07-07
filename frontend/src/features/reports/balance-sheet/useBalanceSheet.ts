@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import apiClient from '../../../api/client';
 import type { BalanceSheetRead } from '../../../api/types';
+import { dataEvents } from '../../../lib/dataEvents';
 
 interface UseBalanceSheetOptions {
   companyId: number | null;
@@ -30,6 +31,12 @@ export function useBalanceSheet({ companyId, asOfDate }: UseBalanceSheetOptions)
       setIsLoading(false);
     }
   }, [companyId, asOfDate]);
+
+  // Auto-refetch when posted journal data changes (post/review/void/reverse)
+  useEffect(() => {
+    const unsub = dataEvents.on('journal:mutated', fetchReport);
+    return () => unsub();
+  }, [fetchReport]);
 
   return { data, isLoading, error, fetchReport };
 }

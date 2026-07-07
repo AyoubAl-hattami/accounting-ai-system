@@ -6,6 +6,7 @@ AI routes:
   POST /ai/gemini-assistant/confirm-action — confirmed action execution
 """
 
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -172,6 +173,19 @@ def gemini_assistant_confirm_action_endpoint(
 
     jp = payload.payload
 
+    # ── Enforce backend-derived today ────────────────────────────────────────
+    from app.core.clock import get_today_date
+    today = get_today_date()
+    if jp.entry_date != today:
+        return ConfirmActionReply(
+            success=False,
+            error_code="gemini_date_must_be_today",
+            message=(
+                "Gemini Assistant can only create entries for today's date. "
+                f"Expected {today}, received {jp.entry_date}."
+            ),
+        )
+
     # ── Validate company ─────────────────────────────────────────────────────
     company = get_company_or_none(db=db, company_id=payload.company_id)
     if not company:
@@ -244,10 +258,10 @@ def gemini_assistant_confirm_action_endpoint(
         open_period_suggestion = _find_open_period_suggestion(db, payload.company_id)
         return ConfirmActionReply(
             success=False,
-            error_code="fiscal_period_not_found",
+            error_code="today_not_in_open_fiscal_period",
             message=(
-                f"No open fiscal period found for the entry date {jp.entry_date}. "
-                "Please choose a date within an open fiscal period or create a new one."
+                f"No open fiscal period found for today's date ({jp.entry_date}). "
+                "Open or create a fiscal period that includes today's date."
             ),
             open_period_suggestion=open_period_suggestion,
         )
@@ -255,10 +269,10 @@ def gemini_assistant_confirm_action_endpoint(
         open_period_suggestion = _find_open_period_suggestion(db, payload.company_id)
         return ConfirmActionReply(
             success=False,
-            error_code="fiscal_period_closed",
+            error_code="today_not_in_open_fiscal_period",
             message=(
-                f"The fiscal period for {jp.entry_date} is closed (status: {fiscal_period.status}). "
-                "Please choose a date within an open fiscal period."
+                f"The fiscal period for today's date ({jp.entry_date}) is closed. "
+                "Open or create a fiscal period that includes today's date."
             ),
             open_period_suggestion=open_period_suggestion,
         )
@@ -298,28 +312,38 @@ def gemini_assistant_confirm_action_endpoint(
         fiscal_period=fiscal_period,
     )
 
-    # ── Audit log ────────────────────────────────────────────────────────────
-    create_audit_log(
-        db=db,
-        company_id=journal_entry.company_id,
-        actor=current_user.email,
-        actor_user_id=current_user.id,
-        actor_email=current_user.email,
-        actor_name=current_user.full_name,
-        action="create_journal_draft_via_gemini",
-        entity_type="journal_entry",
-        entity_id=journal_entry.id,
-        description=f"Created draft journal entry via Gemini Assistant: {journal_entry.entry_no}",
-        old_values=None,
-        new_values={
-            "entry_no": journal_entry.entry_no,
-            "entry_date": str(journal_entry.entry_date),
-            "description": journal_entry.description,
-            "status": journal_entry.status,
-            "source_type": "gemini_assistant",
-            "total_debit": str(total_debit),
-        },
-    )
+    # ── Audit log (best-effort: journal entry already committed) ────────────
+    try:
+        create_audit_log(
+            db=db,
+            company_id=journal_entry.company_id,
+            actor=current_user.email,
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            actor_name=current_user.full_name,
+            action="create_journal_draft_via_gemini",
+            entity_type="journal_entry",
+            entity_id=journal_entry.id,
+            description=f"Created draft journal entry via Gemini Assistant: {journal_entry.entry_no}",
+            old_values=None,
+            new_values={
+                "entry_no": journal_entry.entry_no,
+                "entry_date": str(journal_entry.entry_date),
+                "description": journal_entry.description,
+                "status": journal_entry.status,
+                "source_type": "gemini_assistant",
+                "total_debit": str(total_debit),
+            },
+        )
+    except Exception:
+        # Journal entry is already committed — log full traceback server-side
+        # but don't fail the user response or expose internal details
+        logging.getLogger(__name__).exception(
+            "Audit log write failed for Gemini journal entry %s (id=%s). "
+            "The journal entry was created successfully but the audit trail is incomplete.",
+            journal_entry.entry_no,
+            journal_entry.id,
+        )
 
     return ConfirmActionReply(
         success=True,

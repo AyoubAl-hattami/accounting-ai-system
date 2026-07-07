@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import apiClient from '../../../api/client';
 import type { AccountLedgerRead } from '../../../api/types';
+import { dataEvents } from '../../../lib/dataEvents';
 
 interface UseAccountLedgerOptions {
   companyId: number | null;
@@ -36,6 +37,12 @@ export function useAccountLedger({ companyId, accountId, startDate, endDate }: U
       setIsLoading(false);
     }
   }, [companyId, accountId, startDate, endDate]);
+
+  // Auto-refetch when posted journal data changes (post/review/void/reverse)
+  useEffect(() => {
+    const unsub = dataEvents.on('journal:mutated', fetchReport);
+    return () => unsub();
+  }, [fetchReport]);
 
   return { data, isLoading, error, fetchReport };
 }

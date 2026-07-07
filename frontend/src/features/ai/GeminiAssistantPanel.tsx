@@ -38,7 +38,7 @@ interface GeminiAssistantPanelProps {
   suggestedAction: SuggestedAction | null;
   currentPage: string;
   onSendMessage: (text: string) => void;
-  onConfirmAction: (action: SuggestedAction, overrideDate?: string) => Promise<ConfirmActionReply | null>;
+  onConfirmAction: (action: SuggestedAction) => Promise<ConfirmActionReply | null>;
   onCancelAction: () => void;
   onClearHistory: () => void;
   companyName?: string | null;
@@ -138,45 +138,16 @@ function SuggestedActionCard({
   action: SuggestedAction;
   isConfirming: boolean;
   confirmError?: string | null;
-  /** Called with the (possibly edited) entry date */
-  onConfirm: (editedDate: string) => void;
+  onConfirm: () => void;
   onCancel: () => void;
   dir: 'ltr' | 'rtl';
 }) {
   const { t } = useI18n();
   const tc = t.geminiAssistant;
 
-  // ── Local date state ──────────────────────────────────────────────
-  const originalDate = String(action.payload.entry_date);
-  const suggestion   = action.payload.open_period_suggestion ?? null;
-
-  const [editedDate, setEditedDate] = useState<string>(originalDate);
-
-  // Track whether the current editedDate is fiscally blocked.
-  // Initial state: true if payload explicitly says invalid.
-  // Flips to false as soon as user changes date (optimistic — backend re-validates).
-  const [fiscalBlocked, setFiscalBlocked] = useState<boolean>(
-    action.payload.fiscal_period_valid === false,
-  );
-
-  // Sync if parent action changes (e.g. new AI message)
-  useEffect(() => {
-    setEditedDate(String(action.payload.entry_date));
-    setFiscalBlocked(action.payload.fiscal_period_valid === false);
-  }, [action.payload.entry_date, action.payload.fiscal_period_valid]);
-
-  const handleDateChange = (newDate: string) => {
-    setEditedDate(newDate);
-    // Optimistically unblock — backend will re-validate on confirm
-    setFiscalBlocked(false);
-  };
-
-  const handleUseSuggested = () => {
-    if (!suggestion) return;
-    setEditedDate(suggestion);
-    setFiscalBlocked(false);
-  };
-
+  // Date is read-only — always backend-derived today
+  const entryDate = String(action.payload.entry_date);
+  const fiscalBlocked = action.payload.fiscal_period_valid === false;
   const isConfirmDisabled = isConfirming || fiscalBlocked;
 
   return (
@@ -190,32 +161,20 @@ function SuggestedActionCard({
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.06] bg-white/[0.02]">
         <Sparkles className="w-3.5 h-3.5 text-violet-400" />
         <span className="text-xs font-semibold text-violet-300 uppercase tracking-wider">
-          {tc.aiActionPreview}
+          {tc.previewNotCreated}
         </span>
       </div>
 
-      {/* Fiscal period warning banner */}
+      {/* Fiscal period warning banner (today-specific) */}
       {fiscalBlocked && (
         <div className="px-3 py-2.5 bg-amber-500/10 border-b border-amber-500/20 space-y-2">
           <div className="flex items-start gap-2 text-xs text-amber-300">
             <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-            <p className="font-semibold leading-snug">{tc.cannotCreateEntryForDate}</p>
+            <p className="font-semibold leading-snug">{tc.todayNotInOpenFiscalPeriod}</p>
           </div>
           <p className="text-[11px] text-amber-500/80 leading-snug pl-5">
-            {tc.confirmDisabledFiscal}
+            {tc.createFiscalPeriodForToday}
           </p>
-          {/* Use suggested date button */}
-          {suggestion && (
-            <button
-              type="button"
-              onClick={handleUseSuggested}
-              className="ml-5 flex items-center gap-1.5 text-[11px] font-semibold text-amber-300 bg-amber-500/15 border border-amber-500/25 rounded-lg px-2.5 py-1 hover:bg-amber-500/25 transition-all"
-              id="gemini-assistant-use-suggested-date"
-            >
-              <CalendarDays className="w-3 h-3" />
-              {tc.useSuggestedDate} ({suggestion})
-            </button>
-          )}
         </div>
       )}
 
@@ -230,29 +189,15 @@ function SuggestedActionCard({
       {/* Entry details */}
       <div className="px-3 py-2.5 space-y-2" dir={dir}>
 
-        {/* Editable entry date */}
+        {/* Read-only entry date (backend-derived today) */}
         <div className="flex justify-between items-center gap-2 text-xs">
-          <label
-            htmlFor="gemini-assistant-entry-date"
-            className="text-gray-500 flex items-center gap-1 shrink-0"
-          >
+          <span className="text-gray-500 flex items-center gap-1 shrink-0">
             <CalendarDays className="w-3 h-3" />
-            {tc.editEntryDate}
-          </label>
-          <input
-            id="gemini-assistant-entry-date"
-            type="date"
-            value={editedDate}
-            onChange={(e) => handleDateChange(e.target.value)}
-            disabled={isConfirming}
-            className={`font-mono text-xs rounded-lg border px-2 py-1 bg-white/[0.05] outline-none transition-colors
-              ${
-                fiscalBlocked
-                  ? 'border-amber-500/40 text-amber-300 focus:border-amber-400'
-                  : 'border-white/[0.08] text-gray-300 focus:border-violet-500/50'
-              }
-              disabled:opacity-50`}
-          />
+            {tc.entryDateTodayOnly}
+          </span>
+          <span className="font-mono text-xs text-gray-300 bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 py-1">
+            {entryDate}
+          </span>
         </div>
 
         <div className="text-xs text-gray-400 italic truncate">
@@ -291,16 +236,19 @@ function SuggestedActionCard({
 
         {/* Confirmation notice */}
         {!fiscalBlocked && (
-          <p className="text-[11px] text-gray-500 pt-1">{tc.confirmWarning}</p>
+          <>
+            <p className="text-[11px] text-gray-500 pt-1">{tc.confirmWarning}</p>
+            <p className="text-[10px] text-gray-600 pt-0.5 italic">{tc.draftDoesNotAffectReports}</p>
+          </>
         )}
       </div>
 
       {/* Actions */}
       <div className="flex gap-2 px-3 pb-3">
         <button
-          onClick={() => onConfirm(editedDate)}
+          onClick={() => onConfirm()}
           disabled={isConfirmDisabled}
-          title={fiscalBlocked ? tc.confirmDisabledFiscal : undefined}
+          title={fiscalBlocked ? tc.todayNotInOpenFiscalPeriod : undefined}
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all
             ${
               fiscalBlocked
@@ -509,18 +457,20 @@ export default function GeminiAssistantPanel({
                   action={suggestedAction}
                   isConfirming={isConfirming}
                   confirmError={confirmError}
-                  onConfirm={async (editedDate: string) => {
+                  onConfirm={async () => {
                     setConfirmError(null);
-                    const result = await onConfirmAction(suggestedAction, editedDate);
+                    const result = await onConfirmAction(suggestedAction);
                     // If confirm returned a failure, surface the error in the card
                     if (result && !result.success) {
                       const code = result.error_code;
                       const suggestion = result.open_period_suggestion;
                       const fiscalCodes: Record<string, string> = {
-                        fiscal_period_not_found: tc.fiscalPeriodNotFound,
-                        fiscal_period_closed: tc.fiscalPeriodClosed,
+                        fiscal_period_not_found: tc.todayNotInOpenFiscalPeriod,
+                        fiscal_period_closed: tc.todayNotInOpenFiscalPeriod,
                         fiscal_year_not_found: tc.fiscalYearNotFound,
                         fiscal_year_closed: tc.fiscalYearClosed,
+                        gemini_date_must_be_today: tc.dateMustBeToday,
+                        today_not_in_open_fiscal_period: tc.todayNotInOpenFiscalPeriod,
                       };
                       let msg = (code && fiscalCodes[code]) || tc.confirmFailed;
                       if (suggestion) msg += ` (${tc.suggestedDate}: ${suggestion})`;

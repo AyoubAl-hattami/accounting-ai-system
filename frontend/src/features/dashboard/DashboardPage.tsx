@@ -105,6 +105,9 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
                   <p className="text-sm text-gray-400">
                     {t.dashboard.realtimePosition} {selectedCompany?.name || ''}
                   </p>
+                  <p className="text-[10px] text-gray-600 mt-0.5 italic">
+                    {t.geminiAssistant.postedEntriesOnly}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   {isBalanced ? (

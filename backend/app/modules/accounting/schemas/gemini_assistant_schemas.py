@@ -119,6 +119,8 @@ GEMINI_ASSISTANT_ERROR_CODES = {
     "permission_denied",
     "unsupported_action",
     "unknown_error",
+    "gemini_date_must_be_today",
+    "today_not_in_open_fiscal_period",
 }
 
 

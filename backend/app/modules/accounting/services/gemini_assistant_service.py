@@ -28,6 +28,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.clock import get_today_date
 from app.modules.accounting.schemas.gemini_assistant_schemas import (
     GeminiAssistantReply,
     PageContext,
@@ -636,7 +637,31 @@ def _handle_action_request(
         )
         return msg, None
 
-    today = datetime.now(timezone.utc).date()
+    # ── Refuse explicit non-today dates in user message ────────────────────
+    _DATE_PATTERNS = [
+        # Arabic explicit date phrases
+        r"بتاريخ", r"تاريخ\s+\d", r"أمس", r"البارحة", r"الأمس",
+        # English explicit date phrases
+        r"\byesterday\b", r"\blast\s+week\b", r"\blast\s+month\b",
+        r"\bon\s+\d{4}-\d{2}-\d{2}\b", r"\bdate\s+\d",
+        # ISO date in message (not today)
+        r"\d{4}-\d{2}-\d{2}",
+    ]
+    today = get_today_date()
+    today_str = today.isoformat()
+    for pattern in _DATE_PATTERNS:
+        match = re.search(pattern, message, re.IGNORECASE)
+        if match:
+            matched_text = match.group()
+            # Allow if the matched ISO date IS today
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", matched_text) and matched_text == today_str:
+                continue
+            msg = (
+                "يمكن إنشاء القيود عبر مساعد Gemini بتاريخ اليوم فقط."
+                if language == "ar"
+                else "Gemini Assistant can create journal entries for today's date only."
+            )
+            return msg, None
     amount_dec = Decimal(str(amount)) if amount else Decimal("0.00")
     accounts_map = {a["id"]: a for a in accounts_raw}
     lines: list[SuggestedJournalLine] = []

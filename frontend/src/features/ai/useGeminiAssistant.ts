@@ -11,6 +11,7 @@
 import { useState, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import apiClient from '../../api/client';
+import { dataEvents } from '../../lib/dataEvents';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -191,7 +192,7 @@ export function useGeminiAssistant({ companyId, language = 'en' }: useGeminiAssi
   );
 
   const confirmAction = useCallback(
-    async (action: SuggestedAction, overrideDate?: string): Promise<ConfirmActionReply | null> => {
+    async (action: SuggestedAction): Promise<ConfirmActionReply | null> => {
       if (!companyId || isConfirming) return null;
 
       setIsConfirming(true);
@@ -221,6 +222,12 @@ export function useGeminiAssistant({ companyId, language = 'en' }: useGeminiAssi
           unbalanced_entry: language === 'ar'
             ? 'القيد غير متوازن. يجب أن يتساوى مجموع المدين والدائن.'
             : 'The journal entry is not balanced. Total debit must equal total credit.',
+          gemini_date_must_be_today: language === 'ar'
+            ? 'يمكن إنشاء القيود عبر مساعد Gemini بتاريخ اليوم فقط.'
+            : "Gemini Assistant can create journal entries for today's date only.",
+          today_not_in_open_fiscal_period: language === 'ar'
+            ? 'لا يمكن إنشاء القيد لأن تاريخ اليوم ليس ضمن فترة مالية مفتوحة. افتح أو أنشئ فترة مالية تشمل تاريخ اليوم.'
+            : "Cannot create the entry because today's date is not within an open fiscal period. Open or create a fiscal period that includes today's date.",
         };
         let msg = fiscalCodes[errorCode ?? ''] ?? (
           language === 'ar'
@@ -244,7 +251,7 @@ export function useGeminiAssistant({ companyId, language = 'en' }: useGeminiAssi
             action_type: action.type,
             payload: {
               company_id: companyId,
-              entry_date: overrideDate ?? action.payload.entry_date,
+              entry_date: action.payload.entry_date,
               description: action.payload.description,
               lines: action.payload.lines.map((l) => ({
                 account_id: l.account_id,
@@ -276,17 +283,25 @@ export function useGeminiAssistant({ companyId, language = 'en' }: useGeminiAssi
         // Success — clear the preview card and show success message
         setSuggestedAction(null);
 
+        const draftNote =
+          language === 'ar'
+            ? '\nملاحظة: القيود المسودة لا تظهر في التقارير المالية حتى يتم ترحيلها.'
+            : '\nNote: draft entries do not affect financial reports until posted.';
+
         const confirmMsg: GeminiMessage = {
           id: makeId(),
           role: 'assistant',
           content:
             language === 'ar'
-              ? `✅ تم إنشاء القيد المسودة بنجاح! رقم القيد: **${result.data?.entry_no ?? '—'}**`
-              : `✅ Draft journal entry created! Entry No: **${result.data?.entry_no ?? '—'}**`,
+              ? `✅ تم إنشاء القيد المسودة بنجاح! رقم القيد: **${result.data?.entry_no ?? '—'}**${draftNote}`
+              : `✅ Draft journal entry created! Entry No: **${result.data?.entry_no ?? '—'}**${draftNote}`,
           intent: 'action_confirmed',
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, confirmMsg]);
+
+        // Trigger cross-component data refresh (Dashboard, Journal list, etc.)
+        dataEvents.emit('journal:created');
 
         return result;
       } catch (err: unknown) {

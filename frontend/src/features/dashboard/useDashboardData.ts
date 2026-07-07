@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import apiClient from '../../api/client';
 import type { DashboardData } from '../../api/types';
+import { dataEvents } from '../../lib/dataEvents';
 
 export function useDashboardData(companyId: number | null) {
   const [data, setData] = useState<DashboardData>({
@@ -44,6 +45,16 @@ export function useDashboardData(companyId: number | null) {
 
   useEffect(() => {
     fetchAll();
+  }, [fetchAll]);
+
+  // ── Auto-refetch when journal data changes elsewhere ──
+  useEffect(() => {
+    const unsub1 = dataEvents.on('journal:created', fetchAll);
+    const unsub2 = dataEvents.on('journal:mutated', fetchAll);
+    return () => {
+      unsub1();
+      unsub2();
+    };
   }, [fetchAll]);
 
   return { data, isLoading, error, refetch: fetchAll };

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
+import { dataEvents } from '../../lib/dataEvents';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageLayout from '../../components/layout/PageLayout';
 import { useI18n } from '../../i18n';
@@ -137,6 +138,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
       setSelectedReviewEntry(null);
       toast.success(t.journals.successReviewed);
       fetchEntries();
+      dataEvents.emit('journal:mutated');
     }
   };
 
@@ -152,6 +154,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
       setSelectedPostEntry(null);
       toast.success(t.journals.successPosted);
       fetchEntries();
+      dataEvents.emit('journal:mutated');
     }
   };
 
@@ -167,6 +170,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
       setSelectedVoidEntry(null);
       toast.success(t.journals.successVoided);
       fetchEntries();
+      dataEvents.emit('journal:mutated');
     }
   };
 
@@ -182,6 +186,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
       setSelectedReverseEntry(null);
       toast.success(t.journals.successReversalDraft);
       fetchEntries();
+      dataEvents.emit('journal:mutated');
     }
   };
 
@@ -589,6 +594,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
               setIsCreateModalOpen(false);
               toast.success(t.journals.successCreatedDraft);
               fetchEntries();
+              dataEvents.emit('journal:created');
             }}
             companyId={selectedCompanyId}
           />

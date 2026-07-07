@@ -611,5 +611,15 @@ export interface Translations {
     useSuggestedDate: string;
     editEntryDate: string;
     confirmDisabledFiscal: string;
+    // Preview / draft clarity
+    previewNotCreated: string;
+    draftDoesNotAffectReports: string;
+    postedEntriesOnly: string;
+    // Today-only date enforcement
+    dateMustBeToday: string;
+    todayOnlyForGeminiEntries: string;
+    todayNotInOpenFiscalPeriod: string;
+    createFiscalPeriodForToday: string;
+    entryDateTodayOnly: string;
   };
 }
