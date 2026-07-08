@@ -93,7 +93,7 @@ export interface ProfitLossReport {
   company_id: number;
   total_income: number;
   total_expenses: number;
-  net_income: number;
+  net_profit: number;
   income_accounts: TrialBalanceRow[];
   expense_accounts: TrialBalanceRow[];
 }
@@ -111,9 +111,9 @@ export interface BalanceSheetReport {
 
 // ── Dashboard aggregate ──
 export interface DashboardData {
-  trialBalance: TrialBalanceReport | null;
-  profitLoss: ProfitLossReport | null;
-  balanceSheet: BalanceSheetReport | null;
+  trialBalance: TrialBalanceRead | null;
+  profitLoss: ProfitAndLossRead | null;
+  balanceSheet: BalanceSheetRead | null;
   journalEntries: PaginatedResponse<JournalEntry> | null;
   accounts: PaginatedResponse<Account> | null;
 }

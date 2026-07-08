@@ -71,11 +71,13 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
   const pl = data.profitLoss;
   const tb = data.trialBalance;
 
-  const totalAssets = bs?.total_assets ?? 0;
-  const totalLiabilities = bs?.total_liabilities ?? 0;
-  const totalEquity = bs?.total_equity ?? 0;
-  const netIncome = pl?.net_income ?? 0;
-  const isBalanced = tb?.is_balanced ?? false;
+  const totalAssets = Number(bs?.total_assets ?? 0);
+  const totalLiabilities = Number(bs?.total_liabilities ?? 0);
+  const totalEquity = Number(bs?.total_equity ?? 0);
+  const currentYearEarnings = Number(bs?.current_year_earnings ?? 0);
+  const totalEquityAndEarnings = totalEquity + currentYearEarnings;
+  const netIncome = Number(pl?.net_profit ?? 0);
+  const isBalanced = bs?.is_balanced ?? tb?.is_balanced ?? false;
   const journalCount = data.journalEntries?.total ?? 0;
   const accountCount = data.accounts?.total ?? 0;
 
@@ -150,7 +152,7 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
                 </div>
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">{t.dashboard.totalEquity}</p>
-                  <p className="text-2xl font-bold text-white tracking-tight">{formatCurrency(totalEquity)}</p>
+                  <p className="text-2xl font-bold text-white tracking-tight">{formatCurrency(totalEquityAndEarnings)}</p>
                 </div>
               </div>
             </div>
@@ -176,7 +178,7 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
             />
             <DashboardMetricCard
               label={t.dashboard.totalEquity}
-              value={formatCurrency(totalEquity)}
+              value={formatCurrency(totalEquityAndEarnings)}
               icon={Scale}
               index={2}
               trend="neutral"
@@ -297,7 +299,7 @@ function RevenueExpensesChart({ pl, t }: { pl: DashboardContentProps['selectedCo
     if (!pl) return [];
     const income = parseFloat(String(pl.total_income)) || 0;
     const expenses = parseFloat(String(pl.total_expenses)) || 0;
-    const net = parseFloat(String(pl.net_income)) || 0;
+    const net = parseFloat(String(pl.net_profit)) || 0;
     return [
       { name: t.charts.revenue, value: income, fill: '#34d399' },
       { name: t.charts.expenses, value: Math.abs(expenses), fill: '#f87171' },
@@ -334,10 +336,11 @@ function RevenueExpensesChart({ pl, t }: { pl: DashboardContentProps['selectedCo
 function FinancialCompositionChart({ bs, t }: { bs: ReturnType<typeof useDashboardData>['data']['balanceSheet']; t: ReturnType<typeof useI18n>['t'] }) {
   const chartData = useMemo(() => {
     if (!bs) return [];
+    const equity = (parseFloat(String(bs.total_equity)) || 0) + (parseFloat(String(bs.current_year_earnings)) || 0);
     return [
       { name: t.charts.assets, value: parseFloat(String(bs.total_assets)) || 0, fill: '#60a5fa' },
       { name: t.charts.liabilities, value: parseFloat(String(bs.total_liabilities)) || 0, fill: '#fbbf24' },
-      { name: t.charts.equity, value: parseFloat(String(bs.total_equity)) || 0, fill: '#a78bfa' },
+      { name: t.charts.equity, value: equity, fill: '#a78bfa' },
     ];
   }, [bs, t]);
 
