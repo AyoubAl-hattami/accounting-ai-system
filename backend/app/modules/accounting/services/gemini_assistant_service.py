@@ -26,10 +26,12 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
+from sqlalchemy import select, func, or_
 
 from app.core.config import settings
 from app.core.clock import get_today_date
 from app.modules.accounting.schemas.gemini_assistant_schemas import (
+    EvidenceEntry,
     GeminiAssistantReply,
     PageContext,
     SuggestedAction,
@@ -37,7 +39,10 @@ from app.modules.accounting.schemas.gemini_assistant_schemas import (
     SuggestedJournalPayload,
 )
 from app.modules.accounting.services.audit_service import list_audit_logs
-from app.modules.accounting.services.report_service import get_profit_and_loss
+from app.modules.accounting.services.report_service import (
+    get_profit_and_loss,
+    get_balance_sheet,
+)
 from app.modules.accounting.services.account_service import list_accounts
 from app.modules.accounting.services.journal_service import (
     list_journal_entries,
@@ -45,6 +50,10 @@ from app.modules.accounting.services.journal_service import (
 )
 from app.modules.accounting.services.company_user_service import list_company_users
 from app.modules.accounting.services.ai_suggestion_service import suggest_journal_entry
+from app.modules.accounting.models.journal_entry import JournalEntry as JournalEntryModel
+from app.modules.accounting.models.journal_line import JournalLine as JournalLineModel
+from app.modules.accounting.models.account import Account as AccountModel
+from app.modules.accounting.models.audit_log import AuditLog as AuditLogModel
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +92,10 @@ def _tool_get_profit_loss(
     """
     Always returns a dict with numeric totals (0.0 if no data).
     Never returns {} — callers rely on the structure being present.
+
+    Distinguishes between:
+      - Valid empty reports (0.0 values, has_data=False, no error key)
+      - Unexpected errors (0.0 values + "error" key for context builder)
     """
     try:
         report = get_profit_and_loss(
@@ -90,24 +103,38 @@ def _tool_get_profit_loss(
             start_date=start_date, end_date=end_date,
         )
         return {
-            "total_revenue": float(report.total_revenue),
+            "total_revenue": float(report.total_income),
             "total_expenses": float(report.total_expenses),
             "net_profit": float(report.net_profit),
-            "has_data": bool(report.lines),  # True if there are any account lines
+            "has_data": bool(report.income_lines or report.expense_lines),
             "revenue_lines": [
-                {"name": l.account_name, "amount": float(l.net_amount)}
-                for l in report.lines
-                if l.account_type == "income" and float(l.net_amount) != 0
+                {"name": l.account_name, "amount": float(l.amount)}
+                for l in report.income_lines
+                if float(l.amount) != 0
             ][:10],
             "expense_lines": [
-                {"name": l.account_name, "amount": float(l.net_amount)}
-                for l in report.lines
-                if l.account_type == "expense" and float(l.net_amount) != 0
+                {"name": l.account_name, "amount": float(l.amount)}
+                for l in report.expense_lines
+                if float(l.amount) != 0
             ][:10],
+        }
+    except AttributeError as exc:
+        # Schema mismatch = code bug, not a data issue — log loudly
+        logger.error(
+            "_tool_get_profit_loss schema error (likely code bug): %s", exc,
+            exc_info=True,
+        )
+        return {
+            "total_revenue": 0.0,
+            "total_expenses": 0.0,
+            "net_profit": 0.0,
+            "has_data": False,
+            "revenue_lines": [],
+            "expense_lines": [],
+            "error": f"Internal error: {exc}",
         }
     except Exception as exc:
         logger.warning("_tool_get_profit_loss failed: %s", exc)
-        # Return zero-valued dict so callers always have a valid structure
         return {
             "total_revenue": 0.0,
             "total_expenses": 0.0,
@@ -190,6 +217,244 @@ def _tool_get_accounts(db: Session, company_id: int) -> list[dict]:
         return []
 
 
+# ── Deep-query tools for explain / trace / who questions ──────────────────────
+
+
+def _tool_get_journal_entries_with_lines(
+    db: Session, company_id: int, status: str = "posted", limit: int = 50,
+) -> list[dict]:
+    """Get journal entries with full line-level detail (accounts, amounts)."""
+    try:
+        entries = list_journal_entries(
+            db=db, company_id=company_id, status=status, limit=limit,
+        )
+        # Build account name lookup
+        accounts = {a.id: a for a in db.scalars(
+            select(AccountModel).where(AccountModel.company_id == company_id)
+        ).all()}
+
+        result = []
+        for e in entries:
+            lines = []
+            for line in e.lines:
+                acc = accounts.get(line.account_id)
+                lines.append({
+                    "account_id": line.account_id,
+                    "account_name": acc.name if acc else f"Account #{line.account_id}",
+                    "account_code": acc.code if acc else "?",
+                    "account_type": acc.account_type if acc else "unknown",
+                    "debit": float(line.debit),
+                    "credit": float(line.credit),
+                })
+            result.append({
+                "id": e.id,
+                "entry_no": e.entry_no,
+                "entry_date": str(e.entry_date),
+                "description": e.description,
+                "status": e.status,
+                "source_type": e.source_type,
+                "total_debit": float(sum(l.debit for l in e.lines)),
+                "lines": lines,
+            })
+        return result
+    except Exception as exc:
+        logger.warning("_tool_get_journal_entries_with_lines failed: %s", exc)
+        return []
+
+
+def _tool_trace_amount(
+    db: Session, company_id: int, amount: float, account_hint: str | None = None,
+) -> list[dict]:
+    """Find journal entries containing a line matching the given amount (±0.01)."""
+    try:
+        target = Decimal(str(amount))
+        tolerance = Decimal("0.01")
+
+        stmt = (
+            select(JournalEntryModel)
+            .join(JournalLineModel, JournalLineModel.journal_entry_id == JournalEntryModel.id)
+            .where(
+                JournalEntryModel.company_id == company_id,
+                or_(
+                    func.abs(JournalLineModel.debit - target) <= tolerance,
+                    func.abs(JournalLineModel.credit - target) <= tolerance,
+                ),
+            )
+            .distinct()
+            .order_by(JournalEntryModel.entry_date.desc())
+            .limit(10)
+        )
+        entries = list(db.scalars(stmt).all())
+
+        # Account lookup
+        accounts = {a.id: a for a in db.scalars(
+            select(AccountModel).where(AccountModel.company_id == company_id)
+        ).all()}
+
+        result = []
+        for e in entries:
+            # Reload lines
+            db.refresh(e, ["lines"])
+            matching_lines = [
+                l for l in e.lines
+                if abs(float(l.debit) - amount) < 0.02 or abs(float(l.credit) - amount) < 0.02
+            ]
+            debit_accounts = []
+            credit_accounts = []
+            for line in e.lines:
+                acc = accounts.get(line.account_id)
+                acc_name = acc.name if acc else f"#{line.account_id}"
+                if float(line.debit) > 0:
+                    debit_accounts.append(acc_name)
+                if float(line.credit) > 0:
+                    credit_accounts.append(acc_name)
+
+            # Try to find actor from audit log
+            actor = _tool_get_entry_actor(db, company_id, e.id)
+
+            entry_dict = {
+                "entry_no": e.entry_no,
+                "entry_date": str(e.entry_date),
+                "description": e.description,
+                "status": e.status,
+                "source_type": e.source_type,
+                "amount": amount,
+                "debit_accounts": debit_accounts,
+                "credit_accounts": credit_accounts,
+                "created_by": actor.get("created_by"),
+                "posted_by": actor.get("posted_by"),
+            }
+
+            # Filter by account hint if provided
+            if account_hint:
+                hint_lower = account_hint.lower()
+                all_acc_names = [n.lower() for n in debit_accounts + credit_accounts]
+                if not any(hint_lower in n for n in all_acc_names):
+                    continue
+
+            result.append(entry_dict)
+        return result
+    except Exception as exc:
+        logger.warning("_tool_trace_amount failed: %s", exc)
+        return []
+
+
+def _tool_get_balance_sheet_data(db: Session, company_id: int) -> dict:
+    """Get balance sheet totals and contributing account lines."""
+    try:
+        bs = get_balance_sheet(db=db, company_id=company_id)
+        return {
+            "total_assets": float(bs.total_assets),
+            "total_liabilities": float(bs.total_liabilities),
+            "total_equity": float(bs.total_equity),
+            "current_year_earnings": float(bs.current_year_earnings),
+            "total_liabilities_and_equity": float(bs.total_liabilities_and_equity),
+            "is_balanced": bs.is_balanced,
+            "asset_lines": [
+                {"name": l.account_name, "code": l.account_code, "amount": float(l.amount)}
+                for l in bs.asset_lines if float(l.amount) != 0
+            ],
+            "liability_lines": [
+                {"name": l.account_name, "code": l.account_code, "amount": float(l.amount)}
+                for l in bs.liability_lines if float(l.amount) != 0
+            ],
+            "equity_lines": [
+                {"name": l.account_name, "code": l.account_code, "amount": float(l.amount)}
+                for l in bs.equity_lines if float(l.amount) != 0
+            ],
+        }
+    except Exception as exc:
+        logger.warning("_tool_get_balance_sheet_data failed: %s", exc)
+        return {"error": str(exc)}
+
+
+def _tool_get_account_entries(
+    db: Session, company_id: int, account_name_hint: str, limit: int = 10,
+) -> list[dict]:
+    """Get posted journal entries affecting a specific account (matched by name substring)."""
+    try:
+        # Find matching account(s)
+        accs = db.scalars(
+            select(AccountModel).where(
+                AccountModel.company_id == company_id,
+                AccountModel.name.ilike(f"%{account_name_hint}%"),
+            )
+        ).all()
+        if not accs:
+            return []
+
+        acc_ids = [a.id for a in accs]
+        acc_map = {a.id: a for a in accs}
+
+        stmt = (
+            select(JournalEntryModel)
+            .join(JournalLineModel, JournalLineModel.journal_entry_id == JournalEntryModel.id)
+            .where(
+                JournalEntryModel.company_id == company_id,
+                JournalEntryModel.status == "posted",
+                JournalLineModel.account_id.in_(acc_ids),
+            )
+            .distinct()
+            .order_by(JournalEntryModel.entry_date.desc())
+            .limit(limit)
+        )
+        entries = list(db.scalars(stmt).all())
+
+        # Build all-account lookup for line details
+        all_accounts = {a.id: a for a in db.scalars(
+            select(AccountModel).where(AccountModel.company_id == company_id)
+        ).all()}
+
+        result = []
+        for e in entries:
+            db.refresh(e, ["lines"])
+            lines = []
+            for line in e.lines:
+                acc = all_accounts.get(line.account_id)
+                lines.append({
+                    "account_name": acc.name if acc else f"#{line.account_id}",
+                    "account_type": acc.account_type if acc else "unknown",
+                    "debit": float(line.debit),
+                    "credit": float(line.credit),
+                })
+            result.append({
+                "entry_no": e.entry_no,
+                "entry_date": str(e.entry_date),
+                "description": e.description,
+                "status": e.status,
+                "total_amount": float(sum(l.debit for l in e.lines)),
+                "lines": lines,
+            })
+        return result
+    except Exception as exc:
+        logger.warning("_tool_get_account_entries failed: %s", exc)
+        return []
+
+
+def _tool_get_entry_actor(
+    db: Session, company_id: int, entry_id: int,
+) -> dict:
+    """Get who created/posted a specific journal entry from audit logs."""
+    result = {"created_by": None, "posted_by": None, "reviewed_by": None}
+    try:
+        logs = list_audit_logs(
+            db=db, company_id=company_id,
+            entity_type="journal_entry", entity_id=entry_id,
+            limit=20,
+        )
+        for log in logs:
+            actor = log.actor_name or log.actor_email or log.actor
+            if log.action in ("create_journal_entry", "create_journal_draft_via_gemini") and not result["created_by"]:
+                result["created_by"] = actor
+            elif log.action == "post_journal_entry" and not result["posted_by"]:
+                result["posted_by"] = actor
+            elif log.action == "review_journal_entry" and not result["reviewed_by"]:
+                result["reviewed_by"] = actor
+    except Exception as exc:
+        logger.warning("_tool_get_entry_actor failed: %s", exc)
+    return result
+
+
 # ── Intent classification (deterministic) ────────────────────────────────────
 
 def _classify_intent(message: str) -> str:
@@ -209,11 +474,65 @@ def _classify_intent(message: str) -> str:
     if action_arabic or action_english:
         return "action_request"
 
+    # ── Explain questions (how/why a figure was formed) ────────────────────
+    explain_arabic = any(phrase in text for phrase in [
+        "كيف صار", "كيف صارت", "كيف وصل", "كيف وصلت",
+        "ليش", "لماذا", "من وين جا", "من وين جاء", "من وين جت",
+        "وريني تفاصيل", "اشرح", "فسر", "تفاصيل",
+        "كيف تحسب", "كيف تكون", "كيف تكونت",
+        "ايش القيود", "ايش اللي كون", "ايش اللي صنع",
+        "ارباحي من وين", "من وين الربح", "من وين الدخل",
+        "كيف دخلنا", "ايش دخلنا",
+    ])
+    explain_english = bool(re.search(
+        r"\b(how did|why is|why are|explain|show me what makes|what makes up|"
+        r"break ?down|composed of|formed|trace profit|explain the)\b",
+        text, re.IGNORECASE,
+    ))
+    if explain_arabic or explain_english:
+        return "explain_question"
+
+    # ── Trace questions (who entered/where did amount go) ─────────────────
+    # Extract amount to detect trace intent
+    _has_amount = bool(re.search(r"\d[\d,]*\.?\d*", text))
+    trace_arabic = _has_amount and any(phrase in text for phrase in [
+        "من أدخل", "من سجل", "من رفع", "من دخل", "من عمل",
+        "مين دخل", "مين سجل", "مين أدخل",
+        "ايش هذا", "ايش هذي", "وين راح", "وين راحت",
+        "من اللي أضاف", "من اللي دخل", "من اللي سجل",
+    ])
+    trace_english = _has_amount and bool(re.search(
+        r"\b(who entered|who recorded|who created|where did|what is this)\b",
+        text, re.IGNORECASE,
+    ))
+    # Also catch "وين راحت 500" / "وين راح 500" without requiring other phrases
+    trace_where = bool(re.search(r"(وين\s*راح|وين\s*راحت)", text))
+    if trace_arabic or trace_english or trace_where:
+        return "trace_question"
+
+    # ── Who-did-action questions (audit-actor focused) ────────────────────
+    who_action_arabic = any(phrase in text for phrase in [
+        "من رحّل", "من رحل", "من راجع", "من أنشأ", "من انشأ",
+        "من آخر واحد", "من اخر واحد",
+        "من غير الصلاحية", "من حذف", "من عدل",
+        "مين رحل", "مين راجع", "مين أنشأ",
+        "من اللي رحل", "من الذي رحل", "من الذي أنشأ",
+        "من اللي أنشأ", "من الذي أنشأ قيد",
+    ])
+    who_action_english = bool(re.search(
+        r"\b(who posted|who reviewed|who created the|who made the|"
+        r"who changed|who deleted|who modified|last person)\b",
+        text, re.IGNORECASE,
+    ))
+    if who_action_arabic or who_action_english:
+        return "who_action_question"
+
     # Report / financial questions
     if any(t in text_lower for t in [
         "profit", "loss", "revenue", "income", "expense", "expenses",
         "ربح", "خسارة", "إيراد", "ايراد", "مصروف", "مصاريف",
         "how much", "كم", "total", "إجمالي", "اجمالي",
+        "كم دفعنا", "كم خرجنا", "كم دخلنا",
     ]):
         return "report_question"
 
@@ -221,6 +540,7 @@ def _classify_intent(message: str) -> str:
     if any(t in text_lower for t in [
         "balance", "trial balance", "balance sheet",
         "رصيد", "ميزانية", "ميزان المراجعة",
+        "أصول", "اصول", "assets",
     ]):
         return "balance_question"
 
@@ -498,6 +818,18 @@ def _fallback_report_reply(
     )
     period_display = f" ({period_str})" if period_str else ""
 
+    # If the data fetch failed, show an error instead of fake zeros
+    if "error" in data:
+        if language == "ar":
+            return (
+                f"⚠️ تعذّر استرجاع بيانات الأرباح والخسائر{period_display}. "
+                f"يرجى المحاولة مرة أخرى أو مراجعة صفحة التقارير مباشرة."
+            )
+        return (
+            f"⚠️ Could not retrieve Profit & Loss data{period_display}. "
+            f"Please try again or check the Reports page directly."
+        )
+
     revenue = data.get("total_revenue", 0.0)
     expenses = data.get("total_expenses", 0.0)
     net = data.get("net_profit", 0.0)
@@ -599,6 +931,363 @@ def _fallback_user_reply(users: list[dict], language: str) -> str:
         for u in active[:5]:
             lines.append(f"  - {u.get('name') or u.get('email')} ({u.get('role')})")
     return "\n".join(lines)
+
+
+# ── Helpers for new intents ───────────────────────────────────────────────────
+
+
+def _extract_amount_from_message(message: str) -> float | None:
+    """Extract a numeric amount from the user's message."""
+    # Match numbers like 1,500.00 or 1500 or 500
+    matches = re.findall(r'[\d,]+\.?\d*', message)
+    for m in matches:
+        try:
+            val = float(m.replace(',', ''))
+            if val > 0:
+                return val
+        except ValueError:
+            continue
+    return None
+
+
+def _extract_account_hint(message: str) -> str | None:
+    """Extract an account name hint from the message."""
+    account_keywords = {
+        "إيجار": "rent", "ايجار": "rent", "rent": "rent",
+        "مبيعات": "sales", "sales": "sales", "revenue": "revenue",
+        "بنك": "bank", "bank": "bank",
+        "إيراد": "revenue", "ايراد": "revenue", "income": "income",
+        "مصروف": "expense", "expense": "expense",
+    }
+    text_lower = message.lower()
+    for ar_word, en_word in account_keywords.items():
+        if ar_word in text_lower or ar_word in message:
+            return en_word
+    return None
+
+
+# ── Context builders for new intents ──────────────────────────────────────────
+
+
+def _build_explain_context(
+    pl_data: dict,
+    entries: list[dict],
+    bs_data: dict | None = None,
+) -> str:
+    """Build context for explain questions — includes P&L + journal entry evidence."""
+    ctx = []
+
+    # P&L summary
+    revenue = pl_data.get("total_revenue", 0.0)
+    expenses = pl_data.get("total_expenses", 0.0)
+    net = pl_data.get("net_profit", 0.0)
+    ctx.append("=== Profit & Loss Summary ===")
+    ctx.append(f"Total Revenue: {_fmt_money(revenue)}")
+    ctx.append(f"Total Expenses: {_fmt_money(expenses)}")
+    ctx.append(f"Net Profit/Loss: {_fmt_money(net)}")
+
+    # Revenue breakdown by account
+    if pl_data.get("revenue_lines"):
+        ctx.append("\nRevenue Sources:")
+        for r in pl_data["revenue_lines"]:
+            ctx.append(f"  - {r['name']}: {_fmt_money(r['amount'])}")
+
+    # Expense breakdown by account
+    if pl_data.get("expense_lines"):
+        ctx.append("\nExpense Sources:")
+        for e in pl_data["expense_lines"]:
+            ctx.append(f"  - {e['name']}: {_fmt_money(e['amount'])}")
+
+    # Contributing journal entries
+    if entries:
+        ctx.append(f"\n=== Contributing Posted Journal Entries ({len(entries)} entries) ===")
+        for e in entries[:15]:
+            lines_desc = []
+            for line in e.get("lines", []):
+                if line["debit"] > 0:
+                    lines_desc.append(f"Dr {line['account_name']} {_fmt_money(line['debit'])}")
+                if line["credit"] > 0:
+                    lines_desc.append(f"Cr {line['account_name']} {_fmt_money(line['credit'])}")
+            ctx.append(
+                f"  Entry {e['entry_no']} ({e['entry_date']}) — {e.get('description') or 'No description'} — "
+                f"Status: {e['status']} — {' | '.join(lines_desc)}"
+            )
+
+    # Balance sheet if relevant
+    if bs_data and "error" not in bs_data:
+        ctx.append(f"\n=== Balance Sheet ===")
+        ctx.append(f"Total Assets: {_fmt_money(bs_data.get('total_assets', 0))}")
+        ctx.append(f"Total Liabilities: {_fmt_money(bs_data.get('total_liabilities', 0))}")
+        ctx.append(f"Total Equity: {_fmt_money(bs_data.get('total_equity', 0))}")
+        ctx.append(f"Current Year Earnings: {_fmt_money(bs_data.get('current_year_earnings', 0))}")
+        if bs_data.get("asset_lines"):
+            ctx.append("Asset Accounts:")
+            for a in bs_data["asset_lines"]:
+                ctx.append(f"  - {a['name']}: {_fmt_money(a['amount'])}")
+
+    return "\n".join(ctx)
+
+
+def _build_trace_context(matches: list[dict]) -> str:
+    """Build context for trace questions — matching entries + actor info."""
+    if not matches:
+        return "No journal entries found matching the given amount."
+
+    ctx = [f"=== Matching Journal Entries ({len(matches)} found) ==="]
+    for m in matches:
+        ctx.append(
+            f"Entry {m['entry_no']} ({m['entry_date']}) — Status: {m['status']} — "
+            f"Amount: {_fmt_money(m['amount'])} — "
+            f"Dr: {', '.join(m.get('debit_accounts', []))} — "
+            f"Cr: {', '.join(m.get('credit_accounts', []))} — "
+            f"Description: {m.get('description') or 'None'} — "
+            f"Created by: {m.get('created_by') or 'Unknown'} — "
+            f"Posted by: {m.get('posted_by') or 'N/A'}"
+        )
+    return "\n".join(ctx)
+
+
+def _build_who_action_context(logs: list[dict]) -> str:
+    """Build context for who-action questions — audit logs with actor details."""
+    if not logs:
+        return "No audit logs found for the requested action."
+
+    ctx = [f"=== Audit Logs ({len(logs)} entries) ==="]
+    for log in logs[:10]:
+        ctx.append(
+            f"[{(log.get('created_at') or '')[:19]}] "
+            f"Actor: {log.get('actor') or 'System'} — "
+            f"Action: {log.get('action', '')} — "
+            f"Entity: {log.get('entity_type', '')} #{log.get('entity_id', '')} — "
+            f"Description: {log.get('description') or 'None'}"
+        )
+    return "\n".join(ctx)
+
+
+# ── Fallback replies for new intents ──────────────────────────────────────────
+
+
+def _fallback_explain_reply(
+    pl_data: dict,
+    entries: list[dict],
+    language: str,
+    bs_data: dict | None = None,
+) -> str:
+    """Deterministic explanation of how figures were formed."""
+    revenue = pl_data.get("total_revenue", 0.0)
+    expenses = pl_data.get("total_expenses", 0.0)
+    net = pl_data.get("net_profit", 0.0)
+
+    if language == "ar":
+        parts = []
+
+        # Revenue explanation
+        if revenue > 0:
+            rev_lines = pl_data.get("revenue_lines", [])
+            if rev_lines:
+                rev_desc = "، ".join(
+                    f"{r['name']} بقيمة {_fmt_money(r['amount'])}" for r in rev_lines
+                )
+                parts.append(f"📊 **الإيرادات {_fmt_money(revenue)}** تتكون من: {rev_desc}.")
+            else:
+                parts.append(f"📊 إجمالي الإيرادات: **{_fmt_money(revenue)}**")
+
+        # Expense explanation
+        if expenses > 0:
+            exp_lines = pl_data.get("expense_lines", [])
+            if exp_lines:
+                exp_desc = "، ".join(
+                    f"{e['name']} بقيمة {_fmt_money(e['amount'])}" for e in exp_lines
+                )
+                parts.append(f"💰 **المصاريف {_fmt_money(expenses)}** تتكون من: {exp_desc}.")
+            else:
+                parts.append(f"💰 إجمالي المصاريف: **{_fmt_money(expenses)}**")
+
+        # Net profit explanation
+        sign = "ربح" if net >= 0 else "خسارة"
+        parts.append(
+            f"📈 **صافي {sign}: {_fmt_money(abs(net))}** "
+            f"= الإيرادات {_fmt_money(revenue)} - المصاريف {_fmt_money(expenses)}"
+        )
+
+        # Contributing entries
+        if entries:
+            parts.append(f"\n📝 **القيود المؤثرة ({len(entries)} قيد):**")
+            for e in entries[:10]:
+                debit_parts = []
+                credit_parts = []
+                for line in e.get("lines", []):
+                    if line["debit"] > 0:
+                        debit_parts.append(f"{line['account_name']} {_fmt_money(line['debit'])}")
+                    if line["credit"] > 0:
+                        credit_parts.append(f"{line['account_name']} {_fmt_money(line['credit'])}")
+                parts.append(
+                    f"• **{e['entry_no']}** ({e['entry_date']}) — "
+                    f"مدين: {', '.join(debit_parts)} | دائن: {', '.join(credit_parts)}"
+                )
+
+        # Balance sheet if relevant
+        if bs_data and "error" not in bs_data:
+            ta = bs_data.get("total_assets", 0)
+            tl = bs_data.get("total_liabilities", 0)
+            te = bs_data.get("total_equity", 0)
+            cye = bs_data.get("current_year_earnings", 0)
+            parts.append(
+                f"\n🏦 **الميزانية:** الأصول {_fmt_money(ta)} = "
+                f"الالتزامات {_fmt_money(tl)} + حقوق الملكية {_fmt_money(te)} + "
+                f"أرباح العام {_fmt_money(cye)}"
+            )
+
+        return "\n".join(parts)
+
+    # English
+    parts = []
+    if revenue > 0:
+        rev_lines = pl_data.get("revenue_lines", [])
+        if rev_lines:
+            rev_desc = ", ".join(f"{r['name']} ({_fmt_money(r['amount'])})" for r in rev_lines)
+            parts.append(f"📊 **Revenue {_fmt_money(revenue)}** is composed of: {rev_desc}.")
+        else:
+            parts.append(f"📊 Total Revenue: **{_fmt_money(revenue)}**")
+
+    if expenses > 0:
+        exp_lines = pl_data.get("expense_lines", [])
+        if exp_lines:
+            exp_desc = ", ".join(f"{e['name']} ({_fmt_money(e['amount'])})" for e in exp_lines)
+            parts.append(f"💰 **Expenses {_fmt_money(expenses)}** are composed of: {exp_desc}.")
+        else:
+            parts.append(f"💰 Total Expenses: **{_fmt_money(expenses)}**")
+
+    sign = "Profit" if net >= 0 else "Loss"
+    parts.append(
+        f"📈 **Net {sign}: {_fmt_money(abs(net))}** "
+        f"= Revenue {_fmt_money(revenue)} - Expenses {_fmt_money(expenses)}"
+    )
+
+    if entries:
+        parts.append(f"\n📝 **Contributing Entries ({len(entries)}):**")
+        for e in entries[:10]:
+            debit_parts = []
+            credit_parts = []
+            for line in e.get("lines", []):
+                if line["debit"] > 0:
+                    debit_parts.append(f"{line['account_name']} {_fmt_money(line['debit'])}")
+                if line["credit"] > 0:
+                    credit_parts.append(f"{line['account_name']} {_fmt_money(line['credit'])}")
+            parts.append(
+                f"• **{e['entry_no']}** ({e['entry_date']}) — "
+                f"Dr: {', '.join(debit_parts)} | Cr: {', '.join(credit_parts)}"
+            )
+
+    return "\n".join(parts)
+
+
+def _fallback_trace_reply(matches: list[dict], amount: float, language: str) -> str:
+    """Deterministic reply for amount tracing."""
+    if not matches:
+        if language == "ar":
+            return f"🔍 لم أجد قيدًا مطابقًا لمبلغ **{_fmt_money(amount)}** في الشركة الحالية."
+        return f"🔍 I could not find a matching entry for **{_fmt_money(amount)}** in the selected company."
+
+    if len(matches) == 1:
+        m = matches[0]
+        if language == "ar":
+            actor = m.get("created_by") or "غير معروف"
+            posted_by = m.get("posted_by")
+            reply = (
+                f"🔍 تم إدخال **{_fmt_money(amount)}** بواسطة **{actor}** "
+                f"في القيد رقم **{m['entry_no']}** بتاريخ {m['entry_date']}.\n"
+                f"• الحالة: {m['status']}\n"
+                f"• مدين: {', '.join(m.get('debit_accounts', []))}\n"
+                f"• دائن: {', '.join(m.get('credit_accounts', []))}"
+            )
+            if posted_by:
+                reply += f"\n• رحّله: **{posted_by}**"
+            if m.get("description"):
+                reply += f"\n• الوصف: {m['description']}"
+            return reply
+
+        actor = m.get("created_by") or "Unknown"
+        posted_by = m.get("posted_by")
+        reply = (
+            f"🔍 **{_fmt_money(amount)}** was entered by **{actor}** "
+            f"in entry **{m['entry_no']}** on {m['entry_date']}.\n"
+            f"• Status: {m['status']}\n"
+            f"• Debit: {', '.join(m.get('debit_accounts', []))}\n"
+            f"• Credit: {', '.join(m.get('credit_accounts', []))}"
+        )
+        if posted_by:
+            reply += f"\n• Posted by: **{posted_by}**"
+        if m.get("description"):
+            reply += f"\n• Description: {m['description']}"
+        return reply
+
+    # Multiple matches
+    if language == "ar":
+        lines = [f"🔍 وجدت **{len(matches)}** عمليات بقيمة **{_fmt_money(amount)}**:\n"]
+        for i, m in enumerate(matches[:5], 1):
+            actor = m.get("created_by") or "غير معروف"
+            lines.append(
+                f"{i}. **{m['entry_no']}** ({m['entry_date']}) — "
+                f"{', '.join(m.get('credit_accounts', []))} — "
+                f"بواسطة {actor} — الحالة: {m['status']}"
+            )
+        lines.append("\nأي عملية تقصد؟")
+        return "\n".join(lines)
+
+    lines = [f"🔍 Found **{len(matches)}** entries with amount **{_fmt_money(amount)}**:\n"]
+    for i, m in enumerate(matches[:5], 1):
+        actor = m.get("created_by") or "Unknown"
+        lines.append(
+            f"{i}. **{m['entry_no']}** ({m['entry_date']}) — "
+            f"{', '.join(m.get('credit_accounts', []))} — "
+            f"by {actor} — Status: {m['status']}"
+        )
+    lines.append("\nWhich one do you mean?")
+    return "\n".join(lines)
+
+
+def _fallback_who_action_reply(logs: list[dict], language: str, action_desc: str = "") -> str:
+    """Deterministic reply for who-did-action questions."""
+    if not logs:
+        if language == "ar":
+            return f"🔍 لم أجد سجل تدقيق يطابق '{action_desc}'."
+        return f"🔍 No audit log found matching '{action_desc}'."
+
+    latest = logs[0]
+    actor = latest.get("actor") or ("النظام" if language == "ar" else "System")
+    action = latest.get("action", "").replace("_", " ")
+    ts = (latest.get("created_at") or "")[:19]
+    desc = latest.get("description") or ""
+
+    if language == "ar":
+        reply = (
+            f"👤 **{actor}** قام بعملية **{action}**"
+            f" بتاريخ {ts}."
+        )
+        if desc:
+            reply += f"\n• الوصف: {desc}"
+        if len(logs) > 1:
+            reply += f"\n\n📋 **آخر {min(len(logs), 5)} عمليات:**"
+            for log in logs[:5]:
+                log_actor = log.get("actor") or "النظام"
+                log_ts = (log.get("created_at") or "")[:19]
+                reply += f"\n• {log_actor} — {log.get('action', '').replace('_', ' ')} — {log_ts}"
+        return reply
+
+    reply = (
+        f"👤 **{actor}** performed **{action}**"
+        f" at {ts}."
+    )
+    if desc:
+        reply += f"\n• Description: {desc}"
+    if len(logs) > 1:
+        reply += f"\n\n📋 **Last {min(len(logs), 5)} actions:**"
+        for log in logs[:5]:
+            log_actor = log.get("actor") or "System"
+            log_ts = (log.get("created_at") or "")[:19]
+            reply += f"\n• {log_actor} — {log.get('action', '').replace('_', ' ')} — {log_ts}"
+    return reply
 
 
 # ── Action handler (rules engine, never Gemini) ───────────────────────────────
@@ -779,7 +1468,7 @@ def dispatch_gemini_assistant(
             ),
             intent="access_denied", confidence="high", data_sources=[],
         )
-    if intent in ("report_question", "balance_question", "journal_question") and user_role not in _CAN_READ_REPORTS:
+    if intent in ("report_question", "balance_question", "journal_question", "explain_question") and user_role not in _CAN_READ_REPORTS:
         return GeminiAssistantReply(
             reply=(
                 "🔒 ليس لديك صلاحية الوصول إلى هذه البيانات."
@@ -787,6 +1476,151 @@ def dispatch_gemini_assistant(
                 else "🔒 You don't have permission to access this data."
             ),
             intent="access_denied", confidence="high", data_sources=[],
+        )
+    if intent == "trace_question" and user_role not in _CAN_READ_REPORTS:
+        return GeminiAssistantReply(
+            reply=(
+                "🔒 ليس لديك صلاحية الوصول إلى هذه البيانات."
+                if language == "ar"
+                else "🔒 You don't have permission to access this data."
+            ),
+            intent="access_denied", confidence="high", data_sources=[],
+        )
+    if intent == "who_action_question" and user_role not in _CAN_READ_AUDIT_LOGS:
+        return GeminiAssistantReply(
+            reply=(
+                "🔒 ليس لديك صلاحية الوصول إلى سجلات التدقيق."
+                if language == "ar"
+                else "🔒 You don't have permission to access audit logs."
+            ),
+            intent="access_denied", confidence="high", data_sources=[],
+        )
+
+    # ── Explain question (how/why a figure was formed) ────────────────────────
+    if intent == "explain_question":
+        # Fetch P&L data
+        start_date, end_date, period_label = _extract_date_range(
+            message=message,
+            page_start=page_context.filters.start_date,
+            page_end=page_context.filters.end_date,
+        )
+        pl_data = _tool_get_profit_loss(db, company_id, start_date, end_date)
+        # Fetch journal entries with full line details
+        entries = _tool_get_journal_entries_with_lines(db, company_id, status="posted")
+        # Check if balance sheet is relevant
+        msg_lower = message.lower()
+        bs_data = None
+        if any(w in msg_lower for w in [
+            "أصول", "اصول", "assets", "ميزانية", "balance",
+            "بنك", "bank", "رصيد",
+        ]):
+            bs_data = _tool_get_balance_sheet_data(db, company_id)
+
+        # Build evidence list
+        evidence = [
+            EvidenceEntry(
+                entry_no=e["entry_no"],
+                date=e["entry_date"],
+                amount=e.get("total_debit"),
+                debit_account=", ".join(
+                    l["account_name"] for l in e.get("lines", []) if l["debit"] > 0
+                ),
+                credit_account=", ".join(
+                    l["account_name"] for l in e.get("lines", []) if l["credit"] > 0
+                ),
+                status=e["status"],
+                description=e.get("description"),
+            )
+            for e in entries[:10]
+        ]
+
+        context = _build_explain_context(pl_data, entries, bs_data)
+        gemini_reply = _call_gemini_for_answer(message, context, language)
+        reply = gemini_reply or _fallback_explain_reply(pl_data, entries, language, bs_data)
+
+        data_sources = ["profit_loss_report", "journal_entries"]
+        if bs_data:
+            data_sources.append("balance_sheet")
+
+        return GeminiAssistantReply(
+            reply=reply,
+            intent="answer_explain_question",
+            confidence="high" if entries else "medium",
+            data_sources=data_sources,
+            evidence=evidence,
+        )
+
+    # ── Trace question (who entered / where did amount go) ────────────────────
+    if intent == "trace_question":
+        amount = _extract_amount_from_message(message)
+        account_hint = _extract_account_hint(message)
+
+        if amount is None:
+            if language == "ar":
+                reply = "🤔 لم أتمكن من تحديد المبلغ. حدد المبلغ المطلوب تتبعه، مثل: 'من أدخل 1000؟'"
+            else:
+                reply = "🤔 I couldn't identify the amount. Please specify, e.g. 'Who entered 1000?'"
+            return GeminiAssistantReply(
+                reply=reply,
+                intent="clarification",
+                confidence="low",
+                data_sources=[],
+            )
+
+        matches = _tool_trace_amount(db, company_id, amount, account_hint)
+        evidence = [
+            EvidenceEntry(
+                entry_no=m["entry_no"],
+                date=m["entry_date"],
+                amount=m["amount"],
+                debit_account=", ".join(m.get("debit_accounts", [])),
+                credit_account=", ".join(m.get("credit_accounts", [])),
+                status=m["status"],
+                actor_name=m.get("created_by"),
+                description=m.get("description"),
+            )
+            for m in matches
+        ]
+
+        context = _build_trace_context(matches)
+        gemini_reply = _call_gemini_for_answer(message, context, language)
+        reply = gemini_reply or _fallback_trace_reply(matches, amount, language)
+
+        return GeminiAssistantReply(
+            reply=reply,
+            intent="answer_trace_question",
+            confidence="high" if matches else "medium",
+            data_sources=["journal_entries", "audit_logs"],
+            evidence=evidence,
+        )
+
+    # ── Who-action question (who posted / reviewed / created) ─────────────────
+    if intent == "who_action_question":
+        # Determine action filter from message
+        action_filter = None
+        msg_lower = message.lower()
+        if any(w in msg_lower for w in ["رحّل", "رحل", "posted", "نشر"]):
+            action_filter = "post_journal_entry"
+        elif any(w in msg_lower for w in ["راجع", "reviewed", "review"]):
+            action_filter = "review_journal_entry"
+        elif any(w in msg_lower for w in ["أنشأ", "انشأ", "created", "create", "سجل"]):
+            action_filter = "create_journal_entry"
+        elif any(w in msg_lower for w in ["غير", "عدل", "changed", "modified"]):
+            action_filter = "update_company_user"
+        elif any(w in msg_lower for w in ["حذف", "deleted", "removed"]):
+            action_filter = "remove_company_access"
+
+        action_desc = action_filter or "recent actions"
+        logs = _tool_get_recent_audit_logs(db, company_id, action=action_filter, limit=10)
+        context = _build_who_action_context(logs)
+        gemini_reply = _call_gemini_for_answer(message, context, language)
+        reply = gemini_reply or _fallback_who_action_reply(logs, language, action_desc)
+
+        return GeminiAssistantReply(
+            reply=reply,
+            intent="answer_who_action_question",
+            confidence="high" if logs else "low",
+            data_sources=["audit_logs"],
         )
 
     # ── Report / P&L question ────────────────────────────────────────────────
@@ -878,8 +1712,10 @@ def dispatch_gemini_assistant(
         reply = (
             "🤔 لم أفهم سؤالك. يمكنني مساعدتك في:\n"
             "• **التقارير**: 'كم الربح هذا الشهر؟'\n"
+            "• **شرح الأرقام**: 'كيف صارت الإيرادات 2000؟'\n"
+            "• **تتبع مبلغ**: 'من أدخل 1000؟'\n"
             "• **القيود**: 'آخر قيد محاسبي'\n"
-            "• **التدقيق**: 'من غير صلاحية المستخدم؟'\n"
+            "• **التدقيق**: 'من رحّل القيد؟'\n"
             "• **إنشاء قيد**: 'تم دفع 500 إيجار'\n"
             "• **المستخدمون**: 'من المستخدمون النشطون؟'"
         )
@@ -887,8 +1723,10 @@ def dispatch_gemini_assistant(
         reply = (
             "🤔 I didn't understand your question. I can help with:\n"
             "• **Reports**: 'What are expenses this month?'\n"
+            "• **Explain Figures**: 'How did revenue become 2000?'\n"
+            "• **Trace Amounts**: 'Who entered 1000?'\n"
             "• **Journal Entries**: 'Show me the last journal entry'\n"
-            "• **Audit Logs**: 'Who changed the user role?'\n"
+            "• **Audit**: 'Who posted the last entry?'\n"
             "• **Create Entry**: 'Paid 500 rent'\n"
             "• **Users**: 'Who are the active users?'"
         )

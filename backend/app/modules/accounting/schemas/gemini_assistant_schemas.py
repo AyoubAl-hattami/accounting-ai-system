@@ -73,6 +73,20 @@ class SuggestedAction(BaseModel):
     payload: SuggestedJournalPayload
 
 
+# ── Evidence (structured data backing an answer) ──────────────────────────────
+
+class EvidenceEntry(BaseModel):
+    """Structured evidence entry returned alongside Gemini answers."""
+    entry_no: str | None = None
+    date: str | None = None
+    amount: float | None = None
+    debit_account: str | None = None
+    credit_account: str | None = None
+    status: str | None = None
+    actor_name: str | None = None
+    description: str | None = None
+
+
 # ── Gemini Assistant response ─────────────────────────────────────────────────
 
 class GeminiAssistantReply(BaseModel):
@@ -81,6 +95,7 @@ class GeminiAssistantReply(BaseModel):
     confidence: str = Field(default="medium", pattern="^(high|medium|low)$")
     data_sources: list[str] = Field(default_factory=list)
     suggested_action: SuggestedAction | None = None
+    evidence: list[EvidenceEntry] = Field(default_factory=list)
 
 
 # ── Confirm-action request ────────────────────────────────────────────────────

@@ -262,7 +262,7 @@ def test_gemini_assistant_audit_question_admin(base_url, admin_headers, default_
 
     data = response.json()
     # Should either answer with audit data or gracefully handle empty data
-    assert data["intent"] in ("answer_audit_question", "clarification")
+    assert data["intent"] in ("answer_audit_question", "answer_who_action_question", "clarification")
 
 
 def test_gemini_assistant_journal_question(base_url, admin_headers, default_company_id):

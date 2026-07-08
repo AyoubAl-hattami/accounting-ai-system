@@ -11,6 +11,7 @@ Tests:
   - Fiscal actions create audit logs
 """
 
+import random
 import requests
 import uuid
 from datetime import datetime, timezone
@@ -154,14 +155,15 @@ def test_admin_can_create_fiscal_year(
 ):
     """Admin can create a fiscal year via POST /fiscal-years."""
     unique_name = f"FY Test {uuid.uuid4().hex[:8]}"
+    rand_year = random.randint(2200, 2399)
     response = requests.post(
         f"{base_url}/fiscal-years",
         headers=admin_headers,
         json={
             "company_id": default_company_id,
             "name": unique_name,
-            "start_date": "2099-01-01",
-            "end_date": "2099-12-31",
+            "start_date": f"{rand_year}-01-01",
+            "end_date": f"{rand_year}-12-31",
             "status": "open",
         },
     )
@@ -178,7 +180,8 @@ def test_admin_can_create_fiscal_period(
     base_url, admin_headers, default_company_id
 ):
     """Admin can create a fiscal period under a fiscal year."""
-    # First create a fiscal year
+    # First create a fiscal year with a random far-future year
+    rand_year = random.randint(2400, 2599)
     fy_name = f"FY Period Test {uuid.uuid4().hex[:8]}"
     fy_resp = requests.post(
         f"{base_url}/fiscal-years",
@@ -186,16 +189,18 @@ def test_admin_can_create_fiscal_period(
         json={
             "company_id": default_company_id,
             "name": fy_name,
-            "start_date": "2098-01-01",
-            "end_date": "2098-12-31",
+            "start_date": f"{rand_year}-01-01",
+            "end_date": f"{rand_year}-12-31",
             "status": "open",
         },
     )
-    assert fy_resp.status_code == 201
+    assert fy_resp.status_code == 201, (
+        f"Expected 201, got {fy_resp.status_code}: {fy_resp.text[:300]}"
+    )
     fy_id = fy_resp.json()["id"]
 
     # Create a fiscal period
-    fp_name = f"Jan 2098 {uuid.uuid4().hex[:6]}"
+    fp_name = f"Jan {rand_year} {uuid.uuid4().hex[:6]}"
     fp_resp = requests.post(
         f"{base_url}/fiscal-periods",
         headers=admin_headers,
@@ -204,8 +209,8 @@ def test_admin_can_create_fiscal_period(
             "fiscal_year_id": fy_id,
             "period_no": 1,
             "name": fp_name,
-            "start_date": "2098-01-01",
-            "end_date": "2098-01-31",
+            "start_date": f"{rand_year}-01-01",
+            "end_date": f"{rand_year}-01-31",
             "status": "open",
         },
     )
@@ -345,18 +350,21 @@ def test_fiscal_year_create_generates_audit_log(
 ):
     """Creating a fiscal year must generate an audit log entry."""
     unique_name = f"FY Audit {uuid.uuid4().hex[:8]}"
+    rand_year = random.randint(2600, 2799)
     fy_resp = requests.post(
         f"{base_url}/fiscal-years",
         headers=admin_headers,
         json={
             "company_id": default_company_id,
             "name": unique_name,
-            "start_date": "2096-01-01",
-            "end_date": "2096-12-31",
+            "start_date": f"{rand_year}-01-01",
+            "end_date": f"{rand_year}-12-31",
             "status": "open",
         },
     )
-    assert fy_resp.status_code == 201
+    assert fy_resp.status_code == 201, (
+        f"Expected 201, got {fy_resp.status_code}: {fy_resp.text[:300]}"
+    )
     fy_id = fy_resp.json()["id"]
 
     # Check audit log

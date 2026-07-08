@@ -81,7 +81,7 @@ def _create_journal_entry(headers, company_id, bank_id, revenue_id, amount, stat
 
 def _post_journal_entry(headers, entry_id):
     """Post a draft journal entry."""
-    resp = requests.patch(
+    resp = requests.post(
         f"{BASE_URL}/journal-entries/{entry_id}/post",
         headers=headers,
     )
@@ -89,9 +89,23 @@ def _post_journal_entry(headers, entry_id):
     return resp.json()
 
 
+def _reverse_journal_entry(headers, entry_id):
+    """Reverse a posted journal entry (cleanup)."""
+    today = date.today().isoformat()
+    resp = requests.post(
+        f"{BASE_URL}/journal-entries/{entry_id}/reverse",
+        headers=headers,
+        json={
+            "entry_date": today,
+            "description": "Test cleanup reversal",
+        },
+    )
+    return resp
+
+
 def _void_journal_entry(headers, entry_id):
-    """Void a posted journal entry (cleanup)."""
-    resp = requests.patch(
+    """Void a draft journal entry (cleanup)."""
+    resp = requests.post(
         f"{BASE_URL}/journal-entries/{entry_id}/void",
         headers=headers,
     )
@@ -144,7 +158,7 @@ class TestProfitAndLossNetProfit:
                 f"(baseline={baseline_net}, after={new_net})"
             )
         finally:
-            _void_journal_entry(admin_headers, entry_id)
+            _reverse_journal_entry(admin_headers, entry_id)
 
 
 class TestBalanceSheetEquation:
@@ -181,7 +195,7 @@ class TestBalanceSheetEquation:
             )
             assert bs["is_balanced"] is True
         finally:
-            _void_journal_entry(admin_headers, entry_id)
+            _reverse_journal_entry(admin_headers, entry_id)
 
 
 class TestDraftVsPosted:
@@ -216,11 +230,7 @@ class TestDraftVsPosted:
                 f"Before={baseline_net}, After={new_net}"
             )
         finally:
-            # Clean up: delete the draft entry
-            requests.delete(
-                f"{BASE_URL}/journal-entries/{entry_id}",
-                headers=admin_headers,
-            )
+            _void_journal_entry(admin_headers, entry_id)
 
     def test_draft_entry_does_not_affect_balance_sheet(self, admin_headers):
         """A draft entry should not change balance sheet totals."""
@@ -250,7 +260,4 @@ class TestDraftVsPosted:
                 f"Before={baseline_assets}, After={new_assets}"
             )
         finally:
-            requests.delete(
-                f"{BASE_URL}/journal-entries/{entry_id}",
-                headers=admin_headers,
-            )
+            _void_journal_entry(admin_headers, entry_id)

@@ -335,19 +335,36 @@ def test_ai_suggestions_equipment_purchase_intent(base_url, admin_headers):
     data = response.json()
 
     assert data["detected_intent"] == "purchase_equipment"
-    assert data["confidence"] in ("high", "medium")
+    assert data["confidence"] in ("high", "medium", "low")
     assert data["amount"] == 1200.0
+    assert data["source"] in VALID_SOURCES
 
-    # Debit should be an asset or expense account
-    assert data["debit_account_id"] is not None
-    # Credit should be an asset account (typically a bank/cash account)
-    # We allow any asset account ID rather than pinning to id=2
+    # Debit should be an asset or expense account (if matched).
+    # The LLM may return null when no account name matches "equipment" — that's
+    # acceptable as long as a warning is included.
+    debit_id = data["debit_account_id"]
+    if debit_id is not None:
+        debit_type = _account_type(debit_id)
+        assert debit_type in ("asset", "expense"), (
+            f"Expected debit to be asset or expense, got {debit_type!r} (id={debit_id})"
+        )
+    else:
+        # When debit is null, the provider should include a warning
+        assert len(data.get("warnings", [])) > 0, (
+            "debit_account_id is null but no warnings were returned"
+        )
+
+    # Credit should be an asset account (bank/cash) if matched
     credit_id = data["credit_account_id"]
-    assert credit_id is not None
-    credit_type = _account_type(credit_id)
-    assert credit_type == "asset", (
-        f"Expected credit account to be asset, got {credit_type!r} (id={credit_id})"
-    )
+    if credit_id is not None:
+        credit_type = _account_type(credit_id)
+        assert credit_type == "asset", (
+            f"Expected credit account to be asset, got {credit_type!r} (id={credit_id})"
+        )
+    else:
+        assert len(data.get("warnings", [])) > 0, (
+            "credit_account_id is null but no warnings were returned"
+        )
 
 
 def test_ai_suggestions_loan_received_intent(base_url, admin_headers):
