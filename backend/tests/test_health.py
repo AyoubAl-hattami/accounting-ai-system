@@ -1,7 +1,8 @@
+import os
 import requests
 
 
-BASE_URL = "http://127.0.0.1:8010"
+BASE_URL = os.getenv("ACCOUNTING_TEST_BASE_URL", "http://127.0.0.1:8010")
 
 
 def test_health_check():

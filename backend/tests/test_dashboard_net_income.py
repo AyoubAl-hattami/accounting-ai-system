@@ -7,13 +7,14 @@ should produce:
   - Balance Sheet: total_assets = 1000, current_year_earnings = 1000, is_balanced = True
   - Draft entries should NOT affect reports
 """
+import os
 import requests
 import pytest
 import uuid
 from datetime import date
 
 
-BASE_URL = "http://127.0.0.1:8010"
+BASE_URL = os.getenv("ACCOUNTING_TEST_BASE_URL", "http://127.0.0.1:8010")
 COMPANY_ID = 3
 
 

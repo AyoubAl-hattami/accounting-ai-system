@@ -1,8 +1,9 @@
+import os
 import requests
 import pytest
 
 
-BASE_URL = "http://127.0.0.1:8010"
+BASE_URL = os.getenv("ACCOUNTING_TEST_BASE_URL", "http://127.0.0.1:8010")
 
 ADMIN_EMAIL = "admin@example.com"
 ADMIN_PASSWORD = "Password123"

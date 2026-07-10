@@ -49,6 +49,69 @@ router = APIRouter(
 )
 
 
+def _get_target_company_membership(
+    db: Session,
+    company_id: int,
+    user_id: int,
+) -> CompanyUser:
+    company_user = get_company_user_by_company_and_user(
+        db=db,
+        company_id=company_id,
+        user_id=user_id,
+    )
+
+    if not company_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Target user is not assigned to this company",
+        )
+
+    return company_user
+
+
+def _ensure_no_active_memberships_outside_company(
+    db: Session,
+    company_id: int,
+    user_id: int,
+) -> None:
+    other_membership = db.scalar(
+        select(CompanyUser).where(
+            CompanyUser.user_id == user_id,
+            CompanyUser.company_id != company_id,
+            CompanyUser.is_active.is_(True),
+        )
+    )
+
+    if other_membership:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "User belongs to another active company. Use company-specific "
+                "access controls instead of changing the global user account."
+            ),
+        )
+
+
+def _ensure_not_last_active_admin(
+    db: Session,
+    company_user: CompanyUser,
+) -> None:
+    if company_user.role != "admin" or not company_user.is_active:
+        return
+
+    stmt_admins = select(func.count()).select_from(CompanyUser).where(
+        CompanyUser.company_id == company_user.company_id,
+        CompanyUser.role == "admin",
+        CompanyUser.is_active.is_(True),
+    )
+    admin_count = db.scalar(stmt_admins) or 0
+    if admin_count <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete/deactivate the last active admin in the company.",
+        )
+
+
 @router.post("/invitations", response_model=CompanyUserInvitationResponse)
 def create_invitation_endpoint(
     invitation_in: CompanyUserInvitationCreate,
@@ -57,7 +120,7 @@ def create_invitation_endpoint(
 ) -> CompanyUserInvitationResponse:
     # Ensure current_user is an admin in the target company
     ensure_company_access(db, current_user, invitation_in.company_id, allowed_roles=["admin"])
-    
+
     return create_invitation(
         db=db,
         invitation_in=invitation_in,
@@ -406,32 +469,17 @@ def deactivate_user_account_endpoint(
         allowed_roles={"admin"},
     )
 
-    stmt_members = select(CompanyUser).where(
-        CompanyUser.user_id == user_id,
-        CompanyUser.is_active == True,
+    company_user = _get_target_company_membership(
+        db=db,
+        company_id=company_id,
+        user_id=user_id,
     )
-    memberships = db.scalars(stmt_members).all()
-    active_company_ids = [m.company_id for m in memberships]
-
-    if len(active_company_ids) > 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User belongs to multiple companies. Please use 'Remove Access' to revoke access to your company instead.",
-        )
-
-    for membership in memberships:
-        if membership.role == "admin" and membership.is_active:
-            stmt_admins = select(func.count()).select_from(CompanyUser).where(
-                CompanyUser.company_id == membership.company_id,
-                CompanyUser.role == "admin",
-                CompanyUser.is_active == True,
-            )
-            admin_count = db.scalar(stmt_admins) or 0
-            if admin_count <= 1:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Cannot delete/deactivate the last active admin in the company.",
-                )
+    _ensure_no_active_memberships_outside_company(
+        db=db,
+        company_id=company_id,
+        user_id=user_id,
+    )
+    _ensure_not_last_active_admin(db=db, company_user=company_user)
 
     old_values = {
         "is_active": target_user.is_active,
@@ -440,10 +488,8 @@ def deactivate_user_account_endpoint(
         "target_name": target_user.full_name,
     }
     target_user.is_active = False
-
-    for membership in memberships:
-        membership.is_active = False
-        db.add(membership)
+    company_user.is_active = False
+    db.add(company_user)
 
     db.add(target_user)
     db.commit()
@@ -483,7 +529,7 @@ def cancel_invitation_endpoint(
     invite = db.execute(
         select(CompanyUserInvitation).where(CompanyUserInvitation.id == invitation_id)
     ).scalar_one_or_none()
-    
+
     if not invite:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
 
@@ -587,6 +633,17 @@ def reactivate_user_account_endpoint(
         current_user=current_user,
         company_id=company_id,
         allowed_roles={"admin"},
+    )
+
+    _get_target_company_membership(
+        db=db,
+        company_id=company_id,
+        user_id=user_id,
+    )
+    _ensure_no_active_memberships_outside_company(
+        db=db,
+        company_id=company_id,
+        user_id=user_id,
     )
 
     old_values = {

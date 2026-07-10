@@ -1,4 +1,50 @@
+import uuid
+
 import requests
+
+
+PASSWORD = "Password123"
+
+
+def _register_and_login(base_url, prefix, full_name="Test User"):
+    email = f"{prefix}_{uuid.uuid4().hex[:12]}@example.com"
+    reg = requests.post(
+        f"{base_url}/auth/register",
+        json={"email": email, "password": PASSWORD, "full_name": full_name},
+    )
+    assert reg.status_code == 201, reg.text
+    user_id = reg.json()["id"]
+
+    login = requests.post(
+        f"{base_url}/auth/login",
+        json={"email": email, "password": PASSWORD},
+    )
+    assert login.status_code == 200, login.text
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    return user_id, email, headers
+
+
+def _create_company(base_url, headers, prefix="Company"):
+    response = requests.post(
+        f"{base_url}/companies",
+        headers=headers,
+        json={
+            "name": f"{prefix}_{uuid.uuid4().hex[:10]}",
+            "base_currency": "USD",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
+
+
+def _add_company_user(base_url, admin_headers, company_id, user_id, role="viewer"):
+    response = requests.post(
+        f"{base_url}/company-users",
+        headers=admin_headers,
+        json={"company_id": company_id, "user_id": user_id, "role": role},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
 
 
 def test_company_users_require_authentication(base_url, default_company_id):
@@ -294,7 +340,7 @@ def test_cancel_invitation_flow(base_url, admin_headers, default_company_id):
     assert invite_res.status_code == 200
     invite_data = invite_res.json()
     assert invite_data["status"] == "invited"
-    
+
     # To get invitation ID
     pending_res = requests.get(
         f"{base_url}/company-users/invitations?company_id={default_company_id}",
@@ -600,4 +646,87 @@ def test_current_user_company_role_resolutions(base_url, admin_headers, default_
     )
     assert me_res4.status_code == 403
 
-
+
+
+def test_company_admin_cannot_deactivate_or_reactivate_user_from_another_company(base_url):
+    admin_a_id, _, admin_a_headers = _register_and_login(base_url, "admin_a", "Admin A")
+    user_b_id, _, user_b_headers = _register_and_login(base_url, "user_b", "User B")
+
+    company_a_id = _create_company(base_url, admin_a_headers, "CompanyA")
+    _create_company(base_url, user_b_headers, "CompanyB")
+
+    deactivate = requests.patch(
+        f"{base_url}/company-users/users/{user_b_id}/deactivate?company_id={company_a_id}",
+        headers=admin_a_headers,
+    )
+    assert deactivate.status_code == 404
+    assert "not assigned to this company" in deactivate.text
+
+    reactivate = requests.patch(
+        f"{base_url}/company-users/users/{user_b_id}/reactivate?company_id={company_a_id}",
+        headers=admin_a_headers,
+    )
+    assert reactivate.status_code == 404
+    assert "not assigned to this company" in reactivate.text
+
+    assert admin_a_id != user_b_id
+
+
+def test_company_admin_can_deactivate_and_reactivate_user_in_same_company(base_url):
+    _, _, admin_headers = _register_and_login(base_url, "same_company_admin", "Same Company Admin")
+    target_user_id, target_email, _ = _register_and_login(base_url, "same_company_target", "Same Company Target")
+    company_id = _create_company(base_url, admin_headers, "SameCompany")
+    _add_company_user(base_url, admin_headers, company_id, target_user_id, "viewer")
+
+    deactivate = requests.patch(
+        f"{base_url}/company-users/users/{target_user_id}/deactivate?company_id={company_id}",
+        headers=admin_headers,
+    )
+    assert deactivate.status_code == 200, deactivate.text
+    assert deactivate.json()["is_active"] is False
+
+    blocked_login = requests.post(
+        f"{base_url}/auth/login",
+        json={"email": target_email, "password": PASSWORD},
+    )
+    assert blocked_login.status_code == 401
+
+    reactivate = requests.patch(
+        f"{base_url}/company-users/users/{target_user_id}/reactivate?company_id={company_id}",
+        headers=admin_headers,
+    )
+    assert reactivate.status_code == 200, reactivate.text
+    assert reactivate.json()["is_active"] is True
+
+    ok_login = requests.post(
+        f"{base_url}/auth/login",
+        json={"email": target_email, "password": PASSWORD},
+    )
+    assert ok_login.status_code == 200
+
+
+def test_viewer_cannot_deactivate_or_reactivate_company_user(base_url):
+    _, _, admin_headers = _register_and_login(base_url, "role_admin", "Role Admin")
+    viewer_id, _, viewer_headers = _register_and_login(base_url, "role_viewer", "Role Viewer")
+    target_user_id, _, _ = _register_and_login(base_url, "role_target", "Role Target")
+    company_id = _create_company(base_url, admin_headers, "RoleCompany")
+    _add_company_user(base_url, admin_headers, company_id, viewer_id, "viewer")
+    _add_company_user(base_url, admin_headers, company_id, target_user_id, "viewer")
+
+    bad_deactivate = requests.patch(
+        f"{base_url}/company-users/users/{target_user_id}/deactivate?company_id={company_id}",
+        headers=viewer_headers,
+    )
+    assert bad_deactivate.status_code == 403
+
+    ok_deactivate = requests.patch(
+        f"{base_url}/company-users/users/{target_user_id}/deactivate?company_id={company_id}",
+        headers=admin_headers,
+    )
+    assert ok_deactivate.status_code == 200, ok_deactivate.text
+
+    bad_reactivate = requests.patch(
+        f"{base_url}/company-users/users/{target_user_id}/reactivate?company_id={company_id}",
+        headers=viewer_headers,
+    )
+    assert bad_reactivate.status_code == 403

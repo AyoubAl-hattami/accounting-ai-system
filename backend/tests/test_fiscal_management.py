@@ -14,8 +14,72 @@ Tests:
 import random
 import requests
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
+
+def _create_company(base_url, headers, prefix="FiscalCompany"):
+    response = requests.post(
+        f"{base_url}/companies",
+        headers=headers,
+        json={
+            "name": f"{prefix}_{uuid.uuid4().hex[:10]}",
+            "base_currency": "USD",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
+
+
+def _create_fiscal_year(base_url, headers, company_id, year, status_value="open"):
+    response = requests.post(
+        f"{base_url}/fiscal-years",
+        headers=headers,
+        json={
+            "company_id": company_id,
+            "name": f"FY {year} {uuid.uuid4().hex[:8]}",
+            "start_date": f"{year}-01-01",
+            "end_date": f"{year}-12-31",
+            "status": status_value,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
+
+
+def _create_fiscal_period(
+    base_url,
+    headers,
+    company_id,
+    fiscal_year_id,
+    period_no,
+    name,
+    start_date,
+    end_date,
+    status_value="open",
+):
+    return requests.post(
+        f"{base_url}/fiscal-periods",
+        headers=headers,
+        json={
+            "company_id": company_id,
+            "fiscal_year_id": fiscal_year_id,
+            "period_no": period_no,
+            "name": name,
+            "start_date": start_date,
+            "end_date": end_date,
+            "status": status_value,
+        },
+    )
+
+
+def _current_month_bounds():
+    today = datetime.now(timezone.utc).date()
+    month_start = date(today.year, today.month, 1)
+    if today.month == 12:
+        month_end = date(today.year, 12, 31)
+    else:
+        month_end = date(today.year, today.month + 1, 1) - timedelta(days=1)
+    return today, month_start, month_end
 
 # ── Quick-Setup Tests ─────────────────────────────────────────────────────────
 
@@ -381,3 +445,179 @@ def test_fiscal_year_create_generates_audit_log(
     ]
     assert len(logs) >= 1
     assert logs[0]["entity_type"] == "fiscal_year"
+
+def test_fiscal_period_overlap_create_returns_409(base_url, admin_headers):
+    company_id = _create_company(base_url, admin_headers, "OverlapCreate")
+    year = random.randint(3000, 3499)
+    fiscal_year_id = _create_fiscal_year(base_url, admin_headers, company_id, year)
+
+    first = _create_fiscal_period(
+        base_url, admin_headers, company_id, fiscal_year_id,
+        1, f"Jan {year}", f"{year}-01-01", f"{year}-01-31",
+    )
+    assert first.status_code == 201, first.text
+
+    overlap = _create_fiscal_period(
+        base_url, admin_headers, company_id, fiscal_year_id,
+        2, f"Overlap {year}", f"{year}-01-15", f"{year}-02-15",
+    )
+    assert overlap.status_code == 409
+    assert "overlap" in overlap.text.lower()
+
+
+def test_fiscal_period_adjacent_dates_are_allowed(base_url, admin_headers):
+    company_id = _create_company(base_url, admin_headers, "AdjacentPeriod")
+    year = random.randint(3500, 3999)
+    fiscal_year_id = _create_fiscal_year(base_url, admin_headers, company_id, year)
+
+    jan = _create_fiscal_period(
+        base_url, admin_headers, company_id, fiscal_year_id,
+        1, f"Jan {year}", f"{year}-01-01", f"{year}-01-31",
+    )
+    assert jan.status_code == 201, jan.text
+
+    feb = _create_fiscal_period(
+        base_url, admin_headers, company_id, fiscal_year_id,
+        2, f"Feb {year}", f"{year}-02-01", f"{year}-02-28",
+    )
+    assert feb.status_code == 201, feb.text
+
+
+def test_fiscal_period_same_dates_allowed_for_different_company(base_url, admin_headers):
+    year = random.randint(4000, 4499)
+    company_a_id = _create_company(base_url, admin_headers, "PeriodCompanyA")
+    company_b_id = _create_company(base_url, admin_headers, "PeriodCompanyB")
+    fy_a_id = _create_fiscal_year(base_url, admin_headers, company_a_id, year)
+    fy_b_id = _create_fiscal_year(base_url, admin_headers, company_b_id, year)
+
+    period_a = _create_fiscal_period(
+        base_url, admin_headers, company_a_id, fy_a_id,
+        1, f"Jan A {year}", f"{year}-01-01", f"{year}-01-31",
+    )
+    assert period_a.status_code == 201, period_a.text
+
+    period_b = _create_fiscal_period(
+        base_url, admin_headers, company_b_id, fy_b_id,
+        1, f"Jan B {year}", f"{year}-01-01", f"{year}-01-31",
+    )
+    assert period_b.status_code == 201, period_b.text
+
+
+def test_fiscal_period_update_overlap_returns_409(base_url, admin_headers):
+    company_id = _create_company(base_url, admin_headers, "OverlapUpdate")
+    year = random.randint(4500, 4999)
+    fiscal_year_id = _create_fiscal_year(base_url, admin_headers, company_id, year)
+
+    jan = _create_fiscal_period(
+        base_url, admin_headers, company_id, fiscal_year_id,
+        1, f"Jan {year}", f"{year}-01-01", f"{year}-01-31",
+    )
+    assert jan.status_code == 201, jan.text
+
+    feb = _create_fiscal_period(
+        base_url, admin_headers, company_id, fiscal_year_id,
+        2, f"Feb {year}", f"{year}-02-01", f"{year}-02-28",
+    )
+    assert feb.status_code == 201, feb.text
+    feb_id = feb.json()["id"]
+
+    overlap = requests.patch(
+        f"{base_url}/fiscal-periods/{feb_id}",
+        headers=admin_headers,
+        json={"start_date": f"{year}-01-15"},
+    )
+    assert overlap.status_code == 409
+    assert "overlap" in overlap.text.lower()
+
+
+def test_quick_setup_creates_current_month_for_new_company(base_url, admin_headers):
+    company_id = _create_company(base_url, admin_headers, "QuickSetupCreate")
+    today, _, _ = _current_month_bounds()
+
+    response = requests.post(
+        f"{base_url}/fiscal/quick-setup-today",
+        headers=admin_headers,
+        params={"company_id": company_id},
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["fiscal_year_created"] is True
+    assert data["fiscal_period_created"] is True
+    assert data["fiscal_year"]["status"] == "open"
+    assert data["fiscal_period"]["status"] == "open"
+    assert data["fiscal_period"]["start_date"] <= today.isoformat() <= data["fiscal_period"]["end_date"]
+
+
+def test_quick_setup_is_idempotent_for_new_company(base_url, admin_headers):
+    company_id = _create_company(base_url, admin_headers, "QuickSetupIdempotent")
+
+    first = requests.post(
+        f"{base_url}/fiscal/quick-setup-today",
+        headers=admin_headers,
+        params={"company_id": company_id},
+    )
+    assert first.status_code == 200, first.text
+
+    second = requests.post(
+        f"{base_url}/fiscal/quick-setup-today",
+        headers=admin_headers,
+        params={"company_id": company_id},
+    )
+    assert second.status_code == 200, second.text
+    first_data = first.json()
+    second_data = second.json()
+    assert first_data["fiscal_year"]["id"] == second_data["fiscal_year"]["id"]
+    assert first_data["fiscal_period"]["id"] == second_data["fiscal_period"]["id"]
+    assert second_data["fiscal_year_created"] is False
+    assert second_data["fiscal_period_created"] is False
+
+
+def test_quick_setup_does_not_reopen_closed_fiscal_period(base_url, admin_headers):
+    company_id = _create_company(base_url, admin_headers, "QuickSetupClosedPeriod")
+    today, month_start, month_end = _current_month_bounds()
+    fiscal_year_id = _create_fiscal_year(base_url, admin_headers, company_id, today.year, "open")
+    period = _create_fiscal_period(
+        base_url, admin_headers, company_id, fiscal_year_id,
+        today.month, f"Closed {today.strftime('%B %Y')}",
+        month_start.isoformat(), month_end.isoformat(), "closed",
+    )
+    assert period.status_code == 201, period.text
+    period_id = period.json()["id"]
+
+    setup = requests.post(
+        f"{base_url}/fiscal/quick-setup-today",
+        headers=admin_headers,
+        params={"company_id": company_id},
+    )
+    assert setup.status_code == 409
+    assert "closed or locked" in setup.text
+
+    periods = requests.get(
+        f"{base_url}/fiscal-periods?company_id={company_id}&fiscal_year_id={fiscal_year_id}",
+        headers=admin_headers,
+    )
+    assert periods.status_code == 200
+    stored = next(item for item in periods.json()["items"] if item["id"] == period_id)
+    assert stored["status"] == "closed"
+
+
+def test_quick_setup_does_not_reopen_locked_fiscal_year(base_url, admin_headers):
+    company_id = _create_company(base_url, admin_headers, "QuickSetupLockedYear")
+    today, _, _ = _current_month_bounds()
+    fiscal_year_id = _create_fiscal_year(base_url, admin_headers, company_id, today.year, "locked")
+
+    setup = requests.post(
+        f"{base_url}/fiscal/quick-setup-today",
+        headers=admin_headers,
+        params={"company_id": company_id},
+    )
+    assert setup.status_code == 409
+    assert "closed or locked" in setup.text
+
+    fiscal_years = requests.get(
+        f"{base_url}/fiscal-years?company_id={company_id}",
+        headers=admin_headers,
+    )
+    assert fiscal_years.status_code == 200
+    stored = next(item for item in fiscal_years.json()["items"] if item["id"] == fiscal_year_id)
+    assert stored["status"] == "locked"

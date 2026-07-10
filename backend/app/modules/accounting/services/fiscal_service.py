@@ -199,6 +199,27 @@ def get_fiscal_period_by_name(
     return db.scalar(statement)
 
 
+def find_overlapping_fiscal_period(
+    db: Session,
+    company_id: int,
+    fiscal_year_id: int,
+    start_date: date,
+    end_date: date,
+    exclude_fiscal_period_id: int | None = None,
+) -> FiscalPeriod | None:
+    statement = select(FiscalPeriod).where(
+        FiscalPeriod.company_id == company_id,
+        FiscalPeriod.fiscal_year_id == fiscal_year_id,
+        FiscalPeriod.start_date <= end_date,
+        FiscalPeriod.end_date >= start_date,
+    )
+
+    if exclude_fiscal_period_id is not None:
+        statement = statement.where(FiscalPeriod.id != exclude_fiscal_period_id)
+
+    return db.scalar(statement)
+
+
 def list_fiscal_periods(
     db: Session,
     company_id: int | None = None,

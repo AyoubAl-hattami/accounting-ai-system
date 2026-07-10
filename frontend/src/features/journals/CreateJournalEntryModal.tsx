@@ -24,6 +24,11 @@ interface LineState {
   description: string;
 }
 
+function getLocalIsoDate(date = new Date()): string {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+}
+
 // ─── Account Picker Modal ────────────────────────────────────────────────────
 // A centered overlay that renders above the Create Journal Entry modal.
 // Shows a searchable, scrollable list of active accounts.
@@ -235,7 +240,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
   };
 
   const [entryNo, setEntryNo] = useState('');
-  const [entryDate, setEntryDate] = useState('2026-01-15');
+  const [entryDate, setEntryDate] = useState(() => getLocalIsoDate());
   const [description, setDescription] = useState('');
   const [sourceType] = useState('manual');
   const [sourceId] = useState('FRONTEND');
@@ -253,7 +258,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
   useEffect(() => {
     if (isOpen) {
       setEntryNo(generateDefaultEntryNo());
-      setEntryDate('2026-01-15');
+      setEntryDate(getLocalIsoDate());
       setDescription('');
       setLines([
         { account_id: null, debit: '', credit: '', description: '' },
@@ -286,14 +291,14 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
       lines.map((line, i) => {
         if (i !== index) return line;
         const updated = { ...line, [field]: value };
-        
+
         // If debit is typed, clear credit, and vice-versa
         if (field === 'debit' && value !== '') {
           updated.credit = '';
         } else if (field === 'credit' && value !== '') {
           updated.debit = '';
         }
-        
+
         return updated;
       }),
     );
@@ -536,7 +541,7 @@ export default function CreateJournalEntryModal({ isOpen, onClose, onSuccess, co
                         Each line can contain either a debit or a credit amount, not both.
                       </span>
                     </div>
-                    
+
                     {/* Mobile-only note */}
                     <span className="md:hidden flex items-center gap-1 text-[10px] text-gray-500">
                       <AlertCircle className="w-3 h-3 text-gray-500" />

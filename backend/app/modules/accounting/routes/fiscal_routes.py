@@ -30,6 +30,7 @@ from app.modules.accounting.services.fiscal_service import (
     list_fiscal_years,
     update_fiscal_period,
     update_fiscal_year,
+    find_overlapping_fiscal_period,
     find_overlapping_fiscal_year,
 )
 from app.modules.accounting.services.audit_service import create_audit_log
@@ -77,7 +78,7 @@ def create_fiscal_year_endpoint(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Fiscal year name already exists for this company",
-            
+
         )
     overlapping_year = find_overlapping_fiscal_year(
         db=db,
@@ -337,6 +338,20 @@ def create_fiscal_period_endpoint(
             detail="Fiscal period dates must be within fiscal year dates",
         )
 
+    overlapping_period = find_overlapping_fiscal_period(
+        db=db,
+        company_id=payload.company_id,
+        fiscal_year_id=payload.fiscal_year_id,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+    )
+
+    if overlapping_period:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Fiscal period dates overlap with an existing fiscal period",
+        )
+
     existing_period_no = get_fiscal_period_by_no(
         db=db,
         fiscal_year_id=payload.fiscal_year_id,
@@ -490,10 +505,31 @@ def update_fiscal_period_endpoint(
     new_start_date = payload.start_date or fiscal_period.start_date
     new_end_date = payload.end_date or fiscal_period.end_date
 
+    if new_end_date < new_start_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="end_date must be greater than or equal to start_date",
+        )
+
     if new_start_date < fiscal_year.start_date or new_end_date > fiscal_year.end_date:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Fiscal period dates must be within fiscal year dates",
+        )
+
+    overlapping_period = find_overlapping_fiscal_period(
+        db=db,
+        company_id=fiscal_period.company_id,
+        fiscal_year_id=fiscal_period.fiscal_year_id,
+        start_date=new_start_date,
+        end_date=new_end_date,
+        exclude_fiscal_period_id=fiscal_period.id,
+    )
+
+    if overlapping_period:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Fiscal period dates overlap with an existing fiscal period",
         )
 
     if payload.period_no is not None:
@@ -572,7 +608,8 @@ def quick_setup_fiscal_period_for_today(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Idempotently create/open a fiscal year + fiscal period covering today.
+    Idempotently create a fiscal year + fiscal period covering today.
+    Existing closed/locked years or periods are not reopened automatically.
     Returns what was created vs. what already existed.
     """
     from datetime import date as _date, timedelta
@@ -626,8 +663,13 @@ def quick_setup_fiscal_period_for_today(
             start_date=year_start, end_date=year_end,
         )
         if overlapping:
-            # Use overlapping year instead of creating duplicate
-            fiscal_year = overlapping
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "An existing fiscal year overlaps today's calendar year but "
+                    "does not cover today's date. Review fiscal year setup manually."
+                ),
+            )
         else:
             fy_payload = FiscalYearCreate(
                 company_id=company_id,
@@ -657,15 +699,14 @@ def quick_setup_fiscal_period_for_today(
                     description=f"Quick setup: Created fiscal year {fiscal_year.name}",
                 )
 
-    # Ensure fiscal year is open
     if fiscal_year.status != "open":
-        update_fiscal_year(
-            db=db,
-            fiscal_year=fiscal_year,
-            payload=FiscalYearUpdate(status="open"),
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Today's fiscal year is closed or locked. "
+                "An admin must review and reopen it manually if appropriate."
+            ),
         )
-        result["fiscal_year_opened"] = True
-        db.refresh(fiscal_year)
 
     result["fiscal_year"] = {
         "id": fiscal_year.id,
@@ -693,7 +734,13 @@ def quick_setup_fiscal_period_for_today(
             db=db, fiscal_year_id=fiscal_year.id, name=period_name,
         )
         if existing_name:
-            fiscal_period = existing_name
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "A fiscal period with today's month name already exists but "
+                    "does not cover today's date. Review fiscal period setup manually."
+                ),
+            )
         else:
             # Determine period_no — use month number, but avoid collisions
             desired_no = today.month
@@ -717,6 +764,20 @@ def quick_setup_fiscal_period_for_today(
                 end_date=month_end,
                 status="open",
             )
+            overlapping_period = find_overlapping_fiscal_period(
+                db=db,
+                company_id=company_id,
+                fiscal_year_id=fiscal_year.id,
+                start_date=month_start,
+                end_date=month_end,
+            )
+
+            if overlapping_period:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Fiscal period dates overlap with an existing fiscal period",
+                )
+
             fiscal_period = create_fiscal_period(db=db, payload=fp_payload)
             result["fiscal_period_created"] = True
 
@@ -733,15 +794,14 @@ def quick_setup_fiscal_period_for_today(
                 description=f"Quick setup: Created fiscal period {fiscal_period.name}",
             )
 
-    # Ensure fiscal period is open
     if fiscal_period.status != "open":
-        update_fiscal_period(
-            db=db,
-            fiscal_period=fiscal_period,
-            payload=FiscalPeriodUpdate(status="open"),
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Today's fiscal period is closed or locked. "
+                "An admin must review and reopen it manually if appropriate."
+            ),
         )
-        result["fiscal_period_opened"] = True
-        db.refresh(fiscal_period)
 
     result["fiscal_period"] = {
         "id": fiscal_period.id,
