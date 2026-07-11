@@ -5,10 +5,13 @@ explain figures, trace amounts, who-did-action questions.
 Uses real data from the running backend (expected: Revenue=2000, Expenses=500, Net=1500).
 """
 
+import os
 import requests
 import re
+import uuid
+from datetime import datetime, timezone
 
-BASE_URL = "http://127.0.0.1:8010"
+BASE_URL = os.getenv("ACCOUNTING_TEST_BASE_URL", "http://127.0.0.1:8010")
 COMPANY_ID = 3
 
 
@@ -22,12 +25,12 @@ def _admin_headers():
     return {"Authorization": f"Bearer {token}"}
 
 
-def _gemini_request(headers, message, language="ar"):
+def _gemini_request(headers, message, language="ar", company_id=COMPANY_ID):
     return requests.post(
         f"{BASE_URL}/ai/gemini-assistant",
         headers=headers,
         json={
-            "company_id": COMPANY_ID,
+            "company_id": company_id,
             "message": message,
             "language": language,
             "page_context": {"route": "/dashboard", "page": "dashboard", "filters": {}},
@@ -48,15 +51,133 @@ def _extract_numbers(text):
     return result
 
 
-def _get_pl_data(headers):
+def _get_pl_data(headers, company_id=COMPANY_ID):
     """Get actual P&L from reports."""
     resp = requests.get(
-        f"{BASE_URL}/reports/profit-and-loss?company_id={COMPANY_ID}",
+        f"{BASE_URL}/reports/profit-and-loss?company_id={company_id}",
         headers=headers,
     )
     assert resp.status_code == 200
     return resp.json()
 
+
+
+def _create_company(headers):
+    response = requests.post(
+        f"{BASE_URL}/companies",
+        headers=headers,
+        json={
+            "name": f"ExplainProfit_{uuid.uuid4().hex[:10]}",
+            "base_currency": "USD",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
+
+
+def _seed_default_accounts(headers, company_id):
+    response = requests.post(
+        f"{BASE_URL}/accounts/seed-defaults?company_id={company_id}",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+
+
+def _get_account_id_by_code(headers, company_id, code):
+    response = requests.get(
+        f"{BASE_URL}/accounts?company_id={company_id}&skip=0&limit=100",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    for account in response.json()["items"]:
+        if account["code"] == code:
+            return account["id"]
+    raise AssertionError(f"Account code {code} not found for company {company_id}")
+
+
+def _quick_setup_today(headers, company_id):
+    response = requests.post(
+        f"{BASE_URL}/fiscal/quick-setup-today",
+        headers=headers,
+        params={"company_id": company_id},
+    )
+    assert response.status_code == 200, response.text
+
+
+def _create_journal_entry(headers, company_id, debit_account_id, credit_account_id, amount, description):
+    today = datetime.now(timezone.utc).date().isoformat()
+    response = requests.post(
+        f"{BASE_URL}/journal-entries",
+        headers=headers,
+        json={
+            "company_id": company_id,
+            "entry_no": f"EXPL-{uuid.uuid4().hex[:10].upper()}",
+            "entry_date": today,
+            "description": description,
+            "source_type": "test",
+            "source_id": f"explain-{uuid.uuid4().hex[:10]}",
+            "lines": [
+                {
+                    "account_id": debit_account_id,
+                    "debit": amount,
+                    "credit": 0,
+                    "description": description,
+                },
+                {
+                    "account_id": credit_account_id,
+                    "debit": 0,
+                    "credit": amount,
+                    "description": description,
+                },
+            ],
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
+
+
+def _post_journal_entry(headers, entry_id):
+    response = requests.post(
+        f"{BASE_URL}/journal-entries/{entry_id}/post",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+
+
+def _create_isolated_profit_company(headers):
+    company_id = _create_company(headers)
+    _seed_default_accounts(headers, company_id)
+    _quick_setup_today(headers, company_id)
+
+    bank_id = _get_account_id_by_code(headers, company_id, "1110")
+    revenue_id = _get_account_id_by_code(headers, company_id, "4100")
+    rent_expense_id = _get_account_id_by_code(headers, company_id, "5100")
+
+    revenue_entry_id = _create_journal_entry(
+        headers,
+        company_id,
+        bank_id,
+        revenue_id,
+        2000,
+        "Isolated explain revenue",
+    )
+    _post_journal_entry(headers, revenue_entry_id)
+
+    expense_entry_id = _create_journal_entry(
+        headers,
+        company_id,
+        rent_expense_id,
+        bank_id,
+        500,
+        "Isolated explain rent expense",
+    )
+    _post_journal_entry(headers, expense_entry_id)
+
+    return company_id, {
+        "total_income": 2000.0,
+        "total_expenses": 500.0,
+        "net_profit": 1500.0,
+    }
 
 class TestExplainRevenue:
     """Test 'كيف صارت الإيرادات 2000؟' and similar explain questions."""
@@ -104,31 +225,45 @@ class TestExplainNetProfit:
     """Test 'كيف صار صافي الدخل 1500؟' — net profit explanation."""
 
     def test_explain_net_profit_arabic(self):
-        """Net profit explanation should show revenue - expenses = net."""
+        """Net profit explanation should use isolated company report data."""
         headers = _admin_headers()
-        pl = _get_pl_data(headers)
+        company_id, expected = _create_isolated_profit_company(headers)
+        pl = _get_pl_data(headers, company_id)
         actual_net = float(pl["net_profit"])
         actual_income = float(pl["total_income"])
-        if actual_net == 0:
-            return
+        actual_expenses = float(pl["total_expenses"])
 
-        resp = _gemini_request(headers, "كيف صار صافي الدخل 1500؟", language="ar")
+        assert actual_income == expected["total_income"]
+        assert actual_expenses == expected["total_expenses"]
+        assert actual_net == expected["net_profit"]
+
+        resp = _gemini_request(
+            headers,
+            "كيف صار صافي الدخل 1500؟",
+            language="ar",
+            company_id=company_id,
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["intent"] == "answer_explain_question"
+        assert "profit_loss_report" in data.get("data_sources", [])
+        assert "journal_entries" in data.get("data_sources", [])
+        assert len(data.get("evidence", [])) >= 2
 
         reply = data["reply"]
         numbers = _extract_numbers(reply)
 
-        # Net profit should appear
         assert any(
             abs(n - actual_net) < 1.0 for n in numbers
-        ), f"Expected ~{actual_net} in reply. Numbers: {numbers}"
+        ), f"Expected ~{actual_net} in reply. Numbers: {numbers}. Reply: {reply[:300]}"
 
-        # Revenue should appear
         assert any(
             abs(n - actual_income) < 1.0 for n in numbers
-        ), f"Expected ~{actual_income} in reply. Numbers: {numbers}"
+        ), f"Expected ~{actual_income} in reply. Numbers: {numbers}. Reply: {reply[:300]}"
+
+        assert any(
+            abs(n - actual_expenses) < 1.0 for n in numbers
+        ), f"Expected ~{actual_expenses} in reply. Numbers: {numbers}. Reply: {reply[:300]}"
 
     def test_explain_net_profit_english(self):
         """English explain question should work too."""

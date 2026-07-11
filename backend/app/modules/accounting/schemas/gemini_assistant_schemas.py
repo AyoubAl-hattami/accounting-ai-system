@@ -7,9 +7,66 @@ POST /ai/gemini-assistant/confirm-action - execute a pre-approved action (create
 
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+
+# ── Semantic transaction parsing (internal) ───────────────────────────────────
+
+class ParsedTransaction(BaseModel):
+    """Structured output from Gemini semantic transaction parser."""
+    intent: Literal["create_journal_entry", "clarification", "not_accounting"] = "not_accounting"
+    transaction_type: str = "unknown"  # expense_payment, income_receipt, etc.
+    amount: float | None = None
+    description: str = ""
+    debit_account_hint: str | None = None
+    credit_account_hint: str | None = None
+    income_or_expense_nature: str | None = None  # electricity, rent, salary, etc.
+    counterparty: str | None = None
+    payment_source_hint: str | None = None  # bank, cash, unknown
+    receiving_account_hint: str | None = None
+    confidence: float = 0.0
+    needs_clarification: bool = False
+    clarification_question: str | None = None
+    clarification_options: list[str] = Field(default_factory=list)
+
+
+class MappedTransaction(BaseModel):
+    """Result of mapping ParsedTransaction hints to real company accounts."""
+    debit_account_id: int | None = None
+    debit_account_name: str | None = None
+    debit_account_code: str | None = None
+    credit_account_id: int | None = None
+    credit_account_name: str | None = None
+    credit_account_code: str | None = None
+    amount: float | None = None
+    description: str = ""
+    needs_clarification: bool = False
+    clarification_question: str | None = None
+    clarification_options: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ClarificationOption(BaseModel):
+    """Structured answer option for a pending clarification."""
+    label: str = Field(..., min_length=1, max_length=100)
+    value: str = Field(..., min_length=1, max_length=100)
+
+
+class PendingTransaction(BaseModel):
+    """Server-derived transaction state awaiting a clarification answer."""
+    company_id: int = Field(..., ge=1)
+    transaction_type: str = Field(default="unknown", max_length=80)
+    amount: float = Field(..., gt=0)
+    description: str = Field(default="", max_length=500)
+    debit_account_hint: str | None = Field(default=None, max_length=200)
+    credit_account_hint: str | None = Field(default=None, max_length=200)
+    income_or_expense_nature: str | None = Field(default=None, max_length=120)
+    counterparty: str | None = Field(default=None, max_length=200)
+    payment_source_hint: str | None = Field(default=None, max_length=80)
+    receiving_account_hint: str | None = Field(default=None, max_length=80)
+    missing_fields: list[str] = Field(default_factory=list, max_length=5)
 
 
 # ── Page context ──────────────────────────────────────────────────────────────
@@ -43,6 +100,8 @@ class GeminiAssistantRequest(BaseModel):
     language: str = Field(default="en", pattern="^(en|ar)$")
     # Last N turns for follow-up context (not persisted)
     history: list[ConversationTurn] = Field(default_factory=list, max_length=6)
+    pending_transaction: PendingTransaction | None = None
+    pending_context_token: str | None = Field(default=None, max_length=8000)
 
 
 # ── Suggested action (journal draft) ─────────────────────────────────────────
@@ -95,6 +154,9 @@ class GeminiAssistantReply(BaseModel):
     confidence: str = Field(default="medium", pattern="^(high|medium|low)$")
     data_sources: list[str] = Field(default_factory=list)
     suggested_action: SuggestedAction | None = None
+    pending_transaction: PendingTransaction | None = None
+    clarification_options: list[ClarificationOption] = Field(default_factory=list)
+    pending_context_token: str | None = None
     evidence: list[EvidenceEntry] = Field(default_factory=list)
 
 

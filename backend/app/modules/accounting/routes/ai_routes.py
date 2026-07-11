@@ -128,6 +128,8 @@ def gemini_assistant_chat_endpoint(
         message=payload.message,
         page_context=payload.page_context,
         language=payload.language,
+        pending_transaction=payload.pending_transaction,
+        pending_context_token=payload.pending_context_token,
     )
 
 

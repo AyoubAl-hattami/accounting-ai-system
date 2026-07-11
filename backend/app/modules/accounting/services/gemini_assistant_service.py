@@ -19,9 +19,14 @@ not here — this service only returns SuggestedAction payloads for confirmation
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import json
 import logging
 import re
+import time
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
@@ -31,13 +36,22 @@ from sqlalchemy import select, func, or_
 from app.core.config import settings
 from app.core.clock import get_today_date
 from app.modules.accounting.schemas.gemini_assistant_schemas import (
+    ClarificationOption,
     EvidenceEntry,
     GeminiAssistantReply,
+    MappedTransaction,
     PageContext,
+    ParsedTransaction,
+    PendingTransaction,
     SuggestedAction,
     SuggestedJournalLine,
     SuggestedJournalPayload,
 )
+from app.modules.accounting.services.gemini_transaction_parser import (
+    looks_like_accounting_message_with_amount,
+    parse_transaction_message,
+)
+from app.modules.accounting.services.account_mapper import map_to_accounts
 from app.modules.accounting.services.audit_service import list_audit_logs
 from app.modules.accounting.services.report_service import (
     get_profit_and_loss,
@@ -79,6 +93,16 @@ _CAN_READ_REPORTS = frozenset({"admin", "accountant", "reviewer", "approver", "a
 _CAN_READ_AUDIT_LOGS = frozenset({"admin", "auditor"})
 _CAN_READ_USERS = frozenset({"admin", "auditor"})
 _CAN_CREATE_DRAFT = frozenset({"admin", "accountant"})
+_PENDING_CONTEXT_TTL_SECONDS = 15 * 60
+
+
+@dataclass
+class ActionRequestResult:
+    reply: str
+    suggested_action: SuggestedAction | None = None
+    pending_transaction: PendingTransaction | None = None
+    clarification_options: list[ClarificationOption] = field(default_factory=list)
+    pending_context_token: str | None = None
 
 
 # ── Internal data tools ───────────────────────────────────────────────────────
@@ -461,14 +485,15 @@ def _classify_intent(message: str) -> str:
     text = message.strip()
     text_lower = text.lower()
 
-    # Action-creation signals (must check first)
+    # Action-creation signals (minimal set — Gemini semantic parser handles the rest)
     action_arabic = any(phrase in text for phrase in [
-        "تم دفع", "تم استلام", "دفعنا", "استلمنا", "سجل قيد",
+        "تم دفع", "تم استلام", "دفعنا", "دفعت", "استلمنا", "سجل قيد",
         "اسجل قيد", "إضافة قيد", "أضف قيد", "سجل مصروف",
         "وصلنا", "قبضنا", "تم تحصيل", "استلام مبلغ", "دخل البنك",
+        "خرجنا", "حولت", "نقلت", "سددت",
     ])
     action_english = bool(re.search(
-        r"\b(paid|pay|record a|add a|create a|register a|received|collected)\b",
+        r"\b(paid|pay|record a|add a|create a|register a|received|collected|transferred)\b",
         text, re.IGNORECASE,
     ))
     if action_arabic or action_english:
@@ -567,6 +592,13 @@ def _classify_intent(message: str) -> str:
         "inactive", "معطل", "active users", "member", "أعضاء",
     ]):
         return "user_question"
+
+    # If message contains a number + Arabic text, likely a transaction
+    # (catch dialect phrases like "خرجنا 300 كهربا" that miss keywords)
+    _has_amount = bool(re.search(r'\d[\d,]*\.?\d*', text))
+    _has_arabic = bool(re.search(r'[\u0600-\u06FF]', text))
+    if _has_amount and _has_arabic and len(text) < 200:
+        return "action_request"
 
     return "unknown"
 
@@ -1290,22 +1322,529 @@ def _fallback_who_action_reply(logs: list[dict], language: str, action_desc: str
     return reply
 
 
-# ── Action handler (rules engine, never Gemini) ───────────────────────────────
+# ── Pending clarification state ──────────────────────────────────────────────
 
-def _handle_action_request(
-    db: Session, company_id: int, message: str, language: str,
+def _b64url_encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _b64url_decode(value: str) -> bytes:
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(value + padding)
+
+
+def _pending_signing_key() -> bytes:
+    return settings.SECRET_KEY.encode("utf-8")
+
+
+def _make_pending_context_token(pending: PendingTransaction) -> str:
+    envelope = {
+        "v": 1,
+        "exp": int(time.time()) + _PENDING_CONTEXT_TTL_SECONDS,
+        "pending_transaction": pending.model_dump(mode="json"),
+    }
+    payload = json.dumps(
+        envelope, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    payload_part = _b64url_encode(payload)
+    signature = hmac.new(
+        _pending_signing_key(), payload_part.encode("ascii"), hashlib.sha256
+    ).digest()
+    return f"{payload_part}.{_b64url_encode(signature)}"
+
+
+def _load_pending_context_token(
+    token: str | None,
+    company_id: int,
+) -> PendingTransaction | None:
+    if not token or "." not in token:
+        return None
+    try:
+        payload_part, signature_part = token.split(".", 1)
+        expected = hmac.new(
+            _pending_signing_key(), payload_part.encode("ascii"), hashlib.sha256
+        ).digest()
+        actual = _b64url_decode(signature_part)
+        if not hmac.compare_digest(expected, actual):
+            return None
+
+        envelope = json.loads(_b64url_decode(payload_part).decode("utf-8"))
+        if int(envelope.get("exp", 0)) < int(time.time()):
+            return None
+        pending = PendingTransaction(**envelope.get("pending_transaction", {}))
+        if pending.company_id != company_id:
+            return None
+        return pending
+    except Exception:
+        return None
+
+
+def _pending_from_parsed(
+    parsed: ParsedTransaction,
+    company_id: int,
+    missing_fields: list[str],
+) -> PendingTransaction | None:
+    if parsed.amount is None or parsed.amount <= 0:
+        return None
+    return PendingTransaction(
+        company_id=company_id,
+        transaction_type=parsed.transaction_type,
+        amount=parsed.amount,
+        description=parsed.description or "",
+        debit_account_hint=parsed.debit_account_hint,
+        credit_account_hint=parsed.credit_account_hint,
+        income_or_expense_nature=parsed.income_or_expense_nature,
+        counterparty=parsed.counterparty,
+        payment_source_hint=parsed.payment_source_hint,
+        receiving_account_hint=parsed.receiving_account_hint,
+        missing_fields=missing_fields,
+    )
+
+
+def _parsed_from_pending(pending: PendingTransaction) -> ParsedTransaction:
+    return ParsedTransaction(
+        intent="create_journal_entry",
+        transaction_type=pending.transaction_type,
+        amount=pending.amount,
+        description=pending.description,
+        debit_account_hint=pending.debit_account_hint,
+        credit_account_hint=pending.credit_account_hint,
+        income_or_expense_nature=pending.income_or_expense_nature,
+        counterparty=pending.counterparty,
+        payment_source_hint=pending.payment_source_hint,
+        receiving_account_hint=pending.receiving_account_hint,
+        confidence=0.85,
+        needs_clarification=False,
+    )
+
+
+def _missing_fields_for(parsed: ParsedTransaction, mapped: MappedTransaction) -> list[str]:
+    if not mapped.needs_clarification:
+        return []
+    source_types = {
+        "expense_payment", "supplier_payment", "asset_purchase", "liability_payment",
+    }
+    receiving_types = {"income_receipt", "customer_receipt"}
+    missing: list[str] = []
+    if parsed.transaction_type in source_types and (
+        not parsed.payment_source_hint or parsed.payment_source_hint == "unknown"
+    ):
+        missing.append("payment_source")
+    if parsed.transaction_type in receiving_types and (
+        not parsed.receiving_account_hint or parsed.receiving_account_hint == "unknown"
+    ):
+        missing.append("receiving_account")
+    if parsed.transaction_type == "unknown":
+        missing.append("transaction_type")
+    return missing or ["account_mapping"]
+
+
+def _clarification_options_for_missing_fields(
+    missing_fields: list[str],
+    language: str,
+) -> list[ClarificationOption]:
+    first = missing_fields[0] if missing_fields else ""
+    if first in {"payment_source", "receiving_account"}:
+        return [
+            ClarificationOption(label="البنك" if language == "ar" else "Bank", value="bank"),
+            ClarificationOption(label="الصندوق" if language == "ar" else "Cash", value="cash"),
+        ]
+    if first in {"supplier_or_expense", "transaction_type"}:
+        return [
+            ClarificationOption(
+                label="سداد مورد" if language == "ar" else "Supplier payment",
+                value="supplier_payment",
+            ),
+            ClarificationOption(
+                label="مصروف جديد" if language == "ar" else "New expense",
+                value="expense_payment",
+            ),
+        ]
+    if first == "customer_or_income":
+        return [
+            ClarificationOption(
+                label="تحصيل من عميل" if language == "ar" else "Customer collection",
+                value="customer_receipt",
+            ),
+            ClarificationOption(
+                label="إيراد جديد" if language == "ar" else "New revenue",
+                value="income_receipt",
+            ),
+        ]
+    return []
+
+
+def _build_pending_clarification_result(
+    question: str | None,
+    parsed: ParsedTransaction,
+    company_id: int,
+    missing_fields: list[str],
+    language: str,
+) -> ActionRequestResult:
+    pending = _pending_from_parsed(parsed, company_id, missing_fields)
+    options = _clarification_options_for_missing_fields(missing_fields, language)
+    option_labels = [option.label for option in options]
+    reply = _build_clarification_reply(question, option_labels, language)
+    token = _make_pending_context_token(pending) if pending else None
+    return ActionRequestResult(
+        reply=reply,
+        pending_transaction=pending,
+        clarification_options=options,
+        pending_context_token=token,
+    )
+
+
+def _normalize_clarification_answer(message: str) -> str:
+    arabic_digits = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+    return message.translate(arabic_digits).strip().lower()
+
+
+def _resolve_bank_cash_answer(message: str) -> str | None:
+    text = _normalize_clarification_answer(message)
+    if text in {"1", "اول", "الأول", "الاول", "واحد", "bank"}:
+        return "bank"
+    if text in {"2", "ثاني", "الثاني", "اتنين", "اثنين", "cash"}:
+        return "cash"
+    if any(term in text for term in ["البنك", "بنك", "مصرف", "bank"]):
+        return "bank"
+    if any(term in text for term in ["الصندوق", "صندوق", "كاش", "نقد", "نقدية", "cash"]):
+        return "cash"
+    return None
+
+
+def _resolve_transaction_type_answer(message: str, missing_field: str) -> str | None:
+    text = _normalize_clarification_answer(message)
+    if text in {"1", "اول", "الأول", "الاول"}:
+        if missing_field in {"supplier_or_expense", "transaction_type"}:
+            return "supplier_payment"
+        if missing_field == "customer_or_income":
+            return "customer_receipt"
+    if text in {"2", "ثاني", "الثاني"}:
+        if missing_field in {"supplier_or_expense", "transaction_type"}:
+            return "expense_payment"
+        if missing_field == "customer_or_income":
+            return "income_receipt"
+    if any(term in text for term in ["سداد مورد", "مورد", "supplier", "payable"]):
+        return "supplier_payment"
+    if any(term in text for term in ["مصروف جديد", "مصروف", "expense"]):
+        return "expense_payment"
+    if any(term in text for term in ["تحصيل من عميل", "عميل", "زبون", "customer", "receivable"]):
+        return "customer_receipt"
+    if any(term in text for term in ["إيراد جديد", "ايراد جديد", "إيراد", "ايراد", "revenue", "income"]):
+        return "income_receipt"
+    return None
+
+
+def _apply_clarification_answer(
+    parsed: ParsedTransaction,
+    pending: PendingTransaction,
+    answer: str,
+) -> tuple[ParsedTransaction, bool]:
+    updated = parsed.model_copy(deep=True)
+    changed = False
+    missing = list(pending.missing_fields)
+
+    if "payment_source" in missing:
+        source = _resolve_bank_cash_answer(answer)
+        if source:
+            updated.payment_source_hint = source
+            changed = True
+    if "receiving_account" in missing:
+        destination = _resolve_bank_cash_answer(answer)
+        if destination:
+            updated.receiving_account_hint = destination
+            changed = True
+
+    for field_name in ("transaction_type", "supplier_or_expense", "customer_or_income"):
+        if field_name in missing:
+            tx_type = _resolve_transaction_type_answer(answer, field_name)
+            if tx_type:
+                updated.transaction_type = tx_type
+                if tx_type == "supplier_payment":
+                    updated.debit_account_hint = "accounts payable"
+                elif tx_type == "expense_payment":
+                    updated.debit_account_hint = updated.debit_account_hint or "expense"
+                elif tx_type == "customer_receipt":
+                    updated.credit_account_hint = "accounts receivable"
+                elif tx_type == "income_receipt":
+                    updated.credit_account_hint = updated.credit_account_hint or "sales revenue"
+                changed = True
+            break
+
+    return updated, changed
+
+
+def _standalone_clarification_answer_reply(message: str, language: str) -> str | None:
+    if _resolve_bank_cash_answer(message) or _resolve_transaction_type_answer(message, "transaction_type"):
+        return (
+            "ما العملية التي تريد تسجيلها؟ اكتب العملية مع المبلغ، مثل: 'دفعت 300 كهرباء من الصندوق'."
+            if language == "ar"
+            else "Which transaction do you mean? Include the transaction and amount, e.g. 'paid 300 electricity from cash'."
+        )
+    return None
+
+
+def _invalid_pending_context_reply(language: str) -> str:
+    return (
+        "انتهت صلاحية التوضيح أو لا يخص الشركة الحالية. أعد كتابة العملية مع المبلغ."
+        if language == "ar"
+        else "The pending clarification expired or does not belong to the current company. Please restate the transaction with the amount."
+    )
+
+
+# ── Date guard (shared by both semantic and rules paths) ──────────────────────
+
+def _check_non_today_date(message: str, language: str) -> str | None:
+    """Return an error message if the user requests a non-today date. None = OK."""
+    _DATE_PATTERNS = [
+        r"بتاريخ", r"تاريخ\s+\d", r"أمس", r"البارحة", r"الأمس",
+        r"\byesterday\b", r"\blast\s+week\b", r"\blast\s+month\b",
+        r"\bon\s+\d{4}-\d{2}-\d{2}\b", r"\bdate\s+\d",
+        r"\d{4}-\d{2}-\d{2}",
+    ]
+    today_str = get_today_date().isoformat()
+    for pattern in _DATE_PATTERNS:
+        match = re.search(pattern, message, re.IGNORECASE)
+        if match:
+            matched_text = match.group()
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", matched_text) and matched_text == today_str:
+                continue
+            return (
+                "يمكن إنشاء القيود عبر مساعد Gemini بتاريخ اليوم فقط."
+                if language == "ar"
+                else "Gemini Assistant can create journal entries for today's date only."
+            )
+    return None
+
+
+# ── Build preview reply + SuggestedAction from mapped accounts ────────────────
+
+def _build_preview(
+    mapped: MappedTransaction,
+    tx_type: str,
+    language: str,
 ) -> tuple[str, SuggestedAction | None]:
+    """Build a preview reply and SuggestedAction from a MappedTransaction."""
+    today = get_today_date()
+    amount = mapped.amount
+    amount_dec = Decimal(str(amount)) if amount else Decimal("0.00")
+    lines: list[SuggestedJournalLine] = []
+
+    if mapped.debit_account_id:
+        lines.append(SuggestedJournalLine(
+            account_id=mapped.debit_account_id,
+            account_name=mapped.debit_account_name or "",
+            account_code=mapped.debit_account_code or "",
+            debit=amount_dec, credit=Decimal("0.00"),
+        ))
+    if mapped.credit_account_id:
+        lines.append(SuggestedJournalLine(
+            account_id=mapped.credit_account_id,
+            account_name=mapped.credit_account_name or "",
+            account_code=mapped.credit_account_code or "",
+            debit=Decimal("0.00"), credit=amount_dec,
+        ))
+
+    if len(lines) < 2:
+        msg = (
+            f"تم التعرف على النية ({tx_type}) لكن لا يمكن مطابقة الحسابات. أنشئ القيد يدوياً."
+            if language == "ar"
+            else f"Recognized intent ({tx_type}) but couldn't match the required accounts. Please create the entry manually."
+        )
+        return msg, None
+
+    suggested_action = SuggestedAction(
+        type="create_journal_entry_draft",
+        requires_confirmation=True,
+        payload=SuggestedJournalPayload(
+            entry_date=today,
+            description=mapped.description[:255] if mapped.description else "",
+            lines=lines,
+            amount=float(amount) if amount else None,
+            warnings=mapped.warnings,
+        ),
+    )
+
+    if language == "ar":
+        reply = (
+            f"✅ النية المُكتشفة: **{tx_type.replace('_', ' ')}**\n\n"
+            "📝 **مسودة القيد المقترح:**\n"
+        )
+        for line in lines:
+            if line.debit > 0:
+                reply += f"• مدين: **{line.account_name}** ({line.account_code}) — {_fmt_money(float(line.debit))}\n"
+            if line.credit > 0:
+                reply += f"• دائن: **{line.account_name}** ({line.account_code}) — {_fmt_money(float(line.credit))}\n"
+        if mapped.warnings:
+            reply += "\n⚠️ " + " | ".join(mapped.warnings)
+        reply += "\n\n🔒 هل تريد إنشاء هذا القيد كمسودة؟"
+    else:
+        reply = (
+            f"✅ Recognized: **{tx_type.replace('_', ' ').title()}**\n\n"
+            "📝 **Suggested Draft Entry:**\n"
+        )
+        for line in lines:
+            if line.debit > 0:
+                reply += f"• Debit: **{line.account_name}** ({line.account_code}) — {_fmt_money(float(line.debit))}\n"
+            if line.credit > 0:
+                reply += f"• Credit: **{line.account_name}** ({line.account_code}) — {_fmt_money(float(line.credit))}\n"
+        if mapped.warnings:
+            reply += "\n⚠️ " + " | ".join(mapped.warnings)
+        reply += "\n\n🔒 Create this as a draft journal entry?"
+
+    return reply, suggested_action
+
+
+# ── Build clarification reply ─────────────────────────────────────────────────
+
+def _build_clarification_reply(
+    question: str | None,
+    options: list[str],
+    language: str,
+) -> str:
+    """Build a smart clarification reply with numbered options."""
+    q = question or (
+        "أحتاج مزيد من التوضيح:" if language == "ar"
+        else "I need more details:"
+    )
+    reply = f"🤔 {q}\n\n"
+    for i, opt in enumerate(options, 1):
+        reply += f"{i}. {opt}\n"
+    return reply
+
+
+# ── Action handler: semantic parser → mapper → preview ────────────────────────
+
+def _handle_pending_transaction_answer(
+    db: Session,
+    company_id: int,
+    pending: PendingTransaction,
+    message: str,
+    language: str,
+) -> ActionRequestResult:
     accounts_raw = _tool_get_accounts(db, company_id)
     if not accounts_raw:
         msg = ("لا توجد حسابات نشطة." if language == "ar"
                else "No active accounts found in chart of accounts.")
-        return msg, None
+        return ActionRequestResult(reply=msg)
 
+    active_accounts = [a for a in accounts_raw if a.get("is_active", True)]
+    parsed = _parsed_from_pending(pending)
+    parsed, changed = _apply_clarification_answer(parsed, pending, message)
+
+    mapped = map_to_accounts(parsed, active_accounts, language)
+    if mapped.needs_clarification:
+        missing_fields = _missing_fields_for(parsed, mapped)
+        question = mapped.clarification_question
+        if not changed and pending.missing_fields:
+            question = (
+                "لم أفهم إجابتك. " + (question or "أحتاج مزيد من التوضيح:")
+                if language == "ar"
+                else "I did not understand that answer. " + (question or "I need more details:")
+            )
+        return _build_pending_clarification_result(
+            question=question,
+            parsed=parsed,
+            company_id=company_id,
+            missing_fields=missing_fields,
+            language=language,
+        )
+
+    reply, suggested_action = _build_preview(mapped, parsed.transaction_type, language)
+    return ActionRequestResult(reply=reply, suggested_action=suggested_action)
+
+
+def _handle_action_request(
+    db: Session, company_id: int, message: str, language: str,
+) -> ActionRequestResult:
+    """Handle action requests using Gemini semantic parser with rules fallback."""
+    accounts_raw = _tool_get_accounts(db, company_id)
+    if not accounts_raw:
+        msg = ("لا توجد حسابات نشطة." if language == "ar"
+               else "No active accounts found in chart of accounts.")
+        return ActionRequestResult(reply=msg)
+
+    # ── Refuse non-today dates ────────────────────────────────────────────
+    date_err = _check_non_today_date(message, language)
+    if date_err:
+        return ActionRequestResult(reply=date_err)
+
+    active_accounts = [a for a in accounts_raw if a.get("is_active", True)]
+
+    # ── Try Gemini semantic parser first ──────────────────────────────────
+    parsed = parse_transaction_message(
+        message=message,
+        accounts_context=active_accounts,
+        language=language,
+    )
+
+    if parsed is not None:
+        # Gemini returned a structured result
+        if parsed.intent == "not_accounting":
+            msg = (
+                "لم أتمكن من فهم نوع القيد. يرجى توضيح النية، مثال: 'دفعت 300 كهرباء من البنك'."
+                if language == "ar"
+                else "Couldn't identify the transaction type. Try: 'paid 300 electricity from bank'."
+            )
+            return ActionRequestResult(reply=msg)
+
+        if parsed.needs_clarification and parsed.intent == "clarification":
+            if parsed.amount and parsed.transaction_type != "unknown":
+                missing_fields = []
+                if parsed.payment_source_hint == "unknown":
+                    missing_fields.append("payment_source")
+                if parsed.receiving_account_hint == "unknown":
+                    missing_fields.append("receiving_account")
+                if missing_fields:
+                    return _build_pending_clarification_result(
+                        question=parsed.clarification_question,
+                        parsed=parsed,
+                        company_id=company_id,
+                        missing_fields=missing_fields,
+                        language=language,
+                    )
+            return ActionRequestResult(
+                reply=_build_clarification_reply(
+                    parsed.clarification_question,
+                    parsed.clarification_options,
+                    language,
+                )
+            )
+
+        # Map hints to real accounts
+        mapped = map_to_accounts(parsed, active_accounts, language)
+
+        if mapped.needs_clarification:
+            missing_fields = _missing_fields_for(parsed, mapped)
+            return _build_pending_clarification_result(
+                question=mapped.clarification_question,
+                parsed=parsed,
+                company_id=company_id,
+                missing_fields=missing_fields,
+                language=language,
+            )
+
+        reply, suggested_action = _build_preview(mapped, parsed.transaction_type, language)
+        return ActionRequestResult(reply=reply, suggested_action=suggested_action)
+
+    # ── Fallback: rules engine (Gemini unavailable) ───────────────────────
+    return _handle_action_request_rules_fallback(
+        accounts_raw, active_accounts, message, language,
+    )
+
+
+def _handle_action_request_rules_fallback(
+    accounts_raw: list[dict],
+    active_accounts: list[dict],
+    message: str,
+    language: str,
+) -> ActionRequestResult:
+    """Legacy rules engine fallback when Gemini parser is unavailable."""
     from app.modules.accounting.schemas.ai_suggestion_schemas import AccountInfo
     account_infos = [
         AccountInfo(id=a["id"], code=a["code"], name=a["name"],
                     account_type=a["account_type"], is_active=a["is_active"])
-        for a in accounts_raw if a["is_active"]
+        for a in active_accounts
     ]
 
     result = suggest_journal_entry(description=message, accounts=account_infos, language=language)
@@ -1313,7 +1852,6 @@ def _handle_action_request(
     debit_id = result.get("debit_account_id")
     credit_id = result.get("credit_account_id")
     amount = result.get("amount")
-    confidence = result.get("confidence", "low")
     explanation = result.get("explanation", "")
     warnings = result.get("warnings", [])
     intent = result.get("detected_intent", "unknown")
@@ -1324,33 +1862,9 @@ def _handle_action_request(
             if language == "ar"
             else "Couldn't identify the transaction type. Try: 'paid 500 rent' or 'received 1000 from customer'."
         )
-        return msg, None
+        return ActionRequestResult(reply=msg)
 
-    # ── Refuse explicit non-today dates in user message ────────────────────
-    _DATE_PATTERNS = [
-        # Arabic explicit date phrases
-        r"بتاريخ", r"تاريخ\s+\d", r"أمس", r"البارحة", r"الأمس",
-        # English explicit date phrases
-        r"\byesterday\b", r"\blast\s+week\b", r"\blast\s+month\b",
-        r"\bon\s+\d{4}-\d{2}-\d{2}\b", r"\bdate\s+\d",
-        # ISO date in message (not today)
-        r"\d{4}-\d{2}-\d{2}",
-    ]
     today = get_today_date()
-    today_str = today.isoformat()
-    for pattern in _DATE_PATTERNS:
-        match = re.search(pattern, message, re.IGNORECASE)
-        if match:
-            matched_text = match.group()
-            # Allow if the matched ISO date IS today
-            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", matched_text) and matched_text == today_str:
-                continue
-            msg = (
-                "يمكن إنشاء القيود عبر مساعد Gemini بتاريخ اليوم فقط."
-                if language == "ar"
-                else "Gemini Assistant can create journal entries for today's date only."
-            )
-            return msg, None
     amount_dec = Decimal(str(amount)) if amount else Decimal("0.00")
     accounts_map = {a["id"]: a for a in accounts_raw}
     lines: list[SuggestedJournalLine] = []
@@ -1374,7 +1888,7 @@ def _handle_action_request(
             if language == "ar"
             else f"Recognized intent ({intent}) but couldn't match the required accounts. Please create the entry manually."
         )
-        return msg, None
+        return ActionRequestResult(reply=msg)
 
     suggested_action = SuggestedAction(
         type="create_journal_entry_draft",
@@ -1417,7 +1931,7 @@ def _handle_action_request(
             reply += "\n⚠️ " + " | ".join(warnings)
         reply += "\n\n🔒 Create this as a draft journal entry?"
 
-    return reply, suggested_action
+    return ActionRequestResult(reply=reply, suggested_action=suggested_action)
 
 
 # ── Main dispatcher ───────────────────────────────────────────────────────────
@@ -1429,6 +1943,8 @@ def dispatch_gemini_assistant(
     message: str,
     page_context: PageContext,
     language: str,
+    pending_transaction: PendingTransaction | None = None,
+    pending_context_token: str | None = None,
 ) -> GeminiAssistantReply:
     """
     Main Gemini Assistant dispatcher.
@@ -1438,7 +1954,47 @@ def dispatch_gemini_assistant(
     4. Falls back to deterministic rules if Gemini unavailable
     5. Uses rules engine for action drafts (always safe, always confirmed)
     """
+    if pending_transaction and pending_transaction.company_id != company_id:
+        return GeminiAssistantReply(
+            reply=_invalid_pending_context_reply(language),
+            intent="clarification",
+            confidence="low",
+            data_sources=[],
+        )
+
+    if pending_context_token:
+        if user_role not in _CAN_CREATE_DRAFT:
+            return GeminiAssistantReply(
+                reply=(
+                    "🔒 ليس لديك صلاحية إنشاء قيود محاسبية. هذه الصلاحية للمحاسب والمدير فقط."
+                    if language == "ar"
+                    else "🔒 You don't have permission to create journal entries. Requires admin or accountant role."
+                ),
+                intent="access_denied", confidence="high", data_sources=[],
+            )
+        pending = _load_pending_context_token(pending_context_token, company_id)
+        if pending is None:
+            return GeminiAssistantReply(
+                reply=_invalid_pending_context_reply(language),
+                intent="clarification",
+                confidence="low",
+                data_sources=[],
+            )
+        result = _handle_pending_transaction_answer(db, company_id, pending, message, language)
+        return GeminiAssistantReply(
+            reply=result.reply,
+            intent="create_journal_draft" if result.suggested_action else "clarification",
+            confidence="high" if result.suggested_action else "medium",
+            data_sources=["accounts", "semantic_parser"],
+            suggested_action=result.suggested_action,
+            pending_transaction=result.pending_transaction,
+            clarification_options=result.clarification_options,
+            pending_context_token=result.pending_context_token,
+        )
+
     intent = _classify_intent(message)
+    if intent == "unknown" and looks_like_accounting_message_with_amount(message):
+        intent = "action_request"
 
     # ── Access-denied checks ─────────────────────────────────────────────────
     if intent == "audit_question" and user_role not in _CAN_READ_AUDIT_LOGS:
@@ -1696,15 +2252,27 @@ def dispatch_gemini_assistant(
             data_sources=["company_users"],
         )
 
-    # ── Action request (rules engine only, never Gemini) ─────────────────────
+    # ── Action request (semantic parser + mapper, rules fallback) ──────────
     if intent == "action_request":
-        reply, suggested_action = _handle_action_request(db, company_id, message, language)
+        result = _handle_action_request(db, company_id, message, language)
         return GeminiAssistantReply(
-            reply=reply,
-            intent="create_journal_draft" if suggested_action else "clarification",
-            confidence="high" if suggested_action else "medium",
-            data_sources=["accounts", "rules_engine"],
-            suggested_action=suggested_action,
+            reply=result.reply,
+            intent="create_journal_draft" if result.suggested_action else "clarification",
+            confidence="high" if result.suggested_action else "medium",
+            data_sources=["accounts", "semantic_parser"],
+            suggested_action=result.suggested_action,
+            pending_transaction=result.pending_transaction,
+            clarification_options=result.clarification_options,
+            pending_context_token=result.pending_context_token,
+        )
+
+    standalone_reply = _standalone_clarification_answer_reply(message, language)
+    if standalone_reply:
+        return GeminiAssistantReply(
+            reply=standalone_reply,
+            intent="clarification",
+            confidence="low",
+            data_sources=[],
         )
 
     # ── Unknown / clarification ──────────────────────────────────────────────

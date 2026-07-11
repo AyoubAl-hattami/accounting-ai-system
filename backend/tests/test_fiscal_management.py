@@ -11,7 +11,6 @@ Tests:
   - Fiscal actions create audit logs
 """
 
-import random
 import requests
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -80,6 +79,12 @@ def _current_month_bounds():
     else:
         month_end = date(today.year, today.month + 1, 1) - timedelta(days=1)
     return today, month_start, month_end
+
+
+def _unique_future_year(company_id, base_year):
+    """Use the fresh company id to avoid persistent-test-DB date collisions."""
+    return base_year + (company_id % 500)
+
 
 # ── Quick-Setup Tests ─────────────────────────────────────────────────────────
 
@@ -214,20 +219,19 @@ def test_quick_setup_creates_audit_logs(
 # ── CRUD Tests ────────────────────────────────────────────────────────────────
 
 
-def test_admin_can_create_fiscal_year(
-    base_url, admin_headers, default_company_id
-):
+def test_admin_can_create_fiscal_year(base_url, admin_headers):
     """Admin can create a fiscal year via POST /fiscal-years."""
+    company_id = _create_company(base_url, admin_headers, "FiscalYearCreate")
     unique_name = f"FY Test {uuid.uuid4().hex[:8]}"
-    rand_year = random.randint(2200, 2399)
+    year = _unique_future_year(company_id, 2200)
     response = requests.post(
         f"{base_url}/fiscal-years",
         headers=admin_headers,
         json={
-            "company_id": default_company_id,
+            "company_id": company_id,
             "name": unique_name,
-            "start_date": f"{rand_year}-01-01",
-            "end_date": f"{rand_year}-12-31",
+            "start_date": f"{year}-01-01",
+            "end_date": f"{year}-12-31",
             "status": "open",
         },
     )
@@ -235,26 +239,24 @@ def test_admin_can_create_fiscal_year(
         f"Expected 201, got {response.status_code}: {response.text[:300]}"
     )
     data = response.json()
+    assert data["company_id"] == company_id
     assert data["name"] == unique_name
     assert data["status"] == "open"
     assert data["id"] > 0
 
-
-def test_admin_can_create_fiscal_period(
-    base_url, admin_headers, default_company_id
-):
+def test_admin_can_create_fiscal_period(base_url, admin_headers):
     """Admin can create a fiscal period under a fiscal year."""
-    # First create a fiscal year with a random far-future year
-    rand_year = random.randint(2400, 2599)
+    company_id = _create_company(base_url, admin_headers, "FiscalPeriodCreate")
+    year = _unique_future_year(company_id, 2400)
     fy_name = f"FY Period Test {uuid.uuid4().hex[:8]}"
     fy_resp = requests.post(
         f"{base_url}/fiscal-years",
         headers=admin_headers,
         json={
-            "company_id": default_company_id,
+            "company_id": company_id,
             "name": fy_name,
-            "start_date": f"{rand_year}-01-01",
-            "end_date": f"{rand_year}-12-31",
+            "start_date": f"{year}-01-01",
+            "end_date": f"{year}-12-31",
             "status": "open",
         },
     )
@@ -264,17 +266,17 @@ def test_admin_can_create_fiscal_period(
     fy_id = fy_resp.json()["id"]
 
     # Create a fiscal period
-    fp_name = f"Jan {rand_year} {uuid.uuid4().hex[:6]}"
+    fp_name = f"Jan {year} {uuid.uuid4().hex[:6]}"
     fp_resp = requests.post(
         f"{base_url}/fiscal-periods",
         headers=admin_headers,
         json={
-            "company_id": default_company_id,
+            "company_id": company_id,
             "fiscal_year_id": fy_id,
             "period_no": 1,
             "name": fp_name,
-            "start_date": f"{rand_year}-01-01",
-            "end_date": f"{rand_year}-01-31",
+            "start_date": f"{year}-01-01",
+            "end_date": f"{year}-01-31",
             "status": "open",
         },
     )
@@ -282,9 +284,9 @@ def test_admin_can_create_fiscal_period(
         f"Expected 201, got {fp_resp.status_code}: {fp_resp.text[:300]}"
     )
     data = fp_resp.json()
+    assert data["company_id"] == company_id
     assert data["name"] == fp_name
     assert data["fiscal_year_id"] == fy_id
-
 
 def test_non_admin_cannot_create_fiscal_year(base_url, default_company_id):
     """A non-admin user must be rejected when creating a fiscal year."""
@@ -409,20 +411,19 @@ def test_quick_setup_enables_gemini_today_journal(
     assert data.get("data", {}).get("entry_no") is not None
 
 
-def test_fiscal_year_create_generates_audit_log(
-    base_url, admin_headers, default_company_id
-):
+def test_fiscal_year_create_generates_audit_log(base_url, admin_headers):
     """Creating a fiscal year must generate an audit log entry."""
+    company_id = _create_company(base_url, admin_headers, "FiscalYearAudit")
     unique_name = f"FY Audit {uuid.uuid4().hex[:8]}"
-    rand_year = random.randint(2600, 2799)
+    year = _unique_future_year(company_id, 2600)
     fy_resp = requests.post(
         f"{base_url}/fiscal-years",
         headers=admin_headers,
         json={
-            "company_id": default_company_id,
+            "company_id": company_id,
             "name": unique_name,
-            "start_date": f"{rand_year}-01-01",
-            "end_date": f"{rand_year}-12-31",
+            "start_date": f"{year}-01-01",
+            "end_date": f"{year}-12-31",
             "status": "open",
         },
     )
@@ -433,7 +434,7 @@ def test_fiscal_year_create_generates_audit_log(
 
     # Check audit log
     audit_resp = requests.get(
-        f"{base_url}/audit-logs?company_id={default_company_id}&limit=20",
+        f"{base_url}/audit-logs?company_id={company_id}&limit=20",
         headers=admin_headers,
     )
     assert audit_resp.status_code == 200
@@ -444,11 +445,11 @@ def test_fiscal_year_create_generates_audit_log(
         and log.get("entity_id") == fy_id
     ]
     assert len(logs) >= 1
+    assert logs[0]["company_id"] == company_id
     assert logs[0]["entity_type"] == "fiscal_year"
-
 def test_fiscal_period_overlap_create_returns_409(base_url, admin_headers):
     company_id = _create_company(base_url, admin_headers, "OverlapCreate")
-    year = random.randint(3000, 3499)
+    year = _unique_future_year(company_id, 3000)
     fiscal_year_id = _create_fiscal_year(base_url, admin_headers, company_id, year)
 
     first = _create_fiscal_period(
@@ -467,7 +468,7 @@ def test_fiscal_period_overlap_create_returns_409(base_url, admin_headers):
 
 def test_fiscal_period_adjacent_dates_are_allowed(base_url, admin_headers):
     company_id = _create_company(base_url, admin_headers, "AdjacentPeriod")
-    year = random.randint(3500, 3999)
+    year = _unique_future_year(company_id, 3500)
     fiscal_year_id = _create_fiscal_year(base_url, admin_headers, company_id, year)
 
     jan = _create_fiscal_period(
@@ -484,9 +485,9 @@ def test_fiscal_period_adjacent_dates_are_allowed(base_url, admin_headers):
 
 
 def test_fiscal_period_same_dates_allowed_for_different_company(base_url, admin_headers):
-    year = random.randint(4000, 4499)
     company_a_id = _create_company(base_url, admin_headers, "PeriodCompanyA")
     company_b_id = _create_company(base_url, admin_headers, "PeriodCompanyB")
+    year = _unique_future_year(company_a_id, 4000)
     fy_a_id = _create_fiscal_year(base_url, admin_headers, company_a_id, year)
     fy_b_id = _create_fiscal_year(base_url, admin_headers, company_b_id, year)
 
@@ -505,7 +506,7 @@ def test_fiscal_period_same_dates_allowed_for_different_company(base_url, admin_
 
 def test_fiscal_period_update_overlap_returns_409(base_url, admin_headers):
     company_id = _create_company(base_url, admin_headers, "OverlapUpdate")
-    year = random.randint(4500, 4999)
+    year = _unique_future_year(company_id, 4500)
     fiscal_year_id = _create_fiscal_year(base_url, admin_headers, company_id, year)
 
     jan = _create_fiscal_period(

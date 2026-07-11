@@ -5,10 +5,11 @@ Verifies that when the user asks profit-related questions (Arabic/English),
 the assistant returns actual P&L data rather than 0.00.
 """
 
+import os
 import requests
 import re
 
-BASE_URL = "http://127.0.0.1:8010"
+BASE_URL = os.getenv("ACCOUNTING_TEST_BASE_URL", "http://127.0.0.1:8010")
 COMPANY_ID = 3
 
 

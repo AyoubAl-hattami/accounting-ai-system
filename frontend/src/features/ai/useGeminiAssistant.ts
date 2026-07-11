@@ -8,10 +8,19 @@
  * Never stores JWT, passwords, or secrets in state or history.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { dataEvents } from '../../lib/dataEvents';
+import {
+  appendPendingContextToPayload,
+  clearPendingContext,
+  getPendingContextFromReply,
+  shouldClearPendingForCompanyChange,
+  type ClarificationOption,
+  type PendingContextState,
+  type PendingTransaction,
+} from './pendingContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -54,6 +63,9 @@ export interface GeminiAssistantReply {
   confidence: 'high' | 'medium' | 'low';
   data_sources: string[];
   suggested_action?: SuggestedAction | null;
+  pending_transaction?: PendingTransaction | null;
+  clarification_options?: ClarificationOption[];
+  pending_context_token?: string | null;
 }
 
 export interface ConfirmActionReply {
@@ -102,9 +114,20 @@ export function useGeminiAssistant({ companyId, language = 'en' }: useGeminiAssi
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [suggestedAction, setSuggestedAction] = useState<SuggestedAction | null>(null);
+  const [pendingContext, setPendingContext] = useState<PendingContextState | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
+  const previousCompanyIdRef = useRef<number | null>(companyId);
 
   const currentPage = routeToPage(location.pathname);
+
+  useEffect(() => {
+    if (shouldClearPendingForCompanyChange(previousCompanyIdRef.current, companyId)) {
+      setPendingContext(clearPendingContext());
+      setSuggestedAction(null);
+      setError(null);
+    }
+    previousCompanyIdRef.current = companyId;
+  }, [companyId]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -131,17 +154,25 @@ export function useGeminiAssistant({ companyId, language = 'en' }: useGeminiAssi
       try {
         // Use apiClient: baseURL is already http://127.0.0.1:8010
         // Backend route: POST /ai/gemini-assistant  (no /api/v1 prefix on this server)
-        const { data: reply } = await apiClient.post<GeminiAssistantReply>('/ai/gemini-assistant', {
-          company_id: companyId,
-          message: text.trim(),
-          language,
-          page_context: {
-            route: location.pathname,
-            page: currentPage,
-            filters: {},
+        const requestPayload = appendPendingContextToPayload(
+          {
+            company_id: companyId,
+            message: text.trim(),
+            language,
+            page_context: {
+              route: location.pathname,
+              page: currentPage,
+              filters: {},
+            },
+            history: historyTurns,
           },
-          history: historyTurns,
-        });
+          pendingContext,
+        );
+
+        const { data: reply } = await apiClient.post<GeminiAssistantReply>(
+          '/ai/gemini-assistant',
+          requestPayload,
+        );
 
         const assistantMsg: GeminiMessage = {
           id: makeId(),
@@ -152,6 +183,9 @@ export function useGeminiAssistant({ companyId, language = 'en' }: useGeminiAssi
         };
 
         setMessages((prev) => [...prev, assistantMsg]);
+
+        const nextPendingContext = getPendingContextFromReply(reply);
+        setPendingContext(nextPendingContext);
 
         if (reply.suggested_action) {
           setSuggestedAction(reply.suggested_action);
@@ -175,6 +209,7 @@ export function useGeminiAssistant({ companyId, language = 'en' }: useGeminiAssi
             : 'An unexpected error occurred. Please try again.');
 
         setError(message);
+        setPendingContext(clearPendingContext());
 
         const errMsg: GeminiMessage = {
           id: makeId(),
@@ -188,7 +223,7 @@ export function useGeminiAssistant({ companyId, language = 'en' }: useGeminiAssi
         setIsLoading(false);
       }
     },
-    [companyId, isLoading, language, location.pathname, currentPage, messages],
+    [companyId, isLoading, language, location.pathname, currentPage, messages, pendingContext],
   );
 
   const confirmAction = useCallback(
@@ -267,6 +302,7 @@ export function useGeminiAssistant({ companyId, language = 'en' }: useGeminiAssi
         if (!result.success) {
           const friendlyMsg = getFriendlyMessage(result.error_code, result.open_period_suggestion);
           setError(friendlyMsg);
+          setPendingContext(clearPendingContext());
 
           const errMsg: GeminiMessage = {
             id: makeId(),
@@ -282,6 +318,7 @@ export function useGeminiAssistant({ companyId, language = 'en' }: useGeminiAssi
 
         // Success — clear the preview card and show success message
         setSuggestedAction(null);
+        setPendingContext(clearPendingContext());
 
         const draftNote =
           language === 'ar'
@@ -320,6 +357,7 @@ export function useGeminiAssistant({ companyId, language = 'en' }: useGeminiAssi
             : 'Failed to create entry. Please try manually.');
 
         setError(message);
+        setPendingContext(clearPendingContext());
 
         const errMsg: GeminiMessage = {
           id: makeId(),
@@ -341,11 +379,13 @@ export function useGeminiAssistant({ companyId, language = 'en' }: useGeminiAssi
 
   const cancelAction = useCallback(() => {
     setSuggestedAction(null);
+    setPendingContext(clearPendingContext());
   }, []);
 
   const clearHistory = useCallback(() => {
     setMessages([]);
     setSuggestedAction(null);
+    setPendingContext(clearPendingContext());
     setError(null);
   }, []);
 
