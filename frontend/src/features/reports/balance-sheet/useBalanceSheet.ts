@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
 import apiClient from '../../../api/client';
 import type { BalanceSheetRead } from '../../../api/types';
 import { dataEvents } from '../../../lib/dataEvents';
@@ -24,8 +25,13 @@ export function useBalanceSheet({ companyId, asOfDate }: UseBalanceSheetOptions)
       if (asOfDate) url += `&as_of_date=${asOfDate}`;
       const response = await apiClient.get<BalanceSheetRead>(url);
       setData(response.data);
-    } catch {
-      setError('Failed to load Balance Sheet report. Please try again.');
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const detail = err.response?.data?.detail;
+        setError(typeof detail === 'string' ? detail : 'Failed to load Balance Sheet report. Please try again.');
+      } else {
+        setError('Failed to load Balance Sheet report. Please try again.');
+      }
       setData(null);
     } finally {
       setIsLoading(false);

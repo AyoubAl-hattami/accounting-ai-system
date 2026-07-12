@@ -68,8 +68,11 @@ class BalanceSheetRead(BaseModel):
 
     total_assets: Decimal
     total_liabilities: Decimal
-    total_equity: Decimal
+    equity_accounts_total: Decimal
+    prior_year_earnings: Decimal
+    retained_earnings: Decimal
     current_year_earnings: Decimal
+    total_equity: Decimal
 
     total_liabilities_and_equity: Decimal
     is_balanced: bool

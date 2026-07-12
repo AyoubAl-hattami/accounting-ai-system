@@ -74,8 +74,7 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
   const totalAssets = Number(bs?.total_assets ?? 0);
   const totalLiabilities = Number(bs?.total_liabilities ?? 0);
   const totalEquity = Number(bs?.total_equity ?? 0);
-  const currentYearEarnings = Number(bs?.current_year_earnings ?? 0);
-  const totalEquityAndEarnings = totalEquity + currentYearEarnings;
+  const totalEquityAndEarnings = totalEquity;
   const netIncome = Number(pl?.net_profit ?? 0);
   const isBalanced = bs?.is_balanced ?? tb?.is_balanced ?? false;
   const journalCount = data.journalEntries?.total ?? 0;
@@ -336,7 +335,7 @@ function RevenueExpensesChart({ pl, t }: { pl: DashboardContentProps['selectedCo
 function FinancialCompositionChart({ bs, t }: { bs: ReturnType<typeof useDashboardData>['data']['balanceSheet']; t: ReturnType<typeof useI18n>['t'] }) {
   const chartData = useMemo(() => {
     if (!bs) return [];
-    const equity = (parseFloat(String(bs.total_equity)) || 0) + (parseFloat(String(bs.current_year_earnings)) || 0);
+    const equity = parseFloat(String(bs.total_equity)) || 0;
     return [
       { name: t.charts.assets, value: parseFloat(String(bs.total_assets)) || 0, fill: '#60a5fa' },
       { name: t.charts.liabilities, value: parseFloat(String(bs.total_liabilities)) || 0, fill: '#fbbf24' },

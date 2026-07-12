@@ -4,7 +4,7 @@ Tests for Dashboard Net Income / Balance Sheet consistency.
 Scenario: A posted revenue journal entry (Dr Bank 1000, Cr Sales Revenue 1000)
 should produce:
   - P&L: net_profit = 1000
-  - Balance Sheet: total_assets = 1000, current_year_earnings = 1000, is_balanced = True
+  - Balance Sheet: total_assets = 1000, current_year_earnings = 1000, total_equity = 1000, is_balanced = True
   - Draft entries should NOT affect reports
 """
 import os
@@ -188,11 +188,12 @@ class TestBalanceSheetEquation:
             current_year_earnings = float(bs["current_year_earnings"])
             total_le = float(bs["total_liabilities_and_equity"])
 
-            # Accounting equation: Assets = Liabilities + Equity + CYE
-            assert total_le == total_liabilities + total_equity + current_year_earnings
+            # Accounting equation: Assets = Liabilities + Total Equity.
+            assert total_le == total_liabilities + total_equity
+            assert total_equity >= current_year_earnings
             assert total_assets == total_le, (
                 f"Balance sheet not balanced: assets={total_assets}, "
-                f"L+E+CYE={total_le}"
+                f"L+E={total_le}"
             )
             assert bs["is_balanced"] is True
         finally:

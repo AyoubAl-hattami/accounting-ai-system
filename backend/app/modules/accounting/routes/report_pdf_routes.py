@@ -17,6 +17,7 @@ from app.core.company_access import ensure_company_access
 from app.core.database import get_db
 from app.modules.accounting.models.user import User
 from app.modules.accounting.services.report_service import (
+    MissingFiscalYearForReportError,
     get_trial_balance,
     get_profit_and_loss,
     get_balance_sheet,
@@ -110,11 +111,17 @@ def export_balance_sheet_pdf(
         company_id=company_id,
     )
 
-    report = get_balance_sheet(
-        db=db,
-        company_id=company_id,
-        as_of_date=as_of_date,
-    )
+    try:
+        report = get_balance_sheet(
+            db=db,
+            company_id=company_id,
+            as_of_date=as_of_date,
+        )
+    except MissingFiscalYearForReportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
 
     pdf_bytes = balance_sheet_to_pdf(report)
     return _pdf_response(pdf_bytes, "balance-sheet.pdf")

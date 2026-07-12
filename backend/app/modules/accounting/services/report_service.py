@@ -1,4 +1,4 @@
-from datetime import date
+﻿from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import case, func, select
@@ -21,15 +21,65 @@ from app.modules.accounting.schemas.report import (
 )
 
 
+REPORTABLE_ENTRY_STATUSES = ("posted", "reversed")
+NO_FISCAL_YEAR_FOR_REPORT_MESSAGE = "No fiscal year covers the selected date."
+
+
+class MissingFiscalYearForReportError(ValueError):
+    pass
+
+
+def _official_entry_filter(
+    start_date: date | None = None,
+    end_date: date | None = None,
+):
+    entry_filter = JournalEntry.status.in_(REPORTABLE_ENTRY_STATUSES)
+
+    if start_date is not None:
+        entry_filter = entry_filter & (JournalEntry.entry_date >= start_date)
+
+    if end_date is not None:
+        entry_filter = entry_filter & (JournalEntry.entry_date <= end_date)
+
+    return entry_filter
+
+
+def _account_signed_amount(
+    account_type: str,
+    debit: Decimal,
+    credit: Decimal,
+) -> Decimal:
+    if account_type in {"asset", "expense"}:
+        return debit - credit
+
+    return credit - debit
+
+
+def _find_fiscal_year_for_report_date(
+    db: Session,
+    company_id: int,
+    as_of_date: date,
+) -> FiscalYear:
+    fiscal_year = db.scalar(
+        select(FiscalYear).where(
+            FiscalYear.company_id == company_id,
+            FiscalYear.start_date <= as_of_date,
+            FiscalYear.end_date >= as_of_date,
+        )
+    )
+
+    if fiscal_year is None:
+        raise MissingFiscalYearForReportError(NO_FISCAL_YEAR_FOR_REPORT_MESSAGE)
+
+    return fiscal_year
+
+
 def get_trial_balance(
     db: Session,
     company_id: int,
     as_of_date: date | None = None,
 ) -> TrialBalanceRead:
-    posted_filter = JournalEntry.status.in_(["posted", "reversed"])
-
-    if as_of_date is not None:
-        posted_filter = posted_filter & (JournalEntry.entry_date <= as_of_date)
+    posted_filter = _official_entry_filter(end_date=as_of_date)
 
     debit_sum = func.coalesce(
         func.sum(
@@ -131,19 +181,15 @@ def get_trial_balance(
         is_balanced=total_debit_balance == total_credit_balance,
         lines=lines,
     )
+
+
 def get_profit_and_loss(
     db: Session,
     company_id: int,
     start_date: date | None = None,
     end_date: date | None = None,
 ) -> ProfitAndLossRead:
-    posted_filter = JournalEntry.status.in_(["posted", "reversed"])
-
-    if start_date is not None:
-        posted_filter = posted_filter & (JournalEntry.entry_date >= start_date)
-
-    if end_date is not None:
-        posted_filter = posted_filter & (JournalEntry.entry_date <= end_date)
+    posted_filter = _official_entry_filter(start_date=start_date, end_date=end_date)
 
     debit_sum = func.coalesce(
         func.sum(
@@ -250,15 +296,20 @@ def get_profit_and_loss(
         income_lines=income_lines,
         expense_lines=expense_lines,
     )
+
+
 def get_balance_sheet(
     db: Session,
     company_id: int,
     as_of_date: date | None = None,
 ) -> BalanceSheetRead:
-    posted_filter = JournalEntry.status.in_(["posted", "reversed"])
-
-    if as_of_date is not None:
-        posted_filter = posted_filter & (JournalEntry.entry_date <= as_of_date)
+    effective_date = as_of_date or date.today()
+    fiscal_year = _find_fiscal_year_for_report_date(
+        db=db,
+        company_id=company_id,
+        as_of_date=effective_date,
+    )
+    posted_filter = _official_entry_filter(end_date=effective_date)
 
     debit_sum = func.coalesce(
         func.sum(
@@ -321,7 +372,7 @@ def get_balance_sheet(
 
     total_assets = Decimal("0.00")
     total_liabilities = Decimal("0.00")
-    total_equity = Decimal("0.00")
+    equity_accounts_total = Decimal("0.00")
 
     for row in rows:
         debit_total = Decimal(str(row.debit_total or 0))
@@ -357,7 +408,7 @@ def get_balance_sheet(
 
         elif row.account_type == "equity":
             amount = credit_total - debit_total
-            total_equity += amount
+            equity_accounts_total += amount
 
             equity_lines.append(
                 BalanceSheetLine(
@@ -369,55 +420,45 @@ def get_balance_sheet(
                 )
             )
 
-    effective_date = as_of_date or date.today()
-
-    fiscal_year = db.scalar(
-        select(FiscalYear).where(
-            FiscalYear.company_id == company_id,
-            FiscalYear.start_date <= effective_date,
-            FiscalYear.end_date >= effective_date,
-        )
-    )
-
-    profit_start_date = fiscal_year.start_date if fiscal_year else None
-
-    profit_and_loss = get_profit_and_loss(
+    current_period_profit_and_loss = get_profit_and_loss(
         db=db,
         company_id=company_id,
-        start_date=profit_start_date,
-        end_date=as_of_date,
+        start_date=fiscal_year.start_date,
+        end_date=effective_date,
     )
+    current_year_earnings = current_period_profit_and_loss.net_profit
 
-    current_year_earnings = profit_and_loss.net_profit
+    prior_year_earnings = Decimal("0.00")
+    if fiscal_year.start_date > date.min:
+        prior_period_end = fiscal_year.start_date - timedelta(days=1)
+        prior_profit_and_loss = get_profit_and_loss(
+            db=db,
+            company_id=company_id,
+            start_date=None,
+            end_date=prior_period_end,
+        )
+        prior_year_earnings = prior_profit_and_loss.net_profit
 
-    total_liabilities_and_equity = (
-        total_liabilities
-        + total_equity
-        + current_year_earnings
-    )
+    retained_earnings = prior_year_earnings
+    total_equity = equity_accounts_total + retained_earnings + current_year_earnings
+    total_liabilities_and_equity = total_liabilities + total_equity
 
     return BalanceSheetRead(
         company_id=company_id,
-        as_of_date=as_of_date,
+        as_of_date=effective_date,
         total_assets=total_assets,
         total_liabilities=total_liabilities,
-        total_equity=total_equity,
+        equity_accounts_total=equity_accounts_total,
+        prior_year_earnings=prior_year_earnings,
+        retained_earnings=retained_earnings,
         current_year_earnings=current_year_earnings,
+        total_equity=total_equity,
         total_liabilities_and_equity=total_liabilities_and_equity,
         is_balanced=total_assets == total_liabilities_and_equity,
         asset_lines=asset_lines,
         liability_lines=liability_lines,
         equity_lines=equity_lines,
     )
-def _account_signed_amount(
-    account_type: str,
-    debit: Decimal,
-    credit: Decimal,
-) -> Decimal:
-    if account_type in {"asset", "expense"}:
-        return debit - credit
-
-    return credit - debit
 
 
 def get_account_ledger(
@@ -453,8 +494,7 @@ def get_account_ledger(
             .where(
                 JournalLine.company_id == company_id,
                 JournalLine.account_id == account_id,
-                JournalEntry.status.in_(["posted", "reversed"]),
-                JournalEntry.entry_date < start_date,
+                _official_entry_filter(end_date=start_date - timedelta(days=1)),
             )
         )
 
@@ -487,7 +527,7 @@ def get_account_ledger(
         .where(
             JournalLine.company_id == company_id,
             JournalLine.account_id == account_id,
-            JournalEntry.status.in_(["posted", "reversed"]),
+            _official_entry_filter(),
         )
         .order_by(
             JournalEntry.entry_date.asc(),
@@ -544,6 +584,8 @@ def get_account_ledger(
         closing_balance=running_balance,
         lines=lines,
     )
+
+
 def get_general_ledger(
     db: Session,
     company_id: int,

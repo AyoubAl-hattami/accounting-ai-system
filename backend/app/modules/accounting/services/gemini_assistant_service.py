@@ -370,8 +370,11 @@ def _tool_get_balance_sheet_data(db: Session, company_id: int) -> dict:
         return {
             "total_assets": float(bs.total_assets),
             "total_liabilities": float(bs.total_liabilities),
-            "total_equity": float(bs.total_equity),
+            "equity_accounts_total": float(bs.equity_accounts_total),
+            "prior_year_earnings": float(bs.prior_year_earnings),
+            "retained_earnings": float(bs.retained_earnings),
             "current_year_earnings": float(bs.current_year_earnings),
+            "total_equity": float(bs.total_equity),
             "total_liabilities_and_equity": float(bs.total_liabilities_and_equity),
             "is_balanced": bs.is_balanced,
             "asset_lines": [
@@ -1050,8 +1053,10 @@ def _build_explain_context(
         ctx.append(f"\n=== Balance Sheet ===")
         ctx.append(f"Total Assets: {_fmt_money(bs_data.get('total_assets', 0))}")
         ctx.append(f"Total Liabilities: {_fmt_money(bs_data.get('total_liabilities', 0))}")
-        ctx.append(f"Total Equity: {_fmt_money(bs_data.get('total_equity', 0))}")
+        ctx.append(f"Equity Accounts Total: {_fmt_money(bs_data.get('equity_accounts_total', 0))}")
+        ctx.append(f"Retained Earnings / Prior-Year Earnings: {_fmt_money(bs_data.get('retained_earnings', 0))}")
         ctx.append(f"Current Year Earnings: {_fmt_money(bs_data.get('current_year_earnings', 0))}")
+        ctx.append(f"Total Equity: {_fmt_money(bs_data.get('total_equity', 0))}")
         if bs_data.get("asset_lines"):
             ctx.append("Asset Accounts:")
             for a in bs_data["asset_lines"]:
@@ -1163,11 +1168,9 @@ def _fallback_explain_reply(
             ta = bs_data.get("total_assets", 0)
             tl = bs_data.get("total_liabilities", 0)
             te = bs_data.get("total_equity", 0)
-            cye = bs_data.get("current_year_earnings", 0)
             parts.append(
                 f"\n🏦 **الميزانية:** الأصول {_fmt_money(ta)} = "
-                f"الالتزامات {_fmt_money(tl)} + حقوق الملكية {_fmt_money(te)} + "
-                f"أرباح العام {_fmt_money(cye)}"
+                f"الالتزامات {_fmt_money(tl)} + إجمالي حقوق الملكية {_fmt_money(te)}"
             )
 
         return "\n".join(parts)

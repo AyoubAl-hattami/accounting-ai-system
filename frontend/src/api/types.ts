@@ -102,8 +102,11 @@ export interface BalanceSheetReport {
   company_id: number;
   total_assets: number;
   total_liabilities: number;
-  total_equity: number;
+  equity_accounts_total: number;
+  prior_year_earnings: number;
   retained_earnings: number;
+  current_year_earnings: number;
+  total_equity: number;
   asset_accounts: TrialBalanceRow[];
   liability_accounts: TrialBalanceRow[];
   equity_accounts: TrialBalanceRow[];
@@ -181,8 +184,11 @@ export interface BalanceSheetRead {
   as_of_date: string | null;
   total_assets: string;
   total_liabilities: string;
-  total_equity: string;
+  equity_accounts_total: string;
+  prior_year_earnings: string;
+  retained_earnings: string;
   current_year_earnings: string;
+  total_equity: string;
   total_liabilities_and_equity: string;
   is_balanced: boolean;
   asset_lines: BalanceSheetLine[];

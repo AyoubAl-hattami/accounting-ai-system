@@ -377,6 +377,9 @@ export interface Translations {
       equity: string;
       totalAssets: string;
       totalLiabilities: string;
+      equityAccountsTotal: string;
+      retainedEarnings: string;
+      currentYearEarnings: string;
       totalEquity: string;
       netAssets: string;
       liabilitiesAndEquity: string;

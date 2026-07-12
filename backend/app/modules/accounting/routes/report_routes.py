@@ -17,6 +17,7 @@ from app.modules.accounting.schemas.report import (
     GeneralLedgerRead,
 )
 from app.modules.accounting.services.report_service import (
+    MissingFiscalYearForReportError,
     get_trial_balance,
     get_profit_and_loss,
     get_balance_sheet,
@@ -92,11 +93,17 @@ def balance_sheet_endpoint(
         company_id=company_id,
     )
 
-    return get_balance_sheet(
-        db=db,
-        company_id=company_id,
-        as_of_date=as_of_date,
-    )
+    try:
+        return get_balance_sheet(
+            db=db,
+            company_id=company_id,
+            as_of_date=as_of_date,
+        )
+    except MissingFiscalYearForReportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
 @router.get(
     "/account-ledger",
     response_model=AccountLedgerRead,

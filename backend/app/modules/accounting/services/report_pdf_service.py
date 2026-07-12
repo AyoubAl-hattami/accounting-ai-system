@@ -425,16 +425,32 @@ def balance_sheet_to_pdf(report: BalanceSheetRead) -> bytes:
     data.append([
         _p("", styles["CellLeft"]),
         _p("", styles["CellLeft"]),
-        _p("Total Equity", styles["CellBold"]),
-        _p(_fmt(report.total_equity), styles["CellBoldRight"]),
+        _p("Equity Accounts Total", styles["CellBold"]),
+        _p(_fmt(report.equity_accounts_total), styles["CellBoldRight"]),
     ])
     total_rows.append(len(data) - 1)
 
     data.append([
         _p("", styles["CellLeft"]),
         _p("", styles["CellLeft"]),
-        _p("Current Year Earnings", styles["CellBold"]),
+        _p("Retained Earnings / Prior-Year Earnings", styles["CellBold"]),
+        _p(_fmt(report.retained_earnings), styles["CellBoldRight"]),
+    ])
+    total_rows.append(len(data) - 1)
+
+    data.append([
+        _p("", styles["CellLeft"]),
+        _p("", styles["CellLeft"]),
+        _p("Current-Year Earnings", styles["CellBold"]),
         _p(_fmt(report.current_year_earnings), styles["CellBoldRight"]),
+    ])
+    total_rows.append(len(data) - 1)
+
+    data.append([
+        _p("", styles["CellLeft"]),
+        _p("", styles["CellLeft"]),
+        _p("Total Equity", styles["CellBold"]),
+        _p(_fmt(report.total_equity), styles["CellBoldRight"]),
     ])
     total_rows.append(len(data) - 1)
     data.append([_p("", styles["CellLeft"])] * 4)

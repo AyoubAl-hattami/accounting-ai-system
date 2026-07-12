@@ -204,7 +204,7 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
               </div>
 
               {/* Totals grid */}
-              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <Landmark className="w-3.5 h-3.5 text-blue-400" />
@@ -226,10 +226,22 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <Gem className="w-3.5 h-3.5 text-violet-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.balanceSheet.equity}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.balanceSheet.equityAccountsTotal}</p>
                   </div>
                   <p className="text-xl font-bold text-violet-400 tracking-tight font-mono">
-                    {formatCurrency(parseAmount(data.total_equity))}
+                    {formatCurrency(parseAmount(data.equity_accounts_total))}
+                  </p>
+                </div>
+                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    {parseAmount(data.retained_earnings) >= 0
+                      ? <TrendingUp className="w-3.5 h-3.5 text-cyan-400" />
+                      : <TrendingDown className="w-3.5 h-3.5 text-red-400" />
+                    }
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.balanceSheet.retainedEarnings}</p>
+                  </div>
+                  <p className={`text-xl font-bold tracking-tight font-mono ${parseAmount(data.retained_earnings) >= 0 ? 'text-cyan-400' : 'text-red-400'}`}>
+                    {parseAmount(data.retained_earnings) < 0 ? '−' : ''}{formatCurrency(Math.abs(parseAmount(data.retained_earnings)))}
                   </p>
                 </div>
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
@@ -238,7 +250,7 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
                       ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
                       : <TrendingDown className="w-3.5 h-3.5 text-red-400" />
                     }
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.balanceSheet.earnings}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.balanceSheet.currentYearEarnings}</p>
                   </div>
                   <p className={`text-xl font-bold tracking-tight font-mono ${parseAmount(data.current_year_earnings) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {parseAmount(data.current_year_earnings) < 0 ? '−' : ''}{formatCurrency(Math.abs(parseAmount(data.current_year_earnings)))}
@@ -247,10 +259,10 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
                   <div className="flex items-center gap-1.5 mb-1">
                     <Equal className="w-3.5 h-3.5 text-gray-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">L + E</p>
+                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.balanceSheet.totalEquity}</p>
                   </div>
                   <p className="text-xl font-bold text-white tracking-tight font-mono">
-                    {formatCurrency(parseAmount(data.total_liabilities_and_equity))}
+                    {formatCurrency(parseAmount(data.total_equity))}
                   </p>
                 </div>
               </div>
@@ -279,8 +291,19 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
               <span className="text-gray-600 font-bold">+</span>
               <div className="flex items-center gap-2">
                 <Gem className="w-4 h-4 text-violet-400" />
-                <span className="text-gray-400">{t.reports.balanceSheet.equity}</span>
-                <span className="font-mono font-bold text-violet-400">{formatCurrency(parseAmount(data.total_equity))}</span>
+                <span className="text-gray-400">{t.reports.balanceSheet.equityAccountsTotal}</span>
+                <span className="font-mono font-bold text-violet-400">{formatCurrency(parseAmount(data.equity_accounts_total))}</span>
+              </div>
+              <span className="text-gray-600 font-bold">+</span>
+              <div className="flex items-center gap-2">
+                {parseAmount(data.retained_earnings) >= 0
+                  ? <TrendingUp className="w-4 h-4 text-cyan-400" />
+                  : <TrendingDown className="w-4 h-4 text-red-400" />
+                }
+                <span className="text-gray-400">{t.reports.balanceSheet.retainedEarnings}</span>
+                <span className={`font-mono font-bold ${parseAmount(data.retained_earnings) >= 0 ? 'text-cyan-400' : 'text-red-400'}`}>
+                  {parseAmount(data.retained_earnings) < 0 ? '−' : ''}{formatCurrency(Math.abs(parseAmount(data.retained_earnings)))}
+                </span>
               </div>
               <span className="text-gray-600 font-bold">+</span>
               <div className="flex items-center gap-2">
@@ -288,7 +311,7 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
                   ? <TrendingUp className="w-4 h-4 text-emerald-400" />
                   : <TrendingDown className="w-4 h-4 text-red-400" />
                 }
-                <span className="text-gray-400">{t.reports.balanceSheet.earnings}</span>
+                <span className="text-gray-400">{t.reports.balanceSheet.currentYearEarnings}</span>
                 <span className={`font-mono font-bold ${parseAmount(data.current_year_earnings) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                   {parseAmount(data.current_year_earnings) < 0 ? '−' : ''}{formatCurrency(Math.abs(parseAmount(data.current_year_earnings)))}
                 </span>
@@ -425,8 +448,8 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
                 dotColor="bg-violet-400"
                 amountColor="text-violet-400"
                 lines={filteredEquity}
-                totalLabel={t.reports.balanceSheet.totalEquity}
-                totalAmount={data.total_equity}
+                totalLabel={t.reports.balanceSheet.equityAccountsTotal}
+                totalAmount={data.equity_accounts_total}
                 delay={0.35}
                 searchQuery={searchQuery}
               />
@@ -563,20 +586,22 @@ function SectionTable({ title, icon, dotColor, amountColor, lines, totalLabel, t
 // ── Balance Sheet composition chart ──
 import type { Translations } from '../../../i18n/types';
 
-function BSChart({ data, t }: { data: { total_assets: string; total_liabilities: string; total_equity: string; current_year_earnings: string }; t: Translations }) {
+function BSChart({ data, t }: { data: { total_assets: string; total_liabilities: string; equity_accounts_total: string; retained_earnings: string; current_year_earnings: string }; t: Translations }) {
   const parseAmt = (v: string) => parseFloat(v) || 0;
 
   const chartData = useMemo(() => {
     const assets = parseAmt(data.total_assets);
     const liab = parseAmt(data.total_liabilities);
-    const equity = parseAmt(data.total_equity);
+    const equityAccounts = parseAmt(data.equity_accounts_total);
+    const retained = parseAmt(data.retained_earnings);
     const cye = parseAmt(data.current_year_earnings);
-    if (assets === 0 && liab === 0 && equity === 0) return [];
+    if (assets === 0 && liab === 0 && equityAccounts === 0 && retained === 0 && cye === 0) return [];
     const items = [
       { name: t.charts.assets, value: assets, fill: '#60a5fa' },
       { name: t.charts.liabilities, value: liab, fill: '#fbbf24' },
-      { name: t.charts.equity, value: equity, fill: '#a78bfa' },
-      { name: t.charts.currentYearEarnings, value: cye, fill: cye >= 0 ? '#34d399' : '#f87171' },
+      { name: t.reports.balanceSheet.equityAccountsTotal, value: equityAccounts, fill: '#a78bfa' },
+      { name: t.reports.balanceSheet.retainedEarnings, value: retained, fill: retained >= 0 ? '#22d3ee' : '#f87171' },
+      { name: t.reports.balanceSheet.currentYearEarnings, value: cye, fill: cye >= 0 ? '#34d399' : '#f87171' },
     ];
     // Filter out zero values for a cleaner chart
     return items.filter((item) => item.value !== 0);

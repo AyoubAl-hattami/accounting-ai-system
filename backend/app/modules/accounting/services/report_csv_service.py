@@ -99,8 +99,10 @@ def balance_sheet_to_csv(report: BalanceSheetRead) -> str:
     for line in report.equity_lines:
         writer.writerow(["Equity", line.account_code, line.account_name, _fmt(line.amount)])
 
+    writer.writerow(["", "", "Equity Accounts Total", _fmt(report.equity_accounts_total)])
+    writer.writerow(["", "", "Retained Earnings / Prior-Year Earnings", _fmt(report.retained_earnings)])
+    writer.writerow(["", "", "Current-Year Earnings", _fmt(report.current_year_earnings)])
     writer.writerow(["", "", "Total Equity", _fmt(report.total_equity)])
-    writer.writerow(["", "", "Current Year Earnings", _fmt(report.current_year_earnings)])
     writer.writerow([])
     writer.writerow(["", "", "Total Liabilities & Equity", _fmt(report.total_liabilities_and_equity)])
 
