@@ -41,6 +41,12 @@ def get_journal_entry(
     return db.scalar(statement)
 
 
+def get_reversal_for_entry(db: Session, original_entry_id: int) -> JournalEntry | None:
+    """Return the reversal linked to an entry, if one exists."""
+    statement = select(JournalEntry).where(JournalEntry.reversal_of_id == original_entry_id)
+    return db.scalar(statement)
+
+
 def get_journal_entry_by_no(
     db: Session,
     company_id: int,

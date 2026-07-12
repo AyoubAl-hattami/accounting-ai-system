@@ -30,6 +30,7 @@ class JournalEntry(Base):
             "entry_no",
             name="uq_journal_entries_company_entry_no",
         ),
+        UniqueConstraint("reversal_of_id", name="uq_journal_entries_reversal_of_id"),
         CheckConstraint(
             "status IN ('draft', 'reviewed', 'posted', 'void', 'reversed')",
             name="ck_journal_entries_status",

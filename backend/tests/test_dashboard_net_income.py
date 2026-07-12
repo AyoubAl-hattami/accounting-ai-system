@@ -81,15 +81,11 @@ def _create_journal_entry(headers, company_id, bank_id, revenue_id, amount, stat
 
 
 def _post_journal_entry(headers, entry_id):
-    """Post a draft journal entry."""
-    resp = requests.post(
-        f"{BASE_URL}/journal-entries/{entry_id}/post",
-        headers=headers,
-    )
-    assert resp.status_code == 200, f"Post entry failed: {resp.text}"
-    return resp.json()
-
-
+    review = requests.post(f"{BASE_URL}/journal-entries/{entry_id}/review", headers=headers)
+    assert review.status_code == 200, review.text
+    response = requests.post(f"{BASE_URL}/journal-entries/{entry_id}/post", headers=headers)
+    assert response.status_code == 200, response.text
+    return response.json()
 def _reverse_journal_entry(headers, entry_id):
     """Reverse a posted journal entry (cleanup)."""
     today = date.today().isoformat()

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.auth_dependencies import get_current_user
@@ -25,6 +26,7 @@ from app.modules.accounting.services.journal_service import (
     get_company_or_none,
     get_journal_entry,
     get_journal_entry_by_no,
+    get_reversal_for_entry,
     list_journal_entries,
     mark_journal_entry_reviewed,
     post_journal_entry,
@@ -500,7 +502,7 @@ def review_journal_entry_endpoint(
 
     if journal_entry.status != "draft":
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Only draft journal entries can be reviewed",
         )
 
@@ -568,10 +570,10 @@ def post_journal_entry_endpoint(
         allowed_roles={"admin", "approver"},
     )
 
-    if journal_entry.status not in {"draft", "reviewed"}:
+    if journal_entry.status != "reviewed":
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only draft or reviewed journal entries can be posted",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only reviewed journal entries can be posted",
         )
 
     fiscal_year = find_fiscal_year_for_date(
@@ -666,7 +668,7 @@ def reverse_journal_entry_endpoint(
 
     if original_entry.status != "posted":
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Only posted journal entries can be reversed",
         )
 
@@ -682,6 +684,11 @@ def reverse_journal_entry_endpoint(
             detail="Journal entry number already exists for this company",
         )
 
+    if get_reversal_for_entry(db=db, original_entry_id=original_entry.id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Journal entry has already been reversed",
+        )
     fiscal_year = find_fiscal_year_for_date(
         db=db,
         company_id=original_entry.company_id,
@@ -782,7 +789,7 @@ def void_journal_entry_endpoint(
 
     if journal_entry.status != "draft":
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Only draft journal entries can be voided",
         )
 

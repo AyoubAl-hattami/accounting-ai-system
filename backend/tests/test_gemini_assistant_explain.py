@@ -137,13 +137,10 @@ def _create_journal_entry(headers, company_id, debit_account_id, credit_account_
 
 
 def _post_journal_entry(headers, entry_id):
-    response = requests.post(
-        f"{BASE_URL}/journal-entries/{entry_id}/post",
-        headers=headers,
-    )
+    review = requests.post(f"{BASE_URL}/journal-entries/{entry_id}/review", headers=headers)
+    assert review.status_code == 200, review.text
+    response = requests.post(f"{BASE_URL}/journal-entries/{entry_id}/post", headers=headers)
     assert response.status_code == 200, response.text
-
-
 def _create_isolated_profit_company(headers):
     company_id = _create_company(headers)
     _seed_default_accounts(headers, company_id)

@@ -141,7 +141,8 @@ def _create_entry(headers: dict, company_id: int, entry_date: str, lines: list[d
     if status == "void":
         return _api("POST", f"/journal-entries/{entry['id']}/void", headers).json()
     if status == "posted":
-        return _api("POST", f"/journal-entries/{entry['id']}/post", headers).json()
+        _api("POST", f"/journal-entries/{entry['id']}/review", headers, expected=(200,))
+        return _api("POST", f"/journal-entries/{entry['id']}/post", headers, expected=(200,)).json()
 
     raise AssertionError(f"Unsupported journal entry status for test setup: {status}")
 
@@ -307,7 +308,8 @@ def test_reversal_is_consistent_between_balance_sheet_and_profit_and_loss(admin_
             "description": "Reverse report test revenue",
         },
     ).json()
-    _api("POST", f"/journal-entries/{reversal['id']}/post", admin_headers)
+    _api("POST", f"/journal-entries/{reversal['id']}/review", admin_headers, expected=(200,))
+    _api("POST", f"/journal-entries/{reversal['id']}/post", admin_headers, expected=(200,))
 
     pl = _profit_and_loss(admin_headers, ctx["company_id"], FY2_START, FY2_END)
     bs = _balance_sheet(admin_headers, ctx["company_id"], FY2_AS_OF)
