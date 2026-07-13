@@ -4,6 +4,9 @@ import apiClient from '../../api/client';
 import { dataEvents } from '../../lib/dataEvents';
 import type { ClarificationOption, PendingTransaction } from './pendingContext';
 
+const HISTORY_PAGE_SIZE = 20;
+type ConversationStatus = 'active' | 'archived';
+
 export interface GeminiMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -16,7 +19,8 @@ export interface AssistantConversation {
   id: number;
   company_id: number;
   title: string;
-  status: 'active' | 'archived';
+  title_source: 'fallback' | 'greeting' | 'auto' | 'manual';
+  status: ConversationStatus;
   created_at: string;
   updated_at: string;
   last_message_at: string;
@@ -91,9 +95,12 @@ interface ConversationDetail extends AssistantConversation {
 interface ConversationList {
   items: AssistantConversation[];
   total: number;
+  skip: number;
+  limit: number;
 }
 
 interface MessageExchange {
+  conversation: AssistantConversation;
   user_message: PersistedMessage;
   assistant_message: PersistedMessage;
   assistant_reply: GeminiAssistantReply;
@@ -139,6 +146,10 @@ function clientMessageId(): string {
   return `message-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function selectedConversationKey(companyId: number): string {
+  return `gemini_selected_conversation_${companyId}`;
+}
+
 export interface UseGeminiAssistantOptions {
   companyId: number | null;
   language?: 'en' | 'ar';
@@ -149,80 +160,169 @@ export function useGeminiAssistant({ companyId, language = 'en' }: UseGeminiAssi
   const currentPage = routeToPage(location.pathname);
   const [messages, setMessages] = useState<GeminiMessage[]>([]);
   const [conversations, setConversations] = useState<AssistantConversation[]>([]);
-  const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
+  const [currentConversation, setCurrentConversation] = useState<AssistantConversation | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyStatus, setHistoryStatus] = useState<ConversationStatus>('active');
+  const [historyTotal, setHistoryTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [suggestedAction, setSuggestedAction] = useState<SuggestedAction | null>(null);
   const [failedSend, setFailedSend] = useState<FailedSend | null>(null);
   const companyRequestRef = useRef(0);
+  const conversationRequestRef = useRef(0);
+  const historyRequestRef = useRef(0);
+  const conversationsRef = useRef<AssistantConversation[]>([]);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
+  const clearConversationState = useCallback(() => {
+    conversationRequestRef.current += 1;
+    setCurrentConversation(null);
+    setMessages([]);
+    setSuggestedAction(null);
+    setFailedSend(null);
+  }, []);
 
   const applyConversationDetail = useCallback((detail: ConversationDetail) => {
-    setCurrentConversationId(detail.id);
+    setCurrentConversation(detail);
     setMessages(detail.messages.map(toUiMessage));
     const lastMessage = detail.messages[detail.messages.length - 1];
     setSuggestedAction(lastMessage?.metadata?.suggested_action ?? null);
     setFailedSend(null);
     setError(null);
+    localStorage.setItem(selectedConversationKey(detail.company_id), String(detail.id));
   }, []);
 
   const loadConversation = useCallback(
-    async (conversationId: number) => {
-      if (!companyId) return;
+    async (conversationId: number): Promise<boolean> => {
+      if (!companyId) return false;
+      const requestId = ++conversationRequestRef.current;
       setIsRestoring(true);
+      setMessages([]);
+      setSuggestedAction(null);
       try {
         const { data } = await apiClient.get<ConversationDetail>(
           `/ai/conversations/${conversationId}`,
           { params: { company_id: companyId, messages_limit: 200 } },
         );
+        if (requestId !== conversationRequestRef.current) return false;
         applyConversationDetail(data);
+        return true;
+      } catch (requestError: unknown) {
+        if (requestId !== conversationRequestRef.current) return false;
+        const status = (requestError as { response?: { status?: number } }).response?.status;
+        if (status === 403 || status === 404) {
+          clearConversationState();
+          localStorage.removeItem(selectedConversationKey(companyId));
+        }
+        setError(
+          language === 'ar'
+            ? 'تعذر تحميل المحادثة المطلوبة.'
+            : 'The selected conversation could not be loaded.',
+        );
+        return false;
       } finally {
-        setIsRestoring(false);
+        if (requestId === conversationRequestRef.current) setIsRestoring(false);
       }
     },
-    [applyConversationDetail, companyId],
+    [applyConversationDetail, clearConversationState, companyId, language],
   );
 
-  const refreshConversations = useCallback(async () => {
-    if (!companyId) return [];
-    const { data } = await apiClient.get<ConversationList>('/ai/conversations', {
-      params: { company_id: companyId, limit: 100 },
-    });
-    setConversations(data.items);
-    return data.items;
-  }, [companyId]);
+  const fetchHistory = useCallback(
+    async (append = false): Promise<AssistantConversation[]> => {
+      if (!companyId) return [];
+      const requestId = ++historyRequestRef.current;
+      setIsHistoryLoading(true);
+      setHistoryError(null);
+      const page = append ? Math.floor(conversationsRef.current.length / HISTORY_PAGE_SIZE) + 1 : 1;
+      try {
+        const { data } = await apiClient.get<ConversationList>('/ai/conversations', {
+          params: {
+            company_id: companyId,
+            status: historyStatus,
+            search: historySearch.trim() || undefined,
+            page,
+            page_size: HISTORY_PAGE_SIZE,
+          },
+        });
+        if (requestId !== historyRequestRef.current) return [];
+        setHistoryTotal(data.total);
+        setConversations((previous) => {
+          if (!append) return data.items;
+          const known = new Set(previous.map((conversation) => conversation.id));
+          return [...previous, ...data.items.filter((conversation) => !known.has(conversation.id))];
+        });
+        setCurrentConversation((current) => {
+          if (!current) return current;
+          return data.items.find((item) => item.id === current.id) ?? current;
+        });
+        return data.items;
+      } catch {
+        if (requestId === historyRequestRef.current) {
+          setHistoryError(
+            language === 'ar'
+              ? 'تعذر تحميل سجل المحادثات.'
+              : 'Conversation history could not be loaded.',
+          );
+        }
+        return [];
+      } finally {
+        if (requestId === historyRequestRef.current) setIsHistoryLoading(false);
+      }
+    }, [companyId, historySearch, historyStatus, language]);
 
   useEffect(() => {
     const requestId = ++companyRequestRef.current;
+    historyRequestRef.current += 1;
+    conversationRequestRef.current += 1;
     setMessages([]);
     setConversations([]);
-    setCurrentConversationId(null);
+    setCurrentConversation(null);
     setSuggestedAction(null);
     setFailedSend(null);
     setError(null);
+    setHistoryError(null);
+    setHistorySearch('');
+    setHistoryStatus('active');
+    setHistoryTotal(0);
     if (!companyId) return;
 
     setIsRestoring(true);
     void apiClient
       .get<ConversationList>('/ai/conversations', {
-        params: { company_id: companyId, limit: 100 },
+        params: { company_id: companyId, status: 'active', page: 1, page_size: HISTORY_PAGE_SIZE },
       })
       .then(async ({ data }) => {
         if (requestId !== companyRequestRef.current) return;
         setConversations(data.items);
-        const latest = data.items.find((item) => item.status === 'active') ?? data.items[0];
-        if (!latest) return;
+        setHistoryTotal(data.total);
+        const storedId = Number(localStorage.getItem(selectedConversationKey(companyId)));
+        const preferredId = Number.isInteger(storedId) && storedId > 0 ? storedId : data.items[0]?.id;
+        if (!preferredId) return;
         const detail = await apiClient.get<ConversationDetail>(
-          `/ai/conversations/${latest.id}`,
+          `/ai/conversations/${preferredId}`,
           { params: { company_id: companyId, messages_limit: 200 } },
-        );
-        if (requestId === companyRequestRef.current) {
-          applyConversationDetail(detail.data);
-        }
+        ).catch(async (requestError: unknown) => {
+          const status = (requestError as { response?: { status?: number } }).response?.status;
+          if ((status === 403 || status === 404) && data.items[0]?.id && data.items[0].id !== preferredId) {
+            localStorage.removeItem(selectedConversationKey(companyId));
+            return apiClient.get<ConversationDetail>(`/ai/conversations/${data.items[0].id}`, {
+              params: { company_id: companyId, messages_limit: 200 },
+            });
+          }
+          throw requestError;
+        });
+        if (requestId === companyRequestRef.current) applyConversationDetail(detail.data);
       })
       .catch(() => {
         if (requestId === companyRequestRef.current) {
+          clearConversationState();
           setError(
             language === 'ar'
               ? 'تعذر استعادة سجل المحادثات.'
@@ -233,27 +333,51 @@ export function useGeminiAssistant({ companyId, language = 'en' }: UseGeminiAssi
       .finally(() => {
         if (requestId === companyRequestRef.current) setIsRestoring(false);
       });
-  }, [applyConversationDetail, companyId, language]);
+  }, [applyConversationDetail, clearConversationState, companyId, language]);
+
+  useEffect(() => {
+    if (!companyId) return;
+    const timeout = window.setTimeout(() => void fetchHistory(false), 250);
+    return () => window.clearTimeout(timeout);
+  }, [companyId, fetchHistory, historySearch, historyStatus]);
 
   const createNewConversation = useCallback(async () => {
     if (!companyId) return null;
-    const { data } = await apiClient.post<AssistantConversation>('/ai/conversations', {
-      company_id: companyId,
-      language,
-    });
-    setConversations((previous) => [data, ...previous]);
-    setCurrentConversationId(data.id);
-    setMessages([]);
-    setSuggestedAction(null);
-    setFailedSend(null);
-    setError(null);
-    return data;
+    try {
+      const { data } = await apiClient.post<AssistantConversation>('/ai/conversations', {
+        company_id: companyId,
+        language,
+      });
+      historyRequestRef.current += 1;
+      setHistorySearch('');
+      setHistoryStatus('active');
+      setConversations((previous) => [data, ...previous.filter((item) => item.id !== data.id)]);
+      setHistoryTotal((total) => total + 1);
+      setCurrentConversation(data);
+      setMessages([]);
+      setSuggestedAction(null);
+      setFailedSend(null);
+      setError(null);
+      localStorage.setItem(selectedConversationKey(companyId), String(data.id));
+      return data;
+    } catch {
+      setError(language === 'ar' ? 'تعذر إنشاء محادثة جديدة.' : 'A new conversation could not be created.');
+      return null;
+    }
   }, [companyId, language]);
 
   const sendMessage = useCallback(
     async (text: string, retryClientMessageId?: string) => {
       const trimmed = text.trim();
       if (!companyId || !trimmed || isLoading) return;
+      if (currentConversation?.status === 'archived') {
+        setError(
+          language === 'ar'
+            ? 'لا يمكن الإرسال إلى محادثة مؤرشفة. ألغِ الأرشفة أولاً.'
+            : 'Cannot send to an archived conversation. Unarchive it first.',
+        );
+        return;
+      }
 
       setIsLoading(true);
       setError(null);
@@ -262,20 +386,12 @@ export function useGeminiAssistant({ companyId, language = 'en' }: UseGeminiAssi
       const optimisticId = `pending-${outgoingId}`;
       setMessages((previous) => [
         ...previous.filter((message) => message.id !== optimisticId),
-        {
-          id: optimisticId,
-          role: 'user',
-          content: trimmed,
-          timestamp: new Date(),
-        },
+        { id: optimisticId, role: 'user', content: trimmed, timestamp: new Date() },
       ]);
 
       try {
-        let conversationId = currentConversationId;
-        const currentConversation = conversations.find(
-          (conversation) => conversation.id === conversationId,
-        );
-        if (!conversationId || currentConversation?.status === 'archived') {
+        let conversationId = currentConversation?.id ?? null;
+        if (!conversationId) {
           const conversation = await createNewConversation();
           conversationId = conversation?.id ?? null;
         }
@@ -288,11 +404,7 @@ export function useGeminiAssistant({ companyId, language = 'en' }: UseGeminiAssi
             message: trimmed,
             language,
             client_message_id: outgoingId,
-            page_context: {
-              route: location.pathname,
-              page: currentPage,
-              filters: {},
-            },
+            page_context: { route: location.pathname, page: currentPage, filters: {} },
           },
         );
         const persisted = [toUiMessage(data.user_message), toUiMessage(data.assistant_message)];
@@ -305,9 +417,22 @@ export function useGeminiAssistant({ companyId, language = 'en' }: UseGeminiAssi
           ),
           ...persisted,
         ]);
+        setCurrentConversation(data.conversation);
+        setConversations((previous) => {
+          if (historyStatus !== 'active') return previous;
+          const query = historySearch.trim().toLocaleLowerCase();
+          const matches =
+            !query ||
+            data.conversation.title.toLocaleLowerCase().includes(query) ||
+            (data.conversation.last_message_preview || '').toLocaleLowerCase().includes(query);
+          if (!matches) return previous.filter((item) => item.id !== data.conversation.id);
+          return [
+            data.conversation,
+            ...previous.filter((conversation) => conversation.id !== data.conversation.id),
+          ];
+        });
         setSuggestedAction(data.assistant_reply.suggested_action ?? null);
         setFailedSend(null);
-        await refreshConversations();
       } catch (requestError: unknown) {
         const detail = (requestError as { response?: { data?: { detail?: string } } })
           ?.response?.data?.detail;
@@ -321,89 +446,118 @@ export function useGeminiAssistant({ companyId, language = 'en' }: UseGeminiAssi
       } finally {
         setIsLoading(false);
       }
-    },
-    [
+    }, [
       companyId,
-      conversations,
       createNewConversation,
-      currentConversationId,
+      currentConversation,
       currentPage,
+      historySearch,
+      historyStatus,
       isLoading,
       language,
       location.pathname,
-      refreshConversations,
     ],
   );
 
   const retryLastMessage = useCallback(() => {
-    if (failedSend) {
-      void sendMessage(failedSend.text, failedSend.clientMessageId);
-    }
+    if (failedSend) void sendMessage(failedSend.text, failedSend.clientMessageId);
   }, [failedSend, sendMessage]);
 
   const selectConversation = useCallback(
     async (conversationId: number) => {
-      if (conversationId === currentConversationId) return;
+      if (conversationId === currentConversation?.id) return;
+      const summary = conversations.find((conversation) => conversation.id === conversationId);
+      if (summary) setCurrentConversation(summary);
       await loadConversation(conversationId);
     },
-    [currentConversationId, loadConversation],
+    [conversations, currentConversation?.id, loadConversation],
   );
 
   const renameConversation = useCallback(
-    async (conversationId: number, title: string) => {
-      if (!companyId || !title.trim()) return;
-      const { data } = await apiClient.patch<AssistantConversation>(
-        `/ai/conversations/${conversationId}`,
-        { company_id: companyId, title: title.trim() },
-      );
-      setConversations((previous) =>
-        previous.map((conversation) => (conversation.id === data.id ? data : conversation)),
-      );
-    },
-    [companyId],
+    async (conversationId: number, title: string): Promise<boolean> => {
+      if (!companyId || !title.trim()) return false;
+      try {
+        const { data } = await apiClient.patch<AssistantConversation>(
+          `/ai/conversations/${conversationId}`,
+          { company_id: companyId, title: title.trim() },
+        );
+        setConversations((previous) => {
+          const query = historySearch.trim().toLocaleLowerCase();
+          const matches =
+            !query ||
+            data.title.toLocaleLowerCase().includes(query) ||
+            (data.last_message_preview || '').toLocaleLowerCase().includes(query);
+          if (!matches) {
+            const wasListed = previous.some((conversation) => conversation.id === data.id);
+            if (wasListed) setHistoryTotal((total) => Math.max(0, total - 1));
+            return previous.filter((conversation) => conversation.id !== data.id);
+          }
+          return previous.map((conversation) => (conversation.id === data.id ? data : conversation));
+        });
+        setCurrentConversation((current) => (current?.id === data.id ? data : current));
+        return true;
+      } catch (requestError: unknown) {
+        const detail = (requestError as { response?: { data?: { detail?: string } } })
+          .response?.data?.detail;
+        setHistoryError(typeof detail === 'string' ? detail : language === 'ar' ? 'تعذر تغيير الاسم.' : 'The conversation could not be renamed.');
+        return false;
+      }
+    }, [companyId, historySearch, language],
   );
 
-  const archiveConversation = useCallback(
-    async (conversationId: number) => {
-      if (!companyId) return;
-      await apiClient.patch(`/ai/conversations/${conversationId}`, {
-        company_id: companyId,
-        status: 'archived',
-      });
-      const items = await refreshConversations();
-      if (currentConversationId === conversationId) {
-        const next = items.find(
-          (conversation) => conversation.id !== conversationId && conversation.status === 'active',
+  const setConversationStatus = useCallback(
+    async (conversationId: number, status: ConversationStatus): Promise<boolean> => {
+      if (!companyId) return false;
+      try {
+        const { data } = await apiClient.patch<AssistantConversation>(
+          `/ai/conversations/${conversationId}`,
+          { company_id: companyId, status },
         );
-        if (next) await loadConversation(next.id);
-        else {
-          setCurrentConversationId(null);
-          setMessages([]);
-          setSuggestedAction(null);
-        }
+        setCurrentConversation((current) => (current?.id === data.id ? data : current));
+        setConversations((previous) => {
+          if (historyStatus !== status) return previous.filter((item) => item.id !== data.id);
+          return [data, ...previous.filter((item) => item.id !== data.id)];
+        });
+        setHistoryTotal((total) =>
+          historyStatus === status ? total + 1 : Math.max(0, total - 1),
+        );
+        return true;
+      } catch {
+        setHistoryError(language === 'ar' ? 'تعذر تحديث حالة المحادثة.' : 'The conversation status could not be updated.');
+        return false;
       }
-    },
-    [companyId, currentConversationId, loadConversation, refreshConversations],
+    }, [companyId, historyStatus, language],
   );
 
   const deleteConversation = useCallback(
-    async (conversationId: number) => {
-      if (!companyId) return;
-      await apiClient.delete(`/ai/conversations/${conversationId}`, {
-        params: { company_id: companyId },
-      });
-      const items = await refreshConversations();
-      if (currentConversationId === conversationId) {
-        const next = items.find((conversation) => conversation.id !== conversationId);
-        if (next) await loadConversation(next.id);
-        else {
-          setCurrentConversationId(null);
-          setMessages([]);
-          setSuggestedAction(null);
+    async (conversationId: number): Promise<boolean> => {
+      if (!companyId) return false;
+      const previous = conversations;
+      const previousTotal = historyTotal;
+      const wasListed = previous.some((conversation) => conversation.id === conversationId);
+      setConversations((items) => items.filter((conversation) => conversation.id !== conversationId));
+      if (wasListed) setHistoryTotal((total) => Math.max(0, total - 1));
+      try {
+        await apiClient.delete(`/ai/conversations/${conversationId}`, {
+          params: { company_id: companyId },
+        });
+        if (currentConversation?.id === conversationId) {
+          clearConversationState();
+          localStorage.removeItem(selectedConversationKey(companyId));
+          const { data } = await apiClient.get<ConversationList>('/ai/conversations', {
+            params: { company_id: companyId, status: 'active', page: 1, page_size: HISTORY_PAGE_SIZE },
+          });
+          const next = data.items[0];
+          if (next) await loadConversation(next.id);
         }
+        return true;
+      } catch {
+        setConversations(previous);
+        setHistoryTotal(previousTotal);
+        setHistoryError(language === 'ar' ? 'تعذر حذف المحادثة.' : 'The conversation could not be deleted.');
+        return false;
       }
-    },
-    [companyId, currentConversationId, loadConversation, refreshConversations],
+    }, [clearConversationState, companyId, conversations, currentConversation?.id, historyTotal, language, loadConversation],
   );
 
   const confirmAction = useCallback(
@@ -416,7 +570,7 @@ export function useGeminiAssistant({ companyId, language = 'en' }: UseGeminiAssi
           '/ai/gemini-assistant/confirm-action',
           {
             company_id: companyId,
-            conversation_id: currentConversationId,
+            conversation_id: currentConversation?.id ?? null,
             language,
             action_type: action.type,
             payload: {
@@ -437,8 +591,7 @@ export function useGeminiAssistant({ companyId, language = 'en' }: UseGeminiAssi
           return result;
         }
         setSuggestedAction(null);
-        if (currentConversationId) await loadConversation(currentConversationId);
-        await refreshConversations();
+        if (currentConversation) await loadConversation(currentConversation.id);
         dataEvents.emit('journal:created');
         return result;
       } catch (requestError: unknown) {
@@ -454,15 +607,7 @@ export function useGeminiAssistant({ companyId, language = 'en' }: UseGeminiAssi
       } finally {
         setIsConfirming(false);
       }
-    },
-    [
-      companyId,
-      currentConversationId,
-      isConfirming,
-      language,
-      loadConversation,
-      refreshConversations,
-    ],
+    }, [companyId, currentConversation, isConfirming, language, loadConversation],
   );
 
   const cancelAction = useCallback(() => setSuggestedAction(null), []);
@@ -470,10 +615,17 @@ export function useGeminiAssistant({ companyId, language = 'en' }: UseGeminiAssi
   return {
     messages,
     conversations,
-    currentConversationId,
+    currentConversation,
+    currentConversationId: currentConversation?.id ?? null,
     isLoading,
     isRestoring,
     isConfirming,
+    isHistoryLoading,
+    historyError,
+    historySearch,
+    historyStatus,
+    historyTotal,
+    hasMoreConversations: conversations.length < historyTotal,
     error,
     failedSend: Boolean(failedSend),
     suggestedAction,
@@ -485,7 +637,11 @@ export function useGeminiAssistant({ companyId, language = 'en' }: UseGeminiAssi
     createNewConversation,
     selectConversation,
     renameConversation,
-    archiveConversation,
+    setConversationStatus,
     deleteConversation,
+    setHistorySearch,
+    setHistoryStatus,
+    loadMoreConversations: () => fetchHistory(true),
+    retryHistory: () => fetchHistory(false),
   };
 }

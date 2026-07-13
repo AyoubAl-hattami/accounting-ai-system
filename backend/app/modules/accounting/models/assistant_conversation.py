@@ -30,6 +30,10 @@ class AssistantConversation(Base):
             "status IN ('active', 'archived')",
             name="ck_assistant_conversations_status",
         ),
+        CheckConstraint(
+            "title_source IN ('fallback', 'greeting', 'auto', 'manual')",
+            name="ck_assistant_conversations_title_source",
+        ),
         Index("ix_assistant_conversations_company_id", "company_id"),
         Index("ix_assistant_conversations_user_id", "user_id"),
         Index("ix_assistant_conversations_last_message_at", "last_message_at"),
@@ -51,6 +55,9 @@ class AssistantConversation(Base):
         nullable=False,
     )
     title: Mapped[str] = mapped_column(String(120), nullable=False)
+    title_source: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="fallback"
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

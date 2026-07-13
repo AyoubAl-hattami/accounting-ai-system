@@ -32,10 +32,17 @@ export default function GlobalGeminiAssistant({
   const {
     messages,
     conversations,
+    currentConversation,
     currentConversationId,
     isLoading,
     isRestoring,
     isConfirming,
+    isHistoryLoading,
+    historyError,
+    historySearch,
+    historyStatus,
+    historyTotal,
+    hasMoreConversations,
     error,
     failedSend,
     suggestedAction,
@@ -47,8 +54,12 @@ export default function GlobalGeminiAssistant({
     createNewConversation,
     selectConversation,
     renameConversation,
-    archiveConversation,
+    setConversationStatus,
     deleteConversation,
+    setHistorySearch,
+    setHistoryStatus,
+    loadMoreConversations,
+    retryHistory,
   } = useGeminiAssistant({
     companyId,
     language: language as 'en' | 'ar',
@@ -165,9 +176,16 @@ export default function GlobalGeminiAssistant({
         onClose={() => setIsOpen(false)}
         messages={messages}
         conversations={conversations}
+        currentConversation={currentConversation}
         currentConversationId={currentConversationId}
         isLoading={isLoading}
         isRestoring={isRestoring}
+        isHistoryLoading={isHistoryLoading}
+        historyError={historyError}
+        historySearch={historySearch}
+        historyStatus={historyStatus}
+        historyTotal={historyTotal}
+        hasMoreConversations={hasMoreConversations}
         error={error}
         failedSend={failedSend}
         isConfirming={isConfirming}
@@ -180,8 +198,12 @@ export default function GlobalGeminiAssistant({
         onNewConversation={createNewConversation}
         onSelectConversation={selectConversation}
         onRenameConversation={renameConversation}
-        onArchiveConversation={archiveConversation}
+        onSetConversationStatus={setConversationStatus}
         onDeleteConversation={deleteConversation}
+        onHistorySearchChange={setHistorySearch}
+        onHistoryStatusChange={setHistoryStatus}
+        onLoadMoreConversations={loadMoreConversations}
+        onRetryHistory={retryHistory}
         companyName={companyName}
       />
     </>

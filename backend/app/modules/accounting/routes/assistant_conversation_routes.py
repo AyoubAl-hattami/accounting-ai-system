@@ -38,6 +38,7 @@ def _conversation_read(
         id=conversation.id,
         company_id=conversation.company_id,
         title=conversation.title,
+        title_source=conversation.title_source,
         status=conversation.status,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
@@ -70,28 +71,34 @@ def _owned_or_404(
 @router.get("", response_model=PaginatedResponse[AssistantConversationRead])
 def list_assistant_conversations(
     company_id: int = Query(..., ge=1),
-    conversation_status: str | None = Query(default=None, alias="status"),
-    skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=100),
+    conversation_status: str | None = Query(default="active", alias="status"),
+    search: str | None = Query(default=None, max_length=100),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    skip: int | None = Query(default=None, ge=0),
+    limit: int | None = Query(default=None, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     ensure_company_access(db=db, current_user=current_user, company_id=company_id)
     if conversation_status not in {None, "active", "archived"}:
         raise HTTPException(status_code=400, detail="Invalid conversation status")
+    effective_limit = limit if limit is not None else page_size
+    effective_skip = skip if skip is not None else (page - 1) * effective_limit
     rows, total = list_owned_conversations(
         db,
         company_id=company_id,
         user_id=current_user.id,
         status=conversation_status,
-        skip=skip,
-        limit=limit,
+        search=search,
+        skip=effective_skip,
+        limit=effective_limit,
     )
     return PaginatedResponse[AssistantConversationRead](
         items=[_conversation_read(conversation, preview) for conversation, preview in rows],
         total=total,
-        skip=skip,
-        limit=limit,
+        skip=effective_skip,
+        limit=effective_limit,
     )
 
 
@@ -105,9 +112,7 @@ def create_assistant_conversation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    ensure_company_access(
-        db=db, current_user=current_user, company_id=payload.company_id
-    )
+    ensure_company_access(db=db, current_user=current_user, company_id=payload.company_id)
     conversation = create_conversation(
         db,
         company_id=payload.company_id,
@@ -118,10 +123,7 @@ def create_assistant_conversation(
     return _conversation_read(conversation)
 
 
-@router.get(
-    "/{conversation_id}",
-    response_model=AssistantConversationDetailRead,
-)
+@router.get("/{conversation_id}", response_model=AssistantConversationDetailRead)
 def get_assistant_conversation(
     conversation_id: int,
     company_id: int = Query(..., ge=1),
@@ -153,19 +155,14 @@ def get_assistant_conversation(
     )
 
 
-@router.patch(
-    "/{conversation_id}",
-    response_model=AssistantConversationRead,
-)
+@router.patch("/{conversation_id}", response_model=AssistantConversationRead)
 def patch_assistant_conversation(
     conversation_id: int,
     payload: AssistantConversationPatch,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    ensure_company_access(
-        db=db, current_user=current_user, company_id=payload.company_id
-    )
+    ensure_company_access(db=db, current_user=current_user, company_id=payload.company_id)
     conversation = _owned_or_404(
         db,
         conversation_id=conversation_id,
@@ -252,6 +249,7 @@ def send_assistant_conversation_message(
         client_message_id=payload.client_message_id,
     )
     return AssistantMessageExchangeRead(
+        conversation=_conversation_read(conversation, assistant_message.content),
         user_message=message_to_read(user_message),
         assistant_message=message_to_read(assistant_message),
         assistant_reply=reply,

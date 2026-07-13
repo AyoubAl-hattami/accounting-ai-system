@@ -150,11 +150,11 @@ def conversation_actors(default_company_id):
             db.commit()
 
 
-def _create_conversation(base_url, headers, company_id, language="en"):
+def _create_conversation(base_url, headers, company_id, language="en", title=None):
     response = requests.post(
         f"{base_url}/ai/conversations",
         headers=headers,
-        json={"company_id": company_id, "language": language},
+        json={"company_id": company_id, "language": language, "title": title},
     )
     assert response.status_code == 201, response.text
     return response.json()
@@ -220,7 +220,8 @@ def test_create_save_reload_and_list_newest_first(
     detail = reloaded.json()
     assert detail["messages_total"] == 2
     assert [message["role"] for message in detail["messages"]] == ["user", "assistant"]
-    assert detail["title"] == "سلام عليكم"
+    assert detail["title"] == "محادثة جديدة"
+    assert detail["title_source"] == "greeting"
 
     accounting, _ = _send_message(
         base_url,
@@ -437,6 +438,290 @@ def test_duplicate_client_message_id_is_idempotent(
     ).json()
     assert detail["messages_total"] == 2
 
+
+def test_automatic_titles_and_manual_rename_are_stable(
+    base_url, default_company_id, conversation_actors,
+):
+    greeting = _create_conversation(
+        base_url,
+        conversation_actors.owner_headers,
+        default_company_id,
+        language="ar",
+    )
+    greeted, _ = _send_message(
+        base_url,
+        conversation_actors.owner_headers,
+        default_company_id,
+        greeting["id"],
+        "السلام عليكم",
+        language="en",
+    )
+    assert greeted.status_code == 201, greeted.text
+    assert greeted.json()["conversation"]["title"] == "محادثة جديدة"
+    assert greeted.json()["conversation"]["title_source"] == "greeting"
+
+    meaningful, _ = _send_message(
+        base_url,
+        conversation_actors.owner_headers,
+        default_company_id,
+        greeting["id"],
+        "كم صافي الربح؟",
+        language="en",
+    )
+    assert meaningful.status_code == 201, meaningful.text
+    assert meaningful.json()["conversation"]["title"] == "تحليل صافي الربح"
+    assert meaningful.json()["conversation"]["title_source"] == "auto"
+
+    electricity = _create_conversation(
+        base_url, conversation_actors.owner_headers, default_company_id
+    )
+    expense, _ = _send_message(
+        base_url,
+        conversation_actors.owner_headers,
+        default_company_id,
+        electricity["id"],
+        "دفعت كهرباء 500 ريال",
+        language="en",
+    )
+    assert expense.status_code == 201, expense.text
+    assert expense.json()["conversation"]["title"] == "مصروف كهرباء"
+
+    english = _create_conversation(
+        base_url, conversation_actors.owner_headers, default_company_id
+    )
+    english_reply, _ = _send_message(
+        base_url,
+        conversation_actors.owner_headers,
+        default_company_id,
+        english["id"],
+        "What is my net profit?",
+    )
+    assert english_reply.status_code == 201, english_reply.text
+    assert english_reply.json()["conversation"]["title"] == "Net profit analysis"
+
+    renamed = requests.patch(
+        f"{base_url}/ai/conversations/{greeting['id']}",
+        headers=conversation_actors.owner_headers,
+        json={"company_id": default_company_id, "title": "  تحليلي الخاص  "},
+    )
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["title"] == "تحليلي الخاص"
+    assert renamed.json()["title_source"] == "manual"
+
+    later, _ = _send_message(
+        base_url,
+        conversation_actors.owner_headers,
+        default_company_id,
+        greeting["id"],
+        "اعرض قيود البنك",
+        language="ar",
+    )
+    assert later.status_code == 201, later.text
+    assert later.json()["conversation"]["title"] == "تحليلي الخاص"
+    assert later.json()["conversation"]["title_source"] == "manual"
+
+    empty = requests.patch(
+        f"{base_url}/ai/conversations/{greeting['id']}",
+        headers=conversation_actors.owner_headers,
+        json={"company_id": default_company_id, "title": "   "},
+    )
+    assert empty.status_code == 422
+    too_long = requests.patch(
+        f"{base_url}/ai/conversations/{greeting['id']}",
+        headers=conversation_actors.owner_headers,
+        json={"company_id": default_company_id, "title": "x" * 61},
+    )
+    assert too_long.status_code == 422
+
+
+def test_search_is_scoped_and_filters_active_archived_without_metadata(
+    base_url, default_company_id, conversation_actors,
+):
+    marker = uuid.uuid4().hex[:8]
+    owner = _create_conversation(
+        base_url,
+        conversation_actors.owner_headers,
+        default_company_id,
+        title=f"Owner electricity {marker}",
+    )
+    other = _create_conversation(
+        base_url,
+        conversation_actors.other_headers,
+        default_company_id,
+        title=f"Other electricity {marker}",
+    )
+    second_company = _create_conversation(
+        base_url,
+        conversation_actors.owner_headers,
+        conversation_actors.second_company_id,
+        title=f"Second electricity {marker}",
+    )
+
+    found = requests.get(
+        f"{base_url}/ai/conversations",
+        headers=conversation_actors.owner_headers,
+        params={"company_id": default_company_id, "search": marker},
+    )
+    assert found.status_code == 200, found.text
+    assert [item["id"] for item in found.json()["items"]] == [owner["id"]]
+    assert other["id"] not in {item["id"] for item in found.json()["items"]}
+    assert second_company["id"] not in {item["id"] for item in found.json()["items"]}
+
+    preview = _create_conversation(
+        base_url,
+        conversation_actors.owner_headers,
+        default_company_id,
+        title="Preview lookup",
+    )
+    preview_reply, _ = _send_message(
+        base_url,
+        conversation_actors.owner_headers,
+        default_company_id,
+        preview["id"],
+        "Who are you?",
+    )
+    assert preview_reply.status_code == 201
+    by_preview = requests.get(
+        f"{base_url}/ai/conversations",
+        headers=conversation_actors.owner_headers,
+        params={"company_id": default_company_id, "search": "permissions"},
+    )
+    assert preview["id"] in {item["id"] for item in by_preview.json()["items"]}
+
+    hidden = requests.get(
+        f"{base_url}/ai/conversations",
+        headers=conversation_actors.owner_headers,
+        params={"company_id": default_company_id, "search": "pending_context_token"},
+    )
+    assert hidden.status_code == 200
+    assert hidden.json()["items"] == []
+
+    archived = requests.patch(
+        f"{base_url}/ai/conversations/{owner['id']}",
+        headers=conversation_actors.owner_headers,
+        json={"company_id": default_company_id, "status": "archived"},
+    )
+    assert archived.status_code == 200
+    active_search = requests.get(
+        f"{base_url}/ai/conversations",
+        headers=conversation_actors.owner_headers,
+        params={"company_id": default_company_id, "search": marker, "status": "active"},
+    )
+    assert active_search.json()["items"] == []
+    archived_search = requests.get(
+        f"{base_url}/ai/conversations",
+        headers=conversation_actors.owner_headers,
+        params={"company_id": default_company_id, "search": marker, "status": "archived"},
+    )
+    assert [item["id"] for item in archived_search.json()["items"]] == [owner["id"]]
+
+
+def test_archive_unarchive_and_delete_contract(
+    base_url, default_company_id, conversation_actors,
+):
+    conversation = _create_conversation(
+        base_url, conversation_actors.owner_headers, default_company_id
+    )
+    archived = requests.patch(
+        f"{base_url}/ai/conversations/{conversation['id']}",
+        headers=conversation_actors.owner_headers,
+        json={"company_id": default_company_id, "status": "archived"},
+    )
+    assert archived.status_code == 200
+    rejected, _ = _send_message(
+        base_url,
+        conversation_actors.owner_headers,
+        default_company_id,
+        conversation["id"],
+        "This must not be saved",
+    )
+    assert rejected.status_code == 409
+
+    unarchived = requests.patch(
+        f"{base_url}/ai/conversations/{conversation['id']}",
+        headers=conversation_actors.owner_headers,
+        json={"company_id": default_company_id, "status": "active"},
+    )
+    assert unarchived.status_code == 200
+    accepted, _ = _send_message(
+        base_url,
+        conversation_actors.owner_headers,
+        default_company_id,
+        conversation["id"],
+        "Hello after unarchive",
+    )
+    assert accepted.status_code == 201
+
+    deleted = requests.delete(
+        f"{base_url}/ai/conversations/{conversation['id']}",
+        headers=conversation_actors.owner_headers,
+        params={"company_id": default_company_id},
+    )
+    assert deleted.status_code == 204
+    inaccessible = requests.get(
+        f"{base_url}/ai/conversations/{conversation['id']}",
+        headers=conversation_actors.owner_headers,
+        params={"company_id": default_company_id},
+    )
+    assert inaccessible.status_code == 404
+
+
+def test_conversation_pagination_is_newest_first(
+    base_url, default_company_id, conversation_actors,
+):
+    marker = uuid.uuid4().hex[:8]
+    created_ids = []
+    for index in range(23):
+        conversation = _create_conversation(
+            base_url,
+            conversation_actors.owner_headers,
+            default_company_id,
+            title=f"Page {marker} {index:02d}",
+        )
+        created_ids.append(conversation["id"])
+
+    first_page = requests.get(
+        f"{base_url}/ai/conversations",
+        headers=conversation_actors.owner_headers,
+        params={
+            "company_id": default_company_id,
+            "search": marker,
+            "page": 1,
+            "page_size": 10,
+        },
+    )
+    second_page = requests.get(
+        f"{base_url}/ai/conversations",
+        headers=conversation_actors.owner_headers,
+        params={
+            "company_id": default_company_id,
+            "search": marker,
+            "page": 2,
+            "page_size": 10,
+        },
+    )
+    third_page = requests.get(
+        f"{base_url}/ai/conversations",
+        headers=conversation_actors.owner_headers,
+        params={
+            "company_id": default_company_id,
+            "search": marker,
+            "page": 3,
+            "page_size": 10,
+        },
+    )
+    assert first_page.status_code == second_page.status_code == third_page.status_code == 200
+    assert first_page.json()["total"] == 23
+    assert len(first_page.json()["items"]) == 10
+    assert len(second_page.json()["items"]) == 10
+    assert len(third_page.json()["items"]) == 3
+    combined = [
+        item["id"]
+        for page in (first_page, second_page, third_page)
+        for item in page.json()["items"]
+    ]
+    assert combined == list(reversed(created_ids))
+    assert len(set(combined)) == 23
 
 def test_provider_failure_preserves_user_and_safe_error(
     monkeypatch, default_company_id, conversation_actors,

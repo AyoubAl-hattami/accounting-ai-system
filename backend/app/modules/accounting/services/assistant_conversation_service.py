@@ -2,7 +2,7 @@ import logging
 import re
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -31,16 +31,92 @@ def default_conversation_title(language: str) -> str:
     return "محادثة جديدة" if language == "ar" else "New conversation"
 
 
-def generate_conversation_title(message: str, language: str) -> str:
+def _safe_title_excerpt(message: str, language: str) -> str:
     clean = re.sub(r"\s+", " ", message).strip()
+    clean = re.sub(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b", "", clean)
+    clean = re.sub(r"https?://\S+", "", clean, flags=re.IGNORECASE)
+    clean = re.sub(
+        r"(?i)\b(password|token|api[_ -]?key|secret|jwt)\b\s*[:=]?\s*\S*",
+        "",
+        clean,
+    )
+    clean = re.sub(r"\b\d{6,}\b", "", clean)
+    clean = re.sub(r"\s+", " ", clean).strip(" .,:;!?؟،؛")
     if not clean:
         return default_conversation_title(language)
-    words = clean.split(" ")[:8]
-    title = " ".join(words).strip(" .,:;!?؟")
-    if len(title) > 60:
-        title = title[:57].rstrip() + "..."
-    return title or default_conversation_title(language)
+    words = clean.split(" ")[:7]
+    title = " ".join(words)
+    return title if len(title) <= 60 else title[:57].rstrip() + "..."
 
+
+def generate_conversation_title(message: str, language: str, intent: str) -> str:
+    normalized = re.sub(r"\s+", " ", message).strip().lower()
+    if language == "ar":
+        if "كهرب" in normalized:
+            return "مصروف كهرباء"
+        if "صافي الربح" in normalized or "صافي ربح" in normalized:
+            return "تحليل صافي الربح"
+        if "المبيعات" in normalized or "مبيعات" in normalized:
+            return "تحليل المبيعات"
+        if "الإيرادات" in normalized or "الايرادات" in normalized:
+            return "تحليل الإيرادات"
+        if "قيود" in normalized and "البنك" in normalized:
+            return "قيود البنك"
+        if intent == "identity":
+            return "المساعد المحاسبي"
+        if "report" in intent:
+            return "تحليل مالي"
+        if intent in {"journal_question", "trace_amount"}:
+            return "القيود المحاسبية"
+        if intent in {"create_journal_draft", "clarification"}:
+            return "مسودة قيد محاسبي"
+    else:
+        if "electric" in normalized:
+            return "Electricity expense"
+        if "net profit" in normalized:
+            return "Net profit analysis"
+        if "sales" in normalized:
+            return "Sales analysis"
+        if "revenue" in normalized:
+            return "Revenue analysis"
+        if "bank" in normalized and ("journal" in normalized or "entries" in normalized):
+            return "Bank journal entries"
+        if intent == "identity":
+            return "Accounting assistant"
+        if "report" in intent:
+            return "Financial analysis"
+        if intent in {"journal_question", "trace_amount"}:
+            return "Journal entries"
+        if intent in {"create_journal_draft", "clarification"}:
+            return "Draft journal entry"
+    return _safe_title_excerpt(message, language)
+
+
+def _reply_is_meaningful(reply: GeminiAssistantReply) -> bool:
+    if reply.intent in {"greeting", "error", "access_denied", "unknown"}:
+        return False
+    if reply.intent == "clarification":
+        return bool(reply.pending_transaction or reply.suggested_action)
+    return True
+
+
+def _update_automatic_title(
+    conversation: AssistantConversation,
+    *,
+    message: str,
+    language: str,
+    reply: GeminiAssistantReply,
+) -> None:
+    if conversation.title_source in {"manual", "auto"}:
+        return
+    if reply.intent == "greeting":
+        conversation.title = default_conversation_title(language)
+        conversation.title_source = "greeting"
+        return
+    if not _reply_is_meaningful(reply):
+        return
+    conversation.title = generate_conversation_title(message, language, reply.intent)
+    conversation.title_source = "auto"
 
 def get_owned_conversation(
     db: Session,
@@ -58,25 +134,21 @@ def get_owned_conversation(
     )
 
 
+def _escaped_search_pattern(search: str) -> str:
+    escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 def list_owned_conversations(
     db: Session,
     *,
     company_id: int,
     user_id: int,
     status: str | None,
+    search: str | None,
     skip: int,
     limit: int,
 ) -> tuple[list[tuple[AssistantConversation, str | None]], int]:
-    filters = [
-        AssistantConversation.company_id == company_id,
-        AssistantConversation.user_id == user_id,
-    ]
-    if status:
-        filters.append(AssistantConversation.status == status)
-
-    total = db.scalar(
-        select(func.count(AssistantConversation.id)).where(*filters)
-    ) or 0
     last_preview = (
         select(AssistantMessage.content)
         .where(AssistantMessage.conversation_id == AssistantConversation.id)
@@ -85,6 +157,25 @@ def list_owned_conversations(
         .correlate(AssistantConversation)
         .scalar_subquery()
     )
+    filters = [
+        AssistantConversation.company_id == company_id,
+        AssistantConversation.user_id == user_id,
+    ]
+    if status:
+        filters.append(AssistantConversation.status == status)
+    normalized_search = re.sub(r"\s+", " ", search or "").strip()
+    if normalized_search:
+        pattern = _escaped_search_pattern(normalized_search)
+        filters.append(
+            or_(
+                AssistantConversation.title.ilike(pattern, escape="\\"),
+                last_preview.ilike(pattern, escape="\\"),
+            )
+        )
+
+    total = db.scalar(
+        select(func.count(AssistantConversation.id)).where(*filters)
+    ) or 0
     rows = db.execute(
         select(AssistantConversation, last_preview.label("last_message_preview"))
         .where(*filters)
@@ -96,7 +187,6 @@ def list_owned_conversations(
         .limit(limit)
     ).all()
     return [(row[0], row[1]) for row in rows], total
-
 
 def create_conversation(
     db: Session,
@@ -110,7 +200,8 @@ def create_conversation(
     conversation = AssistantConversation(
         company_id=company_id,
         user_id=user_id,
-        title=(normalized_title[:120] or default_conversation_title(language)),
+        title=(normalized_title[:60] or default_conversation_title(language)),
+        title_source="manual" if normalized_title else "fallback",
         status="active",
     )
     db.add(conversation)
@@ -127,7 +218,11 @@ def update_conversation(
     status: str | None,
 ) -> AssistantConversation:
     if title is not None:
-        conversation.title = re.sub(r"\s+", " ", title).strip()[:120]
+        normalized_title = re.sub(r"\s+", " ", title).strip()
+        if not normalized_title:
+            raise ValueError("Conversation title cannot be empty")
+        conversation.title = normalized_title[:60]
+        conversation.title_source = "manual"
     if status is not None:
         conversation.status = status
     conversation.updated_at = datetime.now(timezone.utc)
@@ -135,7 +230,6 @@ def update_conversation(
     db.commit()
     db.refresh(conversation)
     return conversation
-
 
 def delete_conversation(db: Session, conversation: AssistantConversation) -> None:
     db.delete(conversation)
@@ -322,13 +416,7 @@ def send_conversation_message(
             message_type="text",
             client_message_id=client_message_id,
         )
-        if not db.scalar(
-            select(func.count(AssistantMessage.id)).where(
-                AssistantMessage.conversation_id == conversation.id,
-                AssistantMessage.role == "user",
-            )
-        ):
-            conversation.title = generate_conversation_title(message, message_language)
+
         conversation.last_message_at = now
         conversation.updated_at = now
         db.add_all([conversation, user_message])
@@ -392,6 +480,13 @@ def send_conversation_message(
             confidence="low",
             data_sources=[],
         )
+
+    _update_automatic_title(
+        conversation,
+        message=user_message.content,
+        language=message_language,
+        reply=reply,
+    )
 
     assistant_message = AssistantMessage(
         conversation_id=conversation.id,

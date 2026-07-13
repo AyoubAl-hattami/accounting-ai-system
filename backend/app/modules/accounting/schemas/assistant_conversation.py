@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.modules.accounting.schemas.gemini_assistant_schemas import (
     GeminiAssistantReply,
@@ -9,16 +9,40 @@ from app.modules.accounting.schemas.gemini_assistant_schemas import (
 )
 
 
+ConversationStatus = Literal["active", "archived"]
+ConversationTitleSource = Literal["fallback", "greeting", "auto", "manual"]
+
+
 class AssistantConversationCreate(BaseModel):
     company_id: int = Field(..., ge=1)
-    title: str | None = Field(default=None, max_length=120)
+    title: str | None = Field(default=None, max_length=60)
     language: Literal["en", "ar"] = "en"
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("Conversation title cannot be empty")
+        return normalized
 
 
 class AssistantConversationPatch(BaseModel):
     company_id: int = Field(..., ge=1)
-    title: str | None = Field(default=None, min_length=1, max_length=120)
-    status: Literal["active", "archived"] | None = None
+    title: str | None = Field(default=None, max_length=60)
+    status: ConversationStatus | None = None
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("Conversation title cannot be empty")
+        return normalized
 
     @model_validator(mode="after")
     def require_change(self):
@@ -31,7 +55,8 @@ class AssistantConversationRead(BaseModel):
     id: int
     company_id: int
     title: str
-    status: Literal["active", "archived"]
+    title_source: ConversationTitleSource
+    status: ConversationStatus
     created_at: datetime
     updated_at: datetime
     last_message_at: datetime
@@ -74,6 +99,7 @@ class AssistantConversationMessageCreate(BaseModel):
 
 
 class AssistantMessageExchangeRead(BaseModel):
+    conversation: AssistantConversationRead
     user_message: AssistantMessageRead
     assistant_message: AssistantMessageRead
     assistant_reply: GeminiAssistantReply
