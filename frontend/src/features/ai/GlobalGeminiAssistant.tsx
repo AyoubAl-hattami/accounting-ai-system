@@ -31,14 +31,24 @@ export default function GlobalGeminiAssistant({
 
   const {
     messages,
+    conversations,
+    currentConversationId,
     isLoading,
+    isRestoring,
     isConfirming,
+    error,
+    failedSend,
     suggestedAction,
     currentPage,
     sendMessage,
+    retryLastMessage,
     confirmAction,
     cancelAction,
-    clearHistory,
+    createNewConversation,
+    selectConversation,
+    renameConversation,
+    archiveConversation,
+    deleteConversation,
   } = useGeminiAssistant({
     companyId,
     language: language as 'en' | 'ar',
@@ -154,14 +164,24 @@ export default function GlobalGeminiAssistant({
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
         messages={messages}
+        conversations={conversations}
+        currentConversationId={currentConversationId}
         isLoading={isLoading}
+        isRestoring={isRestoring}
+        error={error}
+        failedSend={failedSend}
         isConfirming={isConfirming}
         suggestedAction={suggestedAction}
         currentPage={currentPage}
         onSendMessage={sendMessage}
+        onRetryMessage={retryLastMessage}
         onConfirmAction={confirmAction}
         onCancelAction={cancelAction}
-        onClearHistory={clearHistory}
+        onNewConversation={createNewConversation}
+        onSelectConversation={selectConversation}
+        onRenameConversation={renameConversation}
+        onArchiveConversation={archiveConversation}
+        onDeleteConversation={deleteConversation}
         companyName={companyName}
       />
     </>
