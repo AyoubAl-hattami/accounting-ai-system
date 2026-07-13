@@ -32,6 +32,10 @@ from app.modules.accounting.services.ai_provider_factory import (
     get_provider_status,
 )
 from app.modules.accounting.services.audit_service import create_audit_log
+from app.modules.accounting.services.assistant_conversation_service import (
+    get_owned_conversation,
+    record_confirmation_event,
+)
 from app.modules.accounting.services.gemini_assistant_service import dispatch_gemini_assistant
 from app.modules.accounting.services.journal_service import (
     create_journal_entry,
@@ -128,6 +132,7 @@ def gemini_assistant_chat_endpoint(
         message=payload.message,
         page_context=payload.page_context,
         language=payload.language,
+        history=payload.history,
         pending_transaction=payload.pending_transaction,
         pending_context_token=payload.pending_context_token,
     )
@@ -165,6 +170,20 @@ def gemini_assistant_confirm_action_endpoint(
         company_id=payload.company_id,
         allowed_roles={"admin", "accountant"},
     )
+
+    conversation = None
+    if payload.conversation_id is not None:
+        conversation = get_owned_conversation(
+            db,
+            conversation_id=payload.conversation_id,
+            company_id=payload.company_id,
+            user_id=current_user.id,
+        )
+        if conversation is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Conversation not found",
+            )
 
     if payload.action_type != "create_journal_entry_draft":
         return ConfirmActionReply(
@@ -346,6 +365,14 @@ def gemini_assistant_confirm_action_endpoint(
             "The journal entry was created successfully but the audit trail is incomplete.",
             journal_entry.entry_no,
             journal_entry.id,
+        )
+
+    if conversation is not None:
+        record_confirmation_event(
+            db,
+            conversation=conversation,
+            entry_no=journal_entry.entry_no,
+            language=payload.language,
         )
 
     return ConfirmActionReply(

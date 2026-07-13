@@ -178,6 +178,8 @@ class ConfirmJournalPayload(BaseModel):
 
 class ConfirmActionRequest(BaseModel):
     company_id: int = Field(..., ge=1)
+    conversation_id: int | None = Field(default=None, ge=1)
+    language: str = Field(default="en", pattern="^(en|ar)$")
     action_type: str = Field(..., pattern="^create_journal_entry_draft$")
     payload: ConfirmJournalPayload
 

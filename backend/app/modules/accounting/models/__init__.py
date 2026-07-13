@@ -8,6 +8,10 @@ from app.modules.accounting.models.audit_log import AuditLog
 from app.modules.accounting.models.user import User
 from app.modules.accounting.models.company_user import CompanyUser
 from app.modules.accounting.models.company_user_invitation import CompanyUserInvitation
+from app.modules.accounting.models.assistant_conversation import (
+    AssistantConversation,
+    AssistantMessage,
+)
 
 __all__ = [
     "Company",
@@ -20,4 +24,6 @@ __all__ = [
     "User",
     "CompanyUser",
     "CompanyUserInvitation",
+    "AssistantConversation",
+    "AssistantMessage",
 ]

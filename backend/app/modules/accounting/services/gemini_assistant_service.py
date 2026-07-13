@@ -37,6 +37,7 @@ from app.core.config import settings
 from app.core.clock import get_today_date
 from app.modules.accounting.schemas.gemini_assistant_schemas import (
     ClarificationOption,
+    ConversationTurn,
     EvidenceEntry,
     GeminiAssistantReply,
     MappedTransaction,
@@ -690,6 +691,7 @@ def _call_gemini_for_answer(
     question: str,
     context_summary: str,
     language: str,
+    conversation_history: list[ConversationTurn] | None = None,
 ) -> str | None:
     """
     Send a context + question to Gemini and return a natural language answer.
@@ -707,6 +709,28 @@ def _call_gemini_for_answer(
         else "Respond in English only."
     )
 
+    history_lines = []
+    skip_casual_response = False
+    for turn in (conversation_history or [])[-20:]:
+        if turn.role == "user":
+            skip_casual_response = _casual_intent(turn.content) is not None
+            if skip_casual_response:
+                continue
+        elif skip_casual_response:
+            skip_casual_response = False
+            continue
+        skip_casual_response = False
+        role = "User" if turn.role == "user" else "Assistant"
+        safe_content = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", " ", turn.content)
+        history_lines.append(f"{role}: {safe_content[:500]}")
+    history_block = (
+        "=== Recent Conversation (same user and company) ===\n"
+        + "\n".join(history_lines)
+        + "\n\n"
+        if history_lines
+        else ""
+    )
+
     prompt = f"""You are a professional accounting assistant for a business accounting system.
 You have been given a summary of the company's financial data below.
 Answer the user's question using ONLY the provided data — do not invent numbers.
@@ -715,13 +739,15 @@ IMPORTANT RULES:
 - Always mention the exact date range from the context in your answer.
 - If the note says 'No posted journal entries found', state the amount is 0.00 for that period and explain briefly.
 - Keep the answer concise and professional.
+- Treat the current User Question as the sole source of intent. Use history only for accounting references.
+- Never repeat a greeting or identity response from conversation history unless the current question is itself casual.
 - Do NOT mention any passwords, tokens, API keys, or internal system details.
 {lang_instruction}
 
 === Company Financial Context ===
 {context_summary}
 
-=== User Question ===
+{history_block}=== User Question ===
 {question}
 
 Answer:"""
@@ -731,7 +757,7 @@ Answer:"""
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(model=model, contents=prompt)
         text = (response.text or "").strip()
-        return text if text else None
+        return _strip_stale_greeting_prefix(text, language) if text else None
     except Exception as exc:
         logger.warning("Gemini assistant call failed: %s", type(exc).__name__)
         return None
@@ -1356,6 +1382,10 @@ def _make_pending_context_token(pending: PendingTransaction) -> str:
     return f"{payload_part}.{_b64url_encode(signature)}"
 
 
+def make_pending_context_token(pending: PendingTransaction) -> str:
+    """Issue a fresh signed token for server-restored pending clarification state."""
+    return _make_pending_context_token(pending)
+
 def _load_pending_context_token(
     token: str | None,
     company_id: int,
@@ -1937,6 +1967,108 @@ def _handle_action_request_rules_fallback(
     return ActionRequestResult(reply=reply, suggested_action=suggested_action)
 
 
+def detect_message_language(message: str, fallback: str = "en") -> str:
+    """Use the latest user message language; fall back only for neutral input."""
+    if re.search(r"[\u0600-\u06FF]", message):
+        return "ar"
+    if re.search(r"[A-Za-z]", message):
+        return "en"
+    return fallback if fallback in {"ar", "en"} else "en"
+
+def _normalize_casual_message(message: str) -> str:
+    normalized = message.strip().lower()
+    normalized = re.sub(r"[\u0640\u064b-\u065f\u0670]", "", normalized)
+    normalized = re.sub(r"[.!?,:;؟،؛]+$", "", normalized).strip()
+    return re.sub(r"\s+", " ", normalized)
+
+
+def _casual_intent(message: str) -> str | None:
+    normalized = _normalize_casual_message(message)
+    if normalized in {
+        "السلام عليكم",
+        "السلام عليكم ورحمة الله وبركاته",
+        "سلام عليكم",
+        "مرحبا",
+        "اهلا",
+        "أهلا",
+        "صباح الخير",
+        "مساء الخير",
+        "hello",
+        "hi",
+        "hey",
+        "good morning",
+        "good evening",
+    }:
+        return "greeting"
+    if normalized in {
+        "كيف حالك",
+        "كيفك",
+        "شلونك",
+        "how are you",
+        "how are you doing",
+    }:
+        return "wellbeing"
+    if normalized in {"من أنت", "من انت", "who are you", "what are you"}:
+        return "identity"
+    return None
+
+
+def _strip_stale_greeting_prefix(reply: str, language: str) -> str:
+    if language == "ar":
+        cleaned = re.sub(
+            r"^\s*وعليكم\s+السلام(?:\s+ورحمة\s+الله(?:\s+وبركاته)?)?"
+            r"[،,.!\s-]*(?:كيف\s+أقدر\s+أساعدك\s+اليوم[؟?]?)?\s*",
+            "",
+            reply,
+            count=1,
+        )
+    else:
+        cleaned = re.sub(
+            r"^\s*(?:hello|hi)[!,.\s-]*(?:how\s+can\s+i\s+help\s+you(?:\s+today)?[?]?)?\s*",
+            "",
+            reply,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+    return cleaned.strip() or reply.strip()
+
+
+def _small_talk_reply(message: str, language: str) -> GeminiAssistantReply | None:
+    casual_intent = _casual_intent(message)
+    if casual_intent in {"greeting", "wellbeing"}:
+        if casual_intent == "wellbeing":
+            reply = (
+                "بخير، شكرًا لك! كيف أقدر أساعدك اليوم؟"
+                if language == "ar"
+                else "I'm doing well, thank you! How can I help you today?"
+            )
+        else:
+            reply = (
+                "وعليكم السلام ورحمة الله وبركاته، كيف أقدر أساعدك اليوم؟"
+                if language == "ar"
+                else "Hello! How can I help you today?"
+            )
+        return GeminiAssistantReply(
+            reply=reply,
+            intent="greeting",
+            confidence="high",
+            data_sources=[],
+        )
+
+    if casual_intent == "identity":
+        reply = (
+            "أنا مساعدك المحاسبي داخل النظام. أقدر أشرح التقارير، أبحث في القيود، وأجهز مسودات قيود وفق صلاحياتك."
+            if language == "ar"
+            else "I am your accounting assistant inside the system. I can explain reports, trace journal amounts, and prepare draft entries according to your permissions."
+        )
+        return GeminiAssistantReply(
+            reply=reply,
+            intent="identity",
+            confidence="high",
+            data_sources=[],
+        )
+    return None
+
 # ── Main dispatcher ───────────────────────────────────────────────────────────
 
 def dispatch_gemini_assistant(
@@ -1948,6 +2080,7 @@ def dispatch_gemini_assistant(
     language: str,
     pending_transaction: PendingTransaction | None = None,
     pending_context_token: str | None = None,
+    history: list[ConversationTurn] | None = None,
 ) -> GeminiAssistantReply:
     """
     Main Gemini Assistant dispatcher.
@@ -1957,6 +2090,12 @@ def dispatch_gemini_assistant(
     4. Falls back to deterministic rules if Gemini unavailable
     5. Uses rules engine for action drafts (always safe, always confirmed)
     """
+    language = detect_message_language(message, language)
+
+    small_talk = _small_talk_reply(message, language)
+    if small_talk:
+        return small_talk
+
     if pending_transaction and pending_transaction.company_id != company_id:
         return GeminiAssistantReply(
             reply=_invalid_pending_context_reply(language),
@@ -2094,7 +2233,7 @@ def dispatch_gemini_assistant(
         ]
 
         context = _build_explain_context(pl_data, entries, bs_data)
-        gemini_reply = _call_gemini_for_answer(message, context, language)
+        gemini_reply = _call_gemini_for_answer(message, context, language, history)
         reply = gemini_reply or _fallback_explain_reply(pl_data, entries, language, bs_data)
 
         data_sources = ["profit_loss_report", "journal_entries"]
@@ -2142,7 +2281,7 @@ def dispatch_gemini_assistant(
         ]
 
         context = _build_trace_context(matches)
-        gemini_reply = _call_gemini_for_answer(message, context, language)
+        gemini_reply = _call_gemini_for_answer(message, context, language, history)
         reply = gemini_reply or _fallback_trace_reply(matches, amount, language)
 
         return GeminiAssistantReply(
@@ -2172,7 +2311,7 @@ def dispatch_gemini_assistant(
         action_desc = action_filter or "recent actions"
         logs = _tool_get_recent_audit_logs(db, company_id, action=action_filter, limit=10)
         context = _build_who_action_context(logs)
-        gemini_reply = _call_gemini_for_answer(message, context, language)
+        gemini_reply = _call_gemini_for_answer(message, context, language, history)
         reply = gemini_reply or _fallback_who_action_reply(logs, language, action_desc)
 
         return GeminiAssistantReply(
@@ -2195,7 +2334,7 @@ def dispatch_gemini_assistant(
         # 3. Build context for Gemini
         context = _build_report_context(data, start_date, end_date, period_label)
         # 4. Try Gemini, fallback to deterministic
-        gemini_reply = _call_gemini_for_answer(message, context, language)
+        gemini_reply = _call_gemini_for_answer(message, context, language, history)
         reply = gemini_reply or _fallback_report_reply(
             data, language, start_date, end_date, period_label
         )
@@ -2219,7 +2358,7 @@ def dispatch_gemini_assistant(
 
         logs = _tool_get_recent_audit_logs(db, company_id, action=action_filter, limit=10)
         context = _build_audit_context(logs)
-        gemini_reply = _call_gemini_for_answer(message, context, language)
+        gemini_reply = _call_gemini_for_answer(message, context, language, history)
         reply = gemini_reply or _fallback_audit_reply(logs, language)
         return GeminiAssistantReply(
             reply=reply,
@@ -2233,7 +2372,7 @@ def dispatch_gemini_assistant(
         entries = _tool_get_recent_journal_entries(db, company_id, limit=5)
         total = count_journal_entries(db=db, company_id=company_id)
         context = _build_journal_context(entries, total)
-        gemini_reply = _call_gemini_for_answer(message, context, language)
+        gemini_reply = _call_gemini_for_answer(message, context, language, history)
         reply = gemini_reply or _fallback_journal_reply(entries, total, language)
         return GeminiAssistantReply(
             reply=reply,
@@ -2246,7 +2385,7 @@ def dispatch_gemini_assistant(
     if intent == "user_question":
         users = _tool_get_company_users(db, company_id)
         context = _build_user_context(users)
-        gemini_reply = _call_gemini_for_answer(message, context, language)
+        gemini_reply = _call_gemini_for_answer(message, context, language, history)
         reply = gemini_reply or _fallback_user_reply(users, language)
         return GeminiAssistantReply(
             reply=reply,

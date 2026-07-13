@@ -4,6 +4,7 @@ Tests for the Gemini Assistant endpoints:
   POST /ai/gemini-assistant/confirm-action
 """
 
+import re
 import requests
 from datetime import date, datetime, timezone
 
@@ -168,6 +169,79 @@ def test_gemini_assistant_requires_authentication(base_url, default_company_id):
     )
     assert response.status_code in (401, 403)
 
+
+def test_gemini_assistant_arabic_casual_greetings_bypass_accounting_routes(
+    base_url, admin_headers, default_company_id,
+):
+    examples = [
+        "السلام عليكم",
+        "سلام عليكم",
+        "مرحبا",
+        "أهلا",
+        "صباح الخير",
+        "مساء الخير",
+        "كيف حالك؟",
+    ]
+    forbidden = ("الإيرادات", "المصروفات", "الربح", "الرصيد", "القيود")
+
+    for message in examples:
+        response = gemini_assistant_request(
+            base_url, admin_headers, default_company_id, message, language="en"
+        )
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["intent"] == "greeting"
+        assert data["data_sources"] == []
+        assert data["suggested_action"] is None
+        assert data["pending_transaction"] is None
+        assert not re.search(r"\d", data["reply"])
+        assert not any(term in data["reply"] for term in forbidden)
+
+    salam = gemini_assistant_request(
+        base_url, admin_headers, default_company_id, "سلام عليكم", language="en"
+    ).json()
+    assert salam["reply"] == "وعليكم السلام ورحمة الله وبركاته، كيف أقدر أساعدك اليوم؟"
+
+
+def test_gemini_assistant_english_casual_greetings_bypass_accounting_routes(
+    base_url, admin_headers, default_company_id,
+):
+    for message in ["Hello", "Hi", "Good morning", "Good evening", "How are you"]:
+        response = gemini_assistant_request(
+            base_url, admin_headers, default_company_id, message, language="ar"
+        )
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["intent"] == "greeting"
+        assert data["data_sources"] == []
+        assert data["suggested_action"] is None
+        assert data["pending_transaction"] is None
+        assert not re.search(r"\d", data["reply"])
+        assert all(
+            term not in data["reply"].lower()
+            for term in ("revenue", "expense", "profit", "balance", "journal")
+        )
+
+
+def test_gemini_assistant_identity_uses_latest_message_language(
+    base_url, admin_headers, default_company_id,
+):
+    arabic = gemini_assistant_request(
+        base_url, admin_headers, default_company_id, "من أنت؟", language="en"
+    )
+    assert arabic.status_code == 200, arabic.text
+    assert arabic.json()["intent"] == "identity"
+    assert arabic.json()["reply"] == (
+        "أنا مساعدك المحاسبي داخل النظام. أقدر أشرح التقارير، أبحث في القيود، "
+        "وأجهز مسودات قيود وفق صلاحياتك."
+    )
+
+    english = gemini_assistant_request(
+        base_url, admin_headers, default_company_id, "Who are you", language="ar"
+    )
+    assert english.status_code == 200, english.text
+    assert english.json()["intent"] == "identity"
+    assert english.json()["reply"].startswith("I am your accounting assistant")
 
 def test_gemini_assistant_confirm_action_requires_authentication(base_url, default_company_id):
     """Unauthenticated confirm-action must be rejected."""
