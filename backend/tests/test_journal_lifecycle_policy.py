@@ -23,6 +23,13 @@ def _entry(base_url, headers, status="draft"):
     })
     assert r.status_code == 201, r.text
     entry = r.json()
+    assert entry["created_by_user_id"] is not None
+    assert entry["creator_name"]
+    actor_response = requests.get(f"{base_url}/auth/me", headers=headers)
+    assert actor_response.status_code == 200, actor_response.text
+    actor = actor_response.json()
+    assert entry["created_by_user_id"] == actor["id"]
+    assert entry["creator_name"] == actor["full_name"]
     if status in {"reviewed", "posted"}:
         r = requests.post(f"{base_url}/journal-entries/{entry['id']}/review", headers=headers)
         assert r.status_code == 200, r.text
@@ -65,6 +72,8 @@ def test_reversal_swaps_lines_and_duplicate_is_409(base_url, admin_headers):
     reversal = first.json()
     assert reversal["status"] == "draft"
     assert reversal["reversal_of_id"] == original["id"]
+    assert reversal["created_by_user_id"] == original["created_by_user_id"]
+    assert reversal["creator_name"] == original["creator_name"]
     assert [(line["debit"], line["credit"]) for line in reversal["lines"]] == [("0.00", "1000.00"), ("1000.00", "0.00")]
     second = requests.post(f"{base_url}/journal-entries/{original['id']}/reverse", headers=admin_headers, json={**payload, "entry_no": f"REV2-{uuid.uuid4().hex[:8]}"})
     assert second.status_code == 409

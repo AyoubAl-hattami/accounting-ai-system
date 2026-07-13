@@ -50,6 +50,16 @@ function calcTotals(entry: JournalEntry) {
   }
   return { debit, credit, balanced: Math.abs(debit - credit) < 0.005 };
 }
+function journalSourceLabel(sourceType: string | null, language: 'en' | 'ar') {
+  const labels: Record<string, { en: string; ar: string }> = {
+    manual: { en: 'Manual', ar: 'يدوي' },
+    gemini_assistant: { en: 'Gemini AI', ar: 'مساعد Gemini' },
+    reversal: { en: 'Reversal', ar: 'عكس القيد' },
+    opening_balance: { en: 'Opening balance', ar: 'رصيد افتتاحي' },
+  };
+  const key = sourceType || 'manual';
+  return labels[key]?.[language] || key.replace(/_/g, ' ');
+}
 
 export default function JournalEntriesPage() {
   const { t } = useI18n();
@@ -77,7 +87,7 @@ interface JournalEntriesContentProps {
 }
 
 function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }: JournalEntriesContentProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const toast = useToast();
   const [skip, setSkip] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
@@ -334,21 +344,34 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
             >
               {/* Desktop table */}
               <div className="hidden lg:block glass-panel overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                <div>
+                  <table className="w-full table-fixed">
+                    <colgroup>
+                      <col className="w-8" />
+                      <col className="w-[130px]" />
+                      <col className="w-[90px]" />
+                      <col />
+                      <col className="w-[88px]" />
+                      <col className="w-[130px]" />
+                      <col className="hidden w-[50px] 2xl:table-column" />
+                      <col className="w-[90px]" />
+                      <col className="w-[90px]" />
+                      <col className="hidden w-[90px] 2xl:table-column" />
+                      <col className="w-[110px]" />
+                    </colgroup>
                     <thead>
                       <tr className="border-b border-white/[0.06]">
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3 w-8" />
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.journals.entryNo}</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.journals.entryDate}</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.description}</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.status}</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.source}</th>
-                        <th className="text-center text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.journals.lines}</th>
-                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.journals.debit}</th>
-                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.journals.credit}</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.journals.posted}</th>
-                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.actions}</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5 w-8" />
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5">{t.journals.entryNo}</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5">{t.journals.entryDate}</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5">{t.common.description}</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5">{t.common.status}</th>
+                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5">{t.common.source}</th>
+                        <th className="hidden text-center text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5 2xl:table-cell">{t.journals.lines}</th>
+                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5">{t.journals.debit}</th>
+                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5">{t.journals.credit}</th>
+                        <th className="hidden text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5 2xl:table-cell">{t.journals.posted}</th>
+                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5">{t.common.actions}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -365,31 +388,34 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
                               className={`border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors cursor-pointer ${isExpanded ? 'bg-white/[0.02]' : ''}`}
                               onClick={() => setExpandedId(isExpanded ? null : entry.id)}
                             >
-                              <td className="px-4 py-3">
+                              <td className="px-2 py-2.5">
                                 <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                               </td>
-                              <td className="px-4 py-3">
-                                <span className="text-sm font-mono font-semibold text-brand-400">{entry.entry_no}</span>
+                              <td className="px-2 py-2.5">
+                                <span className="block max-w-full truncate text-xs font-mono font-semibold text-brand-400" title={entry.entry_no}>{entry.entry_no}</span>
                               </td>
-                              <td className="px-4 py-3">
+                              <td className="px-2 py-2.5">
                                 <span className="text-sm text-gray-300">{new Date(entry.entry_date).toLocaleDateString()}</span>
                               </td>
-                              <td className="px-4 py-3">
-                                <span className="text-sm text-gray-200 truncate block max-w-[200px]">{entry.description || '—'}</span>
+                              <td className="px-2 py-2.5">
+                                <span className="block max-w-full truncate text-sm text-gray-200" title={entry.description || undefined}>{entry.description || '—'}</span>
                               </td>
-                              <td className="px-4 py-3">
+                              <td className="px-2 py-2.5">
                                 <JournalStatusBadge status={entry.status} />
                               </td>
-                              <td className="px-4 py-3">
-                                <span className="text-xs text-gray-500">{entry.source_type || '—'}</span>
+                              <td className="px-2 py-2.5">
+                                <div className="min-w-0 leading-tight" title={`${journalSourceLabel(entry.source_type, language)} — ${entry.creator_name || (language === 'ar' ? 'غير متوفر' : 'Not available')}`}>
+                                  <span className="block truncate text-xs font-medium text-gray-300">{journalSourceLabel(entry.source_type, language)}</span>
+                                  <span className="block truncate text-[10px] text-gray-500">{language === 'ar' ? 'بواسطة:' : 'By:'} {entry.creator_name || (language === 'ar' ? 'غير متوفر' : 'Not available')}</span>
+                                </div>
                               </td>
-                              <td className="px-4 py-3 text-center">
+                              <td className="hidden px-2 py-2.5 text-center 2xl:table-cell">
                                 <span className="text-xs text-gray-400">{entry.lines.length}</span>
                               </td>
-                              <td className="px-4 py-3 text-right">
+                              <td className="px-2 py-2.5 text-right">
                                 <span className="text-sm font-mono text-emerald-400">{fmtCurrency(totals.debit)}</span>
                               </td>
-                              <td className="px-4 py-3 text-right">
+                              <td className="px-2 py-2.5 text-right">
                                 <div className="flex items-center justify-end gap-1.5">
                                   <span className="text-sm font-mono text-red-400">{fmtCurrency(totals.credit)}</span>
                                   {totals.balanced && (
@@ -397,19 +423,19 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
                                   )}
                                 </div>
                               </td>
-                              <td className="px-4 py-3">
+                              <td className="hidden px-2 py-2.5 2xl:table-cell">
                                 <span className="text-xs text-gray-500">
                                   {entry.posted_at ? new Date(entry.posted_at).toLocaleDateString() : '—'}
                                 </span>
                               </td>
-                              <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex items-center justify-end gap-2">
+                              <td className="px-2 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex flex-wrap items-center justify-end gap-1">
                                   {entry.status === 'draft' && (
                                     <>
                                       {canReviewJournal(userRole) && (
                                         <button
                                           onClick={() => handleOpenReviewModal(entry)}
-                                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                                          className="inline-flex items-center gap-1 px-2 py-1 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
                                         >
                                           Review
                                         </button>
@@ -417,7 +443,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
                                       {canVoidJournal(userRole) && (
                                         <button
                                           onClick={() => handleOpenVoidModal(entry)}
-                                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                                          className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
                                         >
                                           {t.journals.void}
                                         </button>
@@ -427,7 +453,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
                                   {entry.status === 'reviewed' && canPostJournal(userRole) && (
                                     <button
                                       onClick={() => handleOpenPostModal(entry)}
-                                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/30 text-amber-400 hover:text-amber-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                                      className="inline-flex items-center gap-1 px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/30 text-amber-400 hover:text-amber-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
                                     >
                                       Post
                                     </button>
@@ -435,7 +461,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
                                   {entry.status === 'posted' && canReverseJournal(userRole) && (
                                     <button
                                       onClick={() => handleOpenReverseModal(entry)}
-                                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/30 text-purple-400 hover:text-purple-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
+                                      className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/30 text-purple-400 hover:text-purple-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
                                     >
                                       {t.journals.reverse}
                                     </button>
@@ -448,6 +474,11 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
                               {isExpanded && (
                                 <tr key={`${entry.id}-lines`}>
                                   <td colSpan={11} className="p-0 border-b border-white/[0.05]">
+                                    <div className="flex flex-wrap gap-x-5 gap-y-1 border-b border-white/[0.04] px-4 py-2 text-[11px] text-gray-500">
+                                      <span>{t.journals.lines}: {entry.lines.length}</span>
+                                      <span>{t.journals.posted}: {entry.posted_at ? new Date(entry.posted_at).toLocaleDateString() : '—'}</span>
+                                      <span>{t.common.source}: {journalSourceLabel(entry.source_type, language)} · {language === 'ar' ? 'بواسطة:' : 'By:'} {entry.creator_name || (language === 'ar' ? 'غير متوفر' : 'Not available')}</span>
+                                    </div>
                                     <JournalEntryLines lines={entry.lines} />
                                   </td>
                                 </tr>
@@ -504,7 +535,7 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
                         <div className="flex items-center gap-4 text-xs text-gray-500 mb-2">
                           <span>{new Date(entry.entry_date).toLocaleDateString()}</span>
                           <span>{entry.lines.length} line{entry.lines.length !== 1 ? 's' : ''}</span>
-                          {entry.source_type && <span>{entry.source_type}</span>}
+                          <span>{journalSourceLabel(entry.source_type, language)} · {language === 'ar' ? 'بواسطة:' : 'By:'} {entry.creator_name || (language === 'ar' ? 'غير متوفر' : 'Not available')}</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">

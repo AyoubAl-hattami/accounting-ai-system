@@ -463,6 +463,19 @@ def test_gemini_assistant_confirm_action_writes_audit_log(
     )
 
     entity_id = data["entity_id"]
+    journal_response = requests.get(
+        f"{base_url}/journal-entries/{entity_id}", headers=admin_headers
+    )
+    assert journal_response.status_code == 200
+    journal = journal_response.json()
+    assert journal["source_type"] == "gemini_assistant"
+    assert journal["created_by_user_id"] is not None
+    assert journal["creator_name"]
+    actor_response = requests.get(f"{base_url}/auth/me", headers=admin_headers)
+    assert actor_response.status_code == 200
+    actor = actor_response.json()
+    assert journal["created_by_user_id"] == actor["id"]
+    assert journal["creator_name"] == actor["full_name"]
 
     # Verify audit log exists
     audit_response = requests.get(

@@ -159,6 +159,7 @@ def create_journal_entry_endpoint(
         payload=payload,
         fiscal_year=fiscal_year,
         fiscal_period=fiscal_period,
+        created_by_user_id=current_user.id,
     )
 
     create_audit_log(
@@ -272,6 +273,7 @@ def create_opening_balance_endpoint(
         payload=payload,
         fiscal_year=fiscal_year,
         fiscal_period=fiscal_period,
+        created_by_user_id=current_user.id,
     )
 
     create_audit_log(
@@ -737,6 +739,7 @@ def reverse_journal_entry_endpoint(
         payload=payload,
         fiscal_year=fiscal_year,
         fiscal_period=fiscal_period,
+        created_by_user_id=current_user.id,
     )
 
     create_audit_log(

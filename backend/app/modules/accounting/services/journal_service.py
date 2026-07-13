@@ -34,7 +34,7 @@ def get_journal_entry(
 ) -> JournalEntry | None:
     statement = (
         select(JournalEntry)
-        .options(selectinload(JournalEntry.lines))
+        .options(selectinload(JournalEntry.lines), selectinload(JournalEntry.creator))
         .where(JournalEntry.id == journal_entry_id)
     )
 
@@ -69,7 +69,7 @@ def list_journal_entries(
 ) -> list[JournalEntry]:
     statement = (
         select(JournalEntry)
-        .options(selectinload(JournalEntry.lines))
+        .options(selectinload(JournalEntry.lines), selectinload(JournalEntry.creator))
         .order_by(JournalEntry.entry_date.desc(), JournalEntry.id.desc())
     )
 
@@ -133,6 +133,7 @@ def create_journal_entry(
     payload: JournalEntryCreate,
     fiscal_year: FiscalYear,
     fiscal_period: FiscalPeriod,
+    created_by_user_id: int | None = None,
 ) -> JournalEntry:
     journal_entry = JournalEntry(
         company_id=payload.company_id,
@@ -144,6 +145,7 @@ def create_journal_entry(
         status="draft",
         source_type=payload.source_type,
         source_id=payload.source_id,
+        created_by_user_id=created_by_user_id,
     )
 
     journal_entry.lines = [
@@ -170,6 +172,7 @@ def create_opening_balance_entry(
     payload: OpeningBalanceCreate,
     fiscal_year: FiscalYear,
     fiscal_period: FiscalPeriod,
+    created_by_user_id: int | None = None,
 ) -> JournalEntry:
     journal_entry = JournalEntry(
         company_id=payload.company_id,
@@ -181,6 +184,7 @@ def create_opening_balance_entry(
         status="draft",
         source_type="opening_balance",
         source_id=None,
+        created_by_user_id=created_by_user_id,
     )
 
     journal_entry.lines = [
@@ -281,6 +285,7 @@ def reverse_journal_entry(
     payload: JournalEntryReverseCreate,
     fiscal_year: FiscalYear,
     fiscal_period: FiscalPeriod,
+    created_by_user_id: int | None = None,
 ) -> JournalEntry:
     reversal_entry = JournalEntry(
         company_id=original_entry.company_id,
@@ -293,6 +298,7 @@ def reverse_journal_entry(
         source_type="reversal",
         source_id=str(original_entry.id),
         reversal_of_id=original_entry.id,
+        created_by_user_id=created_by_user_id,
     )
 
     reversal_entry.lines = [

@@ -19,6 +19,7 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.modules.accounting.models.journal_line import JournalLine
+    from app.modules.accounting.models.user import User
 
 
 class JournalEntry(Base):
@@ -66,6 +67,7 @@ class JournalEntry(Base):
 
     source_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     source_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
 
     reversal_of_id: Mapped[int | None] = mapped_column(
         ForeignKey("journal_entries.id", ondelete="RESTRICT"),
@@ -97,3 +99,8 @@ class JournalEntry(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    creator: Mapped['User | None'] = relationship(lazy='selectin')
+
+    @property
+    def creator_name(self) -> str | None:
+        return self.creator.full_name if self.creator else None

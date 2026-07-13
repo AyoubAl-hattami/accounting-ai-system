@@ -94,6 +94,8 @@ class JournalEntryRead(BaseModel):
 
     source_type: str | None = None
     source_id: str | None = None
+    created_by_user_id: int | None = None
+    creator_name: str | None = None
 
     reversal_of_id: int | None = None
     posted_at: datetime | None = None

@@ -63,6 +63,8 @@ export interface JournalEntry {
   status: JournalEntryStatus;
   source_type: string | null;
   source_id: string | null;
+  created_by_user_id: number | null;
+  creator_name: string | null;
   reversal_of_id: number | null;
   posted_at: string | null;
   created_at: string;

@@ -312,6 +312,7 @@ def gemini_assistant_confirm_action_endpoint(
         payload=journal_create,
         fiscal_year=fiscal_year,
         fiscal_period=fiscal_period,
+        created_by_user_id=current_user.id,
     )
 
     # ── Audit log (best-effort: journal entry already committed) ────────────
