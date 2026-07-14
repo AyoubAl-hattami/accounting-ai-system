@@ -12,7 +12,14 @@ export interface GeminiMessage {
   role: 'user' | 'assistant';
   content: string;
   intent?: string;
+  metadata?: AssistantMessageMetadata | null;
   timestamp: Date;
+}
+
+export interface AssistantMessageMetadata {
+  intent?: string;
+  suggested_action?: SuggestedAction | null;
+  grounding?: unknown;
 }
 
 export interface AssistantConversation {
@@ -80,10 +87,7 @@ interface PersistedMessage {
   content: string;
   language: 'en' | 'ar';
   message_type: string;
-  metadata: {
-    intent?: string;
-    suggested_action?: SuggestedAction | null;
-  } | null;
+  metadata: AssistantMessageMetadata | null;
   created_at: string;
 }
 
@@ -135,6 +139,7 @@ function toUiMessage(message: PersistedMessage): GeminiMessage {
     role: message.role === 'user' ? 'user' : 'assistant',
     content: message.content,
     intent: message.metadata?.intent,
+    metadata: message.metadata,
     timestamp: new Date(message.created_at),
   };
 }

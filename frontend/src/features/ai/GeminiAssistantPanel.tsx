@@ -34,6 +34,7 @@ import {
   ChevronLeft,
 } from 'lucide-react';
 import { useI18n } from '../../i18n';
+import GroundingCards from './GroundingCards';
 import type {
   AssistantConversation,
   GeminiMessage,
@@ -97,7 +98,7 @@ function RichText({ text }: { text: string }) {
   );
 }
 
-function MessageBubble({ message, dir }: { message: GeminiMessage; dir: 'ltr' | 'rtl' }) {
+function MessageBubble({ message, dir, language }: { message: GeminiMessage; dir: 'ltr' | 'rtl'; language: 'en' | 'ar' }) {
   const isUser = message.role === 'user';
   const isError = message.intent === 'error';
   const isConfirmed = message.intent === 'action_confirmed';
@@ -154,6 +155,7 @@ function MessageBubble({ message, dir }: { message: GeminiMessage; dir: 'ltr' | 
             <RichText text={line} />
           </p>
         ))}
+        <GroundingCards message={message} language={language} dir={dir} />
         <p className="text-[10px] text-gray-600 mt-1.5">
           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </p>
@@ -671,7 +673,7 @@ export default function GeminiAssistantPanel({
                     </motion.div>
                   )}
 
-                  {!isRestoring && messages.map((message) => <MessageBubble key={message.id} message={message} dir={dir} />)}
+                  {!isRestoring && messages.map((message) => <MessageBubble key={message.id} message={message} dir={dir} language={language} />)}
 
                   {isLoading && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2.5">

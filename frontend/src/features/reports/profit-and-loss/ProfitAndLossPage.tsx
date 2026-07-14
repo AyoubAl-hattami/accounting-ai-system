@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   BarChart,
@@ -68,8 +69,9 @@ interface ProfitAndLossContentProps {
 
 function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAndLossContentProps) {
   const { t } = useI18n();
-  const [startDate, setStartDate] = useState<string | null>(null);
-  const [endDate, setEndDate] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const [startDate, setStartDate] = useState<string | null>(() => searchParams.get('start_date'));
+  const [endDate, setEndDate] = useState<string | null>(() => searchParams.get('end_date'));
   const [searchQuery, setSearchQuery] = useState('');
   const [exporting, setExporting] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);

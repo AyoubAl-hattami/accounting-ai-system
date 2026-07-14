@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { dataEvents } from '../../lib/dataEvents';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageLayout from '../../components/layout/PageLayout';
@@ -93,6 +94,8 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [searchParams] = useSearchParams();
+  const requestedEntryId = Number(searchParams.get('entry_id'));
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedReviewEntry, setSelectedReviewEntry] = useState<JournalEntry | null>(null);
   const [selectedPostEntry, setSelectedPostEntry] = useState<JournalEntry | null>(null);
@@ -107,6 +110,11 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
     fetchEntries,
     pageSize,
   } = useJournalEntries({ companyId: selectedCompanyId, skip });
+
+  useEffect(() => {
+    if (!Number.isInteger(requestedEntryId) || requestedEntryId <= 0 || entriesLoading) return;
+    if (entries.some((entry) => entry.id === requestedEntryId)) setExpandedId(requestedEntryId);
+  }, [entries, entriesLoading, requestedEntryId]);
 
   const {
     reviewJournalEntry,
