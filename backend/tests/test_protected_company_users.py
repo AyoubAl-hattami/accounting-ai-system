@@ -3,8 +3,29 @@ import uuid
 import requests
 
 
+from app.core.database import SessionLocal
+from app.core.security import hash_password
+from app.modules.accounting.models.user import User
+from app.modules.accounting.services.auth_service import create_user_token
+
 PASSWORD = "Password123"
 
+
+def _create_db_user(prefix, full_name):
+    email = f"{prefix}_{uuid.uuid4().hex}@example.com"
+    with SessionLocal() as db:
+        user = User(
+            email=email,
+            full_name=full_name,
+            hashed_password=hash_password(PASSWORD),
+            is_active=True,
+            is_superuser=False,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        token = create_user_token(user)
+        return user.id, {"Authorization": f"Bearer {token}"}
 
 def _register_and_login(base_url, prefix, full_name="Test User"):
     email = f"{prefix}_{uuid.uuid4().hex[:12]}@example.com"
@@ -706,9 +727,9 @@ def test_company_admin_can_deactivate_and_reactivate_user_in_same_company(base_u
 
 
 def test_viewer_cannot_deactivate_or_reactivate_company_user(base_url):
-    _, _, admin_headers = _register_and_login(base_url, "role_admin", "Role Admin")
-    viewer_id, _, viewer_headers = _register_and_login(base_url, "role_viewer", "Role Viewer")
-    target_user_id, _, _ = _register_and_login(base_url, "role_target", "Role Target")
+    _, admin_headers = _create_db_user("role_admin", "Role Admin")
+    viewer_id, viewer_headers = _create_db_user("role_viewer", "Role Viewer")
+    target_user_id, _ = _create_db_user("role_target", "Role Target")
     company_id = _create_company(base_url, admin_headers, "RoleCompany")
     _add_company_user(base_url, admin_headers, company_id, viewer_id, "viewer")
     _add_company_user(base_url, admin_headers, company_id, target_user_id, "viewer")
@@ -730,3 +751,9 @@ def test_viewer_cannot_deactivate_or_reactivate_company_user(base_url):
         headers=viewer_headers,
     )
     assert bad_reactivate.status_code == 403
+
+    restore = requests.patch(
+        f"{base_url}/company-users/users/{target_user_id}/reactivate?company_id={company_id}",
+        headers=admin_headers,
+    )
+    assert restore.status_code == 200, restore.text

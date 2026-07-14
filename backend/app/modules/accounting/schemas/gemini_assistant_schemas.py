@@ -167,11 +167,42 @@ class ProfitAndLossReference(BaseModel):
 class ProfitAndLossGrounding(BaseModel):
     status: Literal["grounded", "unavailable"]
     kind: Literal["profit_and_loss"]
+    requested_metric: Literal["revenue", "expenses", "net_profit"] | None = None
     period: ProfitAndLossPeriod | None = None
     metrics: ProfitAndLossMetrics | None = None
     reference: ProfitAndLossReference | None = None
 
 # ── Gemini Assistant response ─────────────────────────────────────────────────
+
+class JournalEvidenceEntry(BaseModel):
+    journal_entry_id: int
+    entry_number: str
+    entry_date: str
+    description: str | None = None
+    status: str
+    source: str
+    creator_name: str
+    total_debit: str
+    total_credit: str
+    matched_amount: str | None = None
+    match_reason: Literal["debit_line", "credit_line", "total_debit", "total_credit", "report_revenue_contribution", "report_expense_contribution"]
+
+
+class JournalEvidenceSummary(BaseModel):
+    total_matches: int
+    returned_matches: int
+    has_more: bool
+
+
+class JournalEvidenceGrounding(BaseModel):
+    status: Literal["grounded", "unavailable"]
+    kind: Literal["journal_evidence"]
+    basis: Literal["amount_trace", "profit_and_loss_contribution"] | None = None
+    metric: Literal["revenue", "expenses", "net_profit"] | None = None
+    period: ProfitAndLossPeriod | None = None
+    query: dict[str, str] = Field(default_factory=dict)
+    summary: JournalEvidenceSummary | None = None
+    entries: list[JournalEvidenceEntry] = Field(default_factory=list)
 
 class GeminiAssistantReply(BaseModel):
     reply: str
@@ -183,7 +214,7 @@ class GeminiAssistantReply(BaseModel):
     clarification_options: list[ClarificationOption] = Field(default_factory=list)
     pending_context_token: str | None = None
     evidence: list[EvidenceEntry] = Field(default_factory=list)
-    grounding: ProfitAndLossGrounding | None = None
+    grounding: ProfitAndLossGrounding | JournalEvidenceGrounding | None = None
 
 
 # ── Confirm-action request ────────────────────────────────────────────────────

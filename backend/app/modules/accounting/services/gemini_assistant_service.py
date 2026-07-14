@@ -31,7 +31,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, case, exists
 
 from app.core.config import settings
 from app.core.clock import get_today_date
@@ -44,6 +44,9 @@ from app.modules.accounting.schemas.gemini_assistant_schemas import (
     ProfitAndLossMetrics,
     ProfitAndLossPeriod,
     ProfitAndLossReference,
+    JournalEvidenceGrounding,
+    JournalEvidenceEntry,
+    JournalEvidenceSummary,
     MappedTransaction,
     PageContext,
     ParsedTransaction,
@@ -61,6 +64,7 @@ from app.modules.accounting.services.audit_service import list_audit_logs
 from app.modules.accounting.services.report_service import (
     get_profit_and_loss,
     get_balance_sheet,
+    REPORTABLE_ENTRY_STATUSES,
 )
 from app.modules.accounting.services.account_service import list_accounts
 from app.modules.accounting.services.journal_service import (
@@ -246,6 +250,86 @@ def _tool_get_accounts(db: Session, company_id: int) -> list[dict]:
         return []
 
 
+def _journal_source(source_type: str | None) -> str:
+    allowed = {"manual", "gemini_assistant", "reversal", "opening_balance"}
+    return source_type if source_type in allowed else "manual"
+
+
+def _build_journal_evidence(matches: list[dict], amount: Decimal) -> JournalEvidenceGrounding:
+    entries = []
+    for match in matches[:20]:
+        entries.append(JournalEvidenceEntry(
+            journal_entry_id=match["id"],
+            entry_number=str(match["entry_no"]),
+            entry_date=match["entry_date"],
+            description=match.get("description"),
+            status=match["status"],
+            source=_journal_source(match.get("source_type")),
+            creator_name=match.get("created_by") or "Not available",
+            total_debit=match["total_debit"],
+            total_credit=match["total_credit"],
+            matched_amount=amount.quantize(Decimal("0.01")).to_eng_string(),
+            match_reason=match["match_reason"],
+        ))
+    return JournalEvidenceGrounding(
+        status="grounded", kind="journal_evidence", basis="amount_trace",
+        query={"amount": amount.quantize(Decimal("0.01")).to_eng_string()},
+        summary=JournalEvidenceSummary(total_matches=int(matches[0].get("total_matches", len(matches))) if matches else 0, returned_matches=len(entries), has_more=(int(matches[0].get("total_matches", len(matches))) > len(entries)) if matches else False),
+        entries=entries,
+    )
+
+
+def _build_contribution_evidence(
+    matches: list[dict], metric: str, start_date: date | None, end_date: date | None, period_label: str,
+) -> JournalEvidenceGrounding:
+    entries = [JournalEvidenceEntry(
+        journal_entry_id=m["id"], entry_number=str(m["entry_no"]), entry_date=m["entry_date"],
+        description=m.get("description"), status=m["status"], source=_journal_source(m.get("source_type")),
+        creator_name=m.get("created_by") or "Not available", total_debit=m["total_debit"],
+        total_credit=m["total_credit"], matched_amount=m["matched_amount"], match_reason=m["match_reason"],
+    ) for m in matches[:20]]
+    total = int(matches[0].get("total_matches", len(matches))) if matches else 0
+    return JournalEvidenceGrounding(
+        status="grounded", kind="journal_evidence", basis="profit_and_loss_contribution", metric=metric,
+        period=ProfitAndLossPeriod(start_date=start_date.isoformat() if start_date else None, end_date=end_date.isoformat() if end_date else None, label=period_label),
+        summary=JournalEvidenceSummary(total_matches=total, returned_matches=len(entries), has_more=total > len(entries)), entries=entries,
+    )
+
+
+def _contribution_reply(matches: list[dict], metric: str, period_label: str, language: str) -> str:
+    if not matches:
+        return "لم يتم العثور على قيود مساهمة في هذا التقرير للفترة المحددة." if language == "ar" else "No contributing journal entries were found for this report period."
+    name = {"revenue": ("الإيرادات", "revenue"), "expenses": ("المصروفات", "expenses"), "net_profit": ("الإيرادات والمصروفات", "revenue and expenses")}[metric]
+    head = f"تم العثور على {int(matches[0].get('total_matches', len(matches)))} قيود ساهمت في تكوين {name[0]} للفترة {period_label}." if language == "ar" else f"I found {int(matches[0].get('total_matches', len(matches)))} entries contributing to {name[1]} for {period_label}."
+    lines = [head]
+    for i, m in enumerate(matches[:10], 1):
+        label = "المساهمة" if language == "ar" else "Contribution"
+        lines.append(f"{i}. {m['entry_no']} | {m['entry_date']} | {m.get('description') or ('غير متوفر' if language == 'ar' else 'Not available')} | {m['status']} | {label}: {m['matched_amount']}")
+    if int(matches[0].get("total_matches", len(matches))) > len(matches):
+        lines.append("يوجد المزيد من النتائج." if language == "ar" else "More results are available.")
+    return "\n".join(lines)
+
+def _unavailable_journal_grounding() -> JournalEvidenceGrounding:
+    return JournalEvidenceGrounding(status="unavailable", kind="journal_evidence")
+
+
+def _unavailable_journal_reply(language: str) -> str:
+    return ("تعذر التحقق من القيود من بيانات النظام حاليًا. لم يتم عرض نتائج تقديرية."
+            if language == "ar" else
+            "I could not verify the journal entries from the accounting data. No estimated results were shown.")
+
+def _deterministic_trace_reply(matches: list[dict], amount: Decimal, language: str) -> str:
+    value = f"{amount:,.2f}"
+    if not matches:
+        return (f"لم يتم العثور على قيود مطابقة للمبلغ {value} ضمن بيانات الشركة الحالية." if language == "ar" else f"No journal entries matching {value} were found in the current company data.")
+    head = (f"تم العثور على {len(matches)} قيود تحتوي على مبلغ {value}." if language == "ar" else f"I found {len(matches)} journal entries containing {value}.")
+    lines = [head]
+    for i, m in enumerate(matches[:10], 1):
+        reason = {"debit_line": "مبلغ مدين" if language == "ar" else "Debit amount", "credit_line": "مبلغ دائن" if language == "ar" else "Credit amount"}.get(m["match_reason"], m["match_reason"])
+        lines.append(f"{i}. {m['entry_no']} | {m['entry_date']} | {m.get('description') or ('غير متوفر' if language == 'ar' else 'Not available')} | {m['status']} | {reason} {value}")
+    if len(matches) > 10:
+        lines.append("يوجد المزيد من النتائج." if language == "ar" else "More results are available.")
+    return "\n".join(lines)
 # ── Deep-query tools for explain / trace / who questions ──────────────────────
 
 
@@ -292,81 +376,147 @@ def _tool_get_journal_entries_with_lines(
 
 
 def _tool_trace_amount(
-    db: Session, company_id: int, amount: float, account_hint: str | None = None,
-) -> list[dict]:
-    """Find journal entries containing a line matching the given amount (±0.01)."""
+    db: Session, company_id: int, amount: Decimal, account_hint: str | None = None,
+) -> list[dict] | None:
+    """Find bounded, company-scoped journal entries with an exact Decimal match."""
     try:
         target = Decimal(str(amount))
-        tolerance = Decimal("0.01")
-
-        stmt = (
-            select(JournalEntryModel)
-            .join(JournalLineModel, JournalLineModel.journal_entry_id == JournalEntryModel.id)
-            .where(
-                JournalEntryModel.company_id == company_id,
-                or_(
-                    func.abs(JournalLineModel.debit - target) <= tolerance,
-                    func.abs(JournalLineModel.credit - target) <= tolerance,
-                ),
-            )
-            .distinct()
-            .order_by(JournalEntryModel.entry_date.desc())
-            .limit(10)
+        line_match = or_(JournalLineModel.debit == target, JournalLineModel.credit == target)
+        scope = (
+            JournalEntryModel.company_id == company_id,
+            exists(
+                select(1).where(
+                    JournalLineModel.journal_entry_id == JournalEntryModel.id,
+                    JournalLineModel.company_id == company_id,
+                    line_match,
+                )
+            ),
         )
-        entries = list(db.scalars(stmt).all())
-
-        # Account lookup
-        accounts = {a.id: a for a in db.scalars(
-            select(AccountModel).where(AccountModel.company_id == company_id)
-        ).all()}
-
+        total_matches = db.scalar(
+            select(func.count(JournalEntryModel.id)).where(*scope)
+        ) or 0
+        entries = list(db.scalars(
+            select(JournalEntryModel)
+            .where(*scope)
+            .order_by(
+                case((JournalEntryModel.status == "posted", 0), else_=1),
+                JournalEntryModel.entry_date.desc(),
+                JournalEntryModel.created_at.desc(),
+                JournalEntryModel.id.desc(),
+            )
+            .limit(10)
+        ).all())
+        entry_ids = [entry.id for entry in entries]
+        lines = list(db.scalars(
+            select(JournalLineModel)
+            .where(
+                JournalLineModel.company_id == company_id,
+                JournalLineModel.journal_entry_id.in_(entry_ids),
+            )
+        ).all()) if entry_ids else []
+        lines_by_entry: dict[int, list[JournalLineModel]] = {}
+        for line in lines:
+            lines_by_entry.setdefault(line.journal_entry_id, []).append(line)
+        accounts = {a.id: a for a in db.scalars(select(AccountModel).where(AccountModel.company_id == company_id)).all()}
         result = []
-        for e in entries:
-            # Reload lines
-            db.refresh(e, ["lines"])
-            matching_lines = [
-                l for l in e.lines
-                if abs(float(l.debit) - amount) < 0.02 or abs(float(l.credit) - amount) < 0.02
-            ]
-            debit_accounts = []
-            credit_accounts = []
-            for line in e.lines:
-                acc = accounts.get(line.account_id)
-                acc_name = acc.name if acc else f"#{line.account_id}"
-                if float(line.debit) > 0:
-                    debit_accounts.append(acc_name)
-                if float(line.credit) > 0:
-                    credit_accounts.append(acc_name)
-
-            # Try to find actor from audit log
-            actor = _tool_get_entry_actor(db, company_id, e.id)
-
-            entry_dict = {
-                "entry_no": e.entry_no,
-                "entry_date": str(e.entry_date),
-                "description": e.description,
-                "status": e.status,
-                "source_type": e.source_type,
-                "amount": amount,
+        for entry in entries:
+            entry_lines = lines_by_entry.get(entry.id, [])
+            matching = [line for line in entry_lines if line.debit == target or line.credit == target]
+            if not matching:
+                continue
+            debit_match = any(line.debit == target for line in matching)
+            credit_match = any(line.credit == target for line in matching)
+            debit_accounts = [accounts[line.account_id].name for line in entry_lines if line.debit > 0 and line.account_id in accounts]
+            credit_accounts = [accounts[line.account_id].name for line in entry_lines if line.credit > 0 and line.account_id in accounts]
+            actor = _tool_get_entry_actor(db, company_id, entry.id)
+            result.append({
+                "id": entry.id,
+                "entry_no": entry.entry_no,
+                "entry_date": str(entry.entry_date),
+                "description": entry.description,
+                "status": entry.status,
+                "source_type": entry.source_type,
+                "amount": target,
+                "total_debit": sum((line.debit for line in entry_lines), Decimal("0.00")).quantize(Decimal("0.01")).to_eng_string(),
+                "total_credit": sum((line.credit for line in entry_lines), Decimal("0.00")).quantize(Decimal("0.01")).to_eng_string(),
+                "match_reason": "debit_line" if debit_match else "credit_line",
                 "debit_accounts": debit_accounts,
                 "credit_accounts": credit_accounts,
                 "created_by": actor.get("created_by"),
                 "posted_by": actor.get("posted_by"),
-            }
-
-            # Filter by account hint if provided
-            if account_hint:
-                hint_lower = account_hint.lower()
-                all_acc_names = [n.lower() for n in debit_accounts + credit_accounts]
-                if not any(hint_lower in n for n in all_acc_names):
-                    continue
-
-            result.append(entry_dict)
+                "total_matches": int(total_matches),
+            })
         return result
     except Exception as exc:
-        logger.warning("_tool_trace_amount failed: %s", exc)
-        return []
+        logger.warning("_tool_trace_amount failed: %s", type(exc).__name__)
+        return None
 
+def _tool_get_pl_contributors(
+    db: Session,
+    company_id: int,
+    start_date: date | None,
+    end_date: date | None,
+    metric: str,
+    limit: int = 10,
+) -> list[dict] | None:
+    """Return bounded entries using the same status/date/account rules as P&L."""
+    try:
+        account_types = ["income"] if metric == "revenue" else ["expense"]
+        line_scope = [
+            JournalLineModel.journal_entry_id == JournalEntryModel.id,
+            JournalLineModel.company_id == company_id,
+            AccountModel.id == JournalLineModel.account_id,
+            AccountModel.company_id == company_id,
+            AccountModel.account_type.in_(account_types),
+        ]
+        entry_scope = [
+            JournalEntryModel.company_id == company_id,
+            JournalEntryModel.status.in_(REPORTABLE_ENTRY_STATUSES),
+            exists(select(1).select_from(JournalLineModel).join(AccountModel, AccountModel.id == JournalLineModel.account_id).where(*line_scope)),
+        ]
+        if start_date is not None:
+            entry_scope.append(JournalEntryModel.entry_date >= start_date)
+        if end_date is not None:
+            entry_scope.append(JournalEntryModel.entry_date <= end_date)
+        total_matches = db.scalar(select(func.count(JournalEntryModel.id)).where(*entry_scope)) or 0
+        entries = list(db.scalars(
+            select(JournalEntryModel).where(*entry_scope).order_by(
+                JournalEntryModel.entry_date.desc(), JournalEntryModel.created_at.desc(), JournalEntryModel.id.desc()
+            ).limit(min(limit, 20))
+        ).all())
+        ids = [entry.id for entry in entries]
+        lines = list(db.execute(
+            select(JournalLineModel, AccountModel)
+            .join(AccountModel, AccountModel.id == JournalLineModel.account_id)
+            .where(JournalLineModel.company_id == company_id, JournalLineModel.journal_entry_id.in_(ids), AccountModel.account_type.in_(account_types))
+        ).all()) if ids else []
+        by_entry: dict[int, list[tuple[JournalLineModel, AccountModel]]] = {}
+        for line, account in lines:
+            by_entry.setdefault(line.journal_entry_id, []).append((line, account))
+        result = []
+        for entry in entries:
+            relevant = by_entry.get(entry.id, [])
+            if metric == "revenue":
+                contribution = sum((line.credit - line.debit for line, _ in relevant), Decimal("0.00"))
+                reason = "report_revenue_contribution"
+            else:
+                contribution = sum((line.debit - line.credit for line, _ in relevant), Decimal("0.00"))
+                reason = "report_expense_contribution"
+            if contribution == 0:
+                continue
+            actor = _tool_get_entry_actor(db, company_id, entry.id)
+            result.append({
+                "id": entry.id, "entry_no": entry.entry_no, "entry_date": str(entry.entry_date),
+                "description": entry.description, "status": entry.status, "source_type": entry.source_type,
+                "created_by": actor.get("created_by"), "total_matches": int(total_matches),
+                "total_debit": sum((line.debit for line in entry.lines), Decimal("0.00")).quantize(Decimal("0.01")).to_eng_string(),
+                "total_credit": sum((line.credit for line in entry.lines), Decimal("0.00")).quantize(Decimal("0.01")).to_eng_string(),
+                "matched_amount": contribution.quantize(Decimal("0.01")).to_eng_string(), "match_reason": reason,
+            })
+        return result
+    except Exception as exc:
+        logger.warning("_tool_get_pl_contributors failed: %s", type(exc).__name__)
+        return None
 
 def _tool_get_balance_sheet_data(db: Session, company_id: int) -> dict:
     """Get balance sheet totals and contributing account lines."""
@@ -488,6 +638,20 @@ def _tool_get_entry_actor(
 
 
 # ── Intent classification (deterministic) ────────────────────────────────────
+
+def _is_exact_amount_trace_request(message: str) -> bool:
+    """Recognize amount-trace wording before legacy generic classifiers."""
+    text = message.strip().lower()
+    if not re.search(r"\d[\d,]*(?:\.\d+)?", text):
+        return False
+    english = re.search(r"\b(where did|find entries containing|show entries containing|trace this amount)\b", text)
+    arabic = any(phrase in text for phrase in (
+        "\u0645\u0646 \u0623\u064a\u0646 \u062c\u0627\u0621",
+        "\u0623\u064a\u0646 \u064a\u0648\u062c\u062f",
+        "\u0627\u0628\u062d\u062b \u0639\u0646 \u0645\u0628\u0644\u063a",
+        "\u0627\u0639\u0631\u0636 \u0627\u0644\u0642\u064a\u0648\u062f \u0627\u0644\u062a\u064a \u0641\u064a\u0647\u0627",
+    ))
+    return bool(english or arabic)
 
 def _classify_intent(message: str) -> str:
     text = message.strip()
@@ -865,12 +1029,21 @@ def _build_user_context(users: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _requested_profit_metric(message: str) -> str:
+    text = message.lower()
+    if any(x in text for x in ("revenue", "sales", "\u0627\u0644\u0625\u064a\u0631\u0627\u062f\u0627\u062a", "\u0627\u0644\u0645\u0628\u064a\u0639\u0627\u062a")):
+        return "revenue"
+    if any(x in text for x in ("expense", "expenses", "\u0627\u0644\u0645\u0635\u0631\u0648\u0641\u0627\u062a")):
+        return "expenses"
+    return "net_profit"
+
 def _build_profit_loss_grounding(
     data: dict,
     company_id: int,
     start_date: date | None,
     end_date: date | None,
     period_label: str,
+    requested_metric: str = "net_profit",
 ) -> ProfitAndLossGrounding:
     """Serialize only verified P&L values for persistence and follow-ups."""
     if "error" in data:
@@ -883,6 +1056,7 @@ def _build_profit_loss_grounding(
     return ProfitAndLossGrounding(
         status="grounded",
         kind="profit_and_loss",
+        requested_metric=requested_metric,
         period=ProfitAndLossPeriod(
             start_date=start_date.isoformat() if start_date else None,
             end_date=end_date.isoformat() if end_date else None,
@@ -1039,19 +1213,40 @@ def _fallback_user_reply(users: list[dict], language: str) -> str:
 # ── Helpers for new intents ───────────────────────────────────────────────────
 
 
-def _extract_amount_from_message(message: str) -> float | None:
-    """Extract a numeric amount from the user's message."""
-    # Match numbers like 1,500.00 or 1500 or 500
-    matches = re.findall(r'[\d,]+\.?\d*', message)
-    for m in matches:
-        try:
-            val = float(m.replace(',', ''))
-            if val > 0:
-                return val
-        except ValueError:
-            continue
-    return None
+def _normalize_amount_token(token: str) -> Decimal | None:
+    """Normalize one user-supplied amount token without evaluating expressions."""
+    translated = token.translate(str.maketrans(
+        "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹",
+        "01234567890123456789",
+    )).replace("٬", ",").replace("٫", ".")
+    if translated.count(".") > 1:
+        return None
+    integer_part, separator, fractional_part = translated.partition(".")
+    if separator and (not fractional_part or not fractional_part.isdigit()):
+        return None
+    if "," in integer_part:
+        groups = integer_part.split(",")
+        if not groups[0].isdigit() or any(len(group) != 3 or not group.isdigit() for group in groups[1:]):
+            return None
+        integer_part = "".join(groups)
+    if not integer_part.isdigit():
+        return None
+    normalized = integer_part + ("." + fractional_part if separator else "")
+    try:
+        value = Decimal(normalized)
+    except (ArithmeticError, ValueError):
+        return None
+    return value if value > 0 else None
 
+
+def _extract_amount_from_message(message: str) -> Decimal | None:
+    """Extract the first valid positive Western, Arabic-Indic, or Persian amount."""
+    token_pattern = r"[0-9٠-٩۰-۹][0-9٠-٩۰-۹,٬٫]*(?:\.[0-9٠-٩۰-۹]+)?"
+    for match in re.finditer(token_pattern, message):
+        value = _normalize_amount_token(match.group(0))
+        if value is not None:
+            return value
+    return None
 
 def _extract_account_hint(message: str) -> str | None:
     """Extract an account name hint from the message."""
@@ -2113,6 +2308,30 @@ def _small_talk_reply(message: str, language: str) -> GeminiAssistantReply | Non
 
 # ── Main dispatcher ───────────────────────────────────────────────────────────
 
+def _is_generic_entries_request(message: str) -> bool:
+    text = message.strip().lower()
+    return text in {
+        "show the entries",
+        "show the journal entries",
+        "which entries made up this amount",
+        "\u0627\u0639\u0631\u0636 \u0627\u0644\u0642\u064a\u0648\u062f",
+        "\u0648\u0631\u0646\u064a \u0627\u0644\u0642\u064a\u0648\u062f",
+        "\u0645\u0627 \u0647\u064a \u0627\u0644\u0642\u064a\u0648\u062f",
+        "\u0627\u0644\u0642\u064a\u0648\u062f \u0627\u0644\u062a\u064a \u0643\u0648\u0646\u062a \u0627\u0644\u0631\u0642\u0645",
+    }
+
+def _contribution_metric(message: str, prior_grounding: dict | None) -> str | None:
+    text = message.strip().lower()
+    if any(x in text for x in ("show revenue entries", "which entries make up revenue", "\u0627\u0639\u0631\u0636 \u0642\u064a\u0648\u062f \u0627\u0644\u0625\u064a\u0631\u0627\u062f\u0627\u062a")):
+        return "revenue"
+    if any(x in text for x in ("show expense entries", "which entries make up expenses", "\u0627\u0639\u0631\u0636 \u0642\u064a\u0648\u062f \u0627\u0644\u0645\u0635\u0631\u0648\u0641\u0627\u062a")):
+        return "expenses"
+    if text in {"show the entries", "\u0627\u0639\u0631\u0636 \u0627\u0644\u0642\u064a\u0648\u062f"}:
+        grounding = prior_grounding or {}
+        if grounding.get("status") == "grounded" and grounding.get("kind") == "profit_and_loss":
+            return grounding.get("requested_metric") or ("net_profit" if grounding.get("metrics") else None)
+    return None
+
 def dispatch_gemini_assistant(
     db: Session,
     company_id: int,
@@ -2123,6 +2342,7 @@ def dispatch_gemini_assistant(
     pending_transaction: PendingTransaction | None = None,
     pending_context_token: str | None = None,
     history: list[ConversationTurn] | None = None,
+    prior_grounding: dict | None = None,
 ) -> GeminiAssistantReply:
     """
     Main Gemini Assistant dispatcher.
@@ -2176,7 +2396,11 @@ def dispatch_gemini_assistant(
             pending_context_token=result.pending_context_token,
         )
 
-    intent = _classify_intent(message)
+    intent = "trace_question" if _is_exact_amount_trace_request(message) else _classify_intent(message)
+    contribution_metric = _contribution_metric(message, prior_grounding)
+    generic_without_context = _is_generic_entries_request(message) and contribution_metric is None
+    if contribution_metric:
+        intent = "pl_contribution_question"
     if intent == "unknown" and looks_like_accounting_message_with_amount(message):
         intent = "action_request"
 
@@ -2236,6 +2460,36 @@ def dispatch_gemini_assistant(
             intent="access_denied", confidence="high", data_sources=[],
         )
 
+    if intent == "pl_contribution_question":
+        grounded_period = (prior_grounding or {}).get("period") or {}
+        try:
+            start_date = date.fromisoformat(grounded_period["start_date"]) if grounded_period.get("start_date") else None
+            end_date = date.fromisoformat(grounded_period["end_date"]) if grounded_period.get("end_date") else None
+        except (TypeError, ValueError):
+            start_date, end_date = None, None
+        period_label = grounded_period.get("label") or "all available data"
+        metrics = ["revenue", "expenses"] if contribution_metric == "net_profit" else [contribution_metric]
+        all_matches = []
+        for metric in metrics:
+            matches = _tool_get_pl_contributors(db, company_id, start_date, end_date, metric, limit=10)
+            if matches is None:
+                return GeminiAssistantReply(reply=_unavailable_journal_reply(language), intent="answer_journal_question", confidence="low", data_sources=[], grounding=_unavailable_journal_grounding())
+            all_matches.extend(matches)
+        unique = {}
+        for match in all_matches:
+            unique.setdefault(match["id"], match)
+        matches = list(unique.values())[:20]
+        for match in matches:
+            match["total_matches"] = len(unique)
+        grounding = _build_contribution_evidence(matches, contribution_metric, start_date, end_date, period_label)
+        return GeminiAssistantReply(reply=_contribution_reply(matches, contribution_metric, period_label, language), intent="answer_journal_question", confidence="high", data_sources=["profit_loss_report", "journal_entries"], grounding=grounding)
+    if generic_without_context:
+        return GeminiAssistantReply(
+            reply=("أي قيود تريد عرضها: قيود الإيرادات، المصروفات، أم البحث عن مبلغ محدد؟" if language == "ar" else "Which entries would you like to see: revenue entries, expense entries, or entries containing a specific amount"),
+            intent="clarification",
+            confidence="low",
+            data_sources=[],
+        )
     # ── Explain question (how/why a figure was formed) ────────────────────────
     if intent == "explain_question":
         # Fetch P&L data
@@ -2308,6 +2562,8 @@ def dispatch_gemini_assistant(
             )
 
         matches = _tool_trace_amount(db, company_id, amount, account_hint)
+        if matches is None:
+            return GeminiAssistantReply(reply=_unavailable_journal_reply(language), intent="answer_trace_question", confidence="low", data_sources=[], grounding=_unavailable_journal_grounding())
         evidence = [
             EvidenceEntry(
                 entry_no=m["entry_no"],
@@ -2322,16 +2578,15 @@ def dispatch_gemini_assistant(
             for m in matches
         ]
 
-        context = _build_trace_context(matches)
-        gemini_reply = _call_gemini_for_answer(message, context, language, history)
-        reply = gemini_reply or _fallback_trace_reply(matches, amount, language)
-
+        grounding = _build_journal_evidence(matches, amount)
+        reply = _deterministic_trace_reply(matches, amount, language)
         return GeminiAssistantReply(
             reply=reply,
             intent="answer_trace_question",
             confidence="high" if matches else "medium",
-            data_sources=["journal_entries", "audit_logs"],
+            data_sources=["journal_entries", "audit_logs"] if matches else ["journal_entries"],
             evidence=evidence,
+            grounding=grounding,
         )
 
     # ── Who-action question (who posted / reviewed / created) ─────────────────
@@ -2373,7 +2628,7 @@ def dispatch_gemini_assistant(
         )
         # 2. Fetch data — always returns a dict with numeric values (never {})
         data = _tool_get_profit_loss(db, company_id, start_date, end_date)
-        grounding = _build_profit_loss_grounding(data, company_id, start_date, end_date, period_label)
+        grounding = _build_profit_loss_grounding(data, company_id, start_date, end_date, period_label, _requested_profit_metric(message))
         if grounding.status == "unavailable":
             return GeminiAssistantReply(
                 reply=_grounding_failure_reply(language),

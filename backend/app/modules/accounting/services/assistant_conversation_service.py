@@ -15,6 +15,7 @@ from app.modules.accounting.schemas.gemini_assistant_schemas import (
     ConversationTurn,
     GeminiAssistantReply,
     PendingTransaction,
+    ProfitAndLossGrounding,
 )
 from app.modules.accounting.services.gemini_assistant_service import (
     detect_message_language,
@@ -381,6 +382,40 @@ def _latest_pending_transaction(
         return None
 
 
+def _latest_profit_loss_grounding(
+    db: Session,
+    *,
+    conversation_id: int,
+    before_message_id: int,
+) -> dict | None:
+    """Load only the newest valid P&L grounding from this owned conversation."""
+    messages = list(db.scalars(
+        select(AssistantMessage)
+        .where(
+            AssistantMessage.conversation_id == conversation_id,
+            AssistantMessage.id < before_message_id,
+            AssistantMessage.role == "assistant",
+        )
+        .order_by(AssistantMessage.created_at.desc(), AssistantMessage.id.desc())
+        .limit(MAX_CONTEXT_MESSAGES)
+    ))
+    for message in messages:
+        grounding_data = (message.message_metadata or {}).get("grounding")
+        if not isinstance(grounding_data, dict):
+            continue
+        try:
+            grounding = ProfitAndLossGrounding.model_validate(grounding_data)
+        except Exception:
+            continue
+        if grounding.status != "grounded" or grounding.kind != "profit_and_loss":
+            continue
+        if grounding.period is None or grounding.metrics is None:
+            continue
+        if grounding.requested_metric not in {"revenue", "expenses", "net_profit"}:
+            continue
+        return grounding.model_dump(mode="json")
+    return None
+
 def send_conversation_message(
     db: Session,
     *,
@@ -451,6 +486,11 @@ def send_conversation_message(
         before_message_id=user_message.id,
     )
     pending_token = make_pending_context_token(pending) if pending else None
+    prior_grounding = _latest_profit_loss_grounding(
+        db,
+        conversation_id=conversation.id,
+        before_message_id=user_message.id,
+    )
 
     try:
         reply = dispatch_gemini_assistant(
@@ -463,6 +503,7 @@ def send_conversation_message(
             history=history,
             pending_transaction=pending,
             pending_context_token=pending_token,
+            prior_grounding=prior_grounding,
         )
     except Exception as exc:
         logger.warning(
