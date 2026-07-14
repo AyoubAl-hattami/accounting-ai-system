@@ -146,6 +146,31 @@ class EvidenceEntry(BaseModel):
     description: str | None = None
 
 
+class ProfitAndLossPeriod(BaseModel):
+    start_date: str | None = None
+    end_date: str | None = None
+    label: str
+
+
+class ProfitAndLossMetrics(BaseModel):
+    revenue: str
+    expenses: str
+    net_profit: str
+
+
+class ProfitAndLossReference(BaseModel):
+    type: Literal["report"]
+    report: Literal["profit_and_loss"]
+    filters: dict[str, str] = Field(default_factory=dict)
+
+
+class ProfitAndLossGrounding(BaseModel):
+    status: Literal["grounded", "unavailable"]
+    kind: Literal["profit_and_loss"]
+    period: ProfitAndLossPeriod | None = None
+    metrics: ProfitAndLossMetrics | None = None
+    reference: ProfitAndLossReference | None = None
+
 # ── Gemini Assistant response ─────────────────────────────────────────────────
 
 class GeminiAssistantReply(BaseModel):
@@ -158,6 +183,7 @@ class GeminiAssistantReply(BaseModel):
     clarification_options: list[ClarificationOption] = Field(default_factory=list)
     pending_context_token: str | None = None
     evidence: list[EvidenceEntry] = Field(default_factory=list)
+    grounding: ProfitAndLossGrounding | None = None
 
 
 # ── Confirm-action request ────────────────────────────────────────────────────

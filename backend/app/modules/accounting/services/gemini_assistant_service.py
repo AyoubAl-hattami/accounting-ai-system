@@ -40,6 +40,10 @@ from app.modules.accounting.schemas.gemini_assistant_schemas import (
     ConversationTurn,
     EvidenceEntry,
     GeminiAssistantReply,
+    ProfitAndLossGrounding,
+    ProfitAndLossMetrics,
+    ProfitAndLossPeriod,
+    ProfitAndLossReference,
     MappedTransaction,
     PageContext,
     ParsedTransaction,
@@ -128,17 +132,17 @@ def _tool_get_profit_loss(
             start_date=start_date, end_date=end_date,
         )
         return {
-            "total_revenue": float(report.total_income),
-            "total_expenses": float(report.total_expenses),
-            "net_profit": float(report.net_profit),
+            "total_revenue": report.total_income,
+            "total_expenses": report.total_expenses,
+            "net_profit": report.net_profit,
             "has_data": bool(report.income_lines or report.expense_lines),
             "revenue_lines": [
-                {"name": l.account_name, "amount": float(l.amount)}
+                {"name": l.account_name, "amount": l.amount}
                 for l in report.income_lines
                 if float(l.amount) != 0
             ][:10],
             "expense_lines": [
-                {"name": l.account_name, "amount": float(l.amount)}
+                {"name": l.account_name, "amount": l.amount}
                 for l in report.expense_lines
                 if float(l.amount) != 0
             ][:10],
@@ -861,6 +865,44 @@ def _build_user_context(users: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _build_profit_loss_grounding(
+    data: dict,
+    company_id: int,
+    start_date: date | None,
+    end_date: date | None,
+    period_label: str,
+) -> ProfitAndLossGrounding:
+    """Serialize only verified P&L values for persistence and follow-ups."""
+    if "error" in data:
+        return ProfitAndLossGrounding(status="unavailable", kind="profit_and_loss")
+    filters = {}
+    if start_date is not None:
+        filters["start_date"] = start_date.isoformat()
+    if end_date is not None:
+        filters["end_date"] = end_date.isoformat()
+    return ProfitAndLossGrounding(
+        status="grounded",
+        kind="profit_and_loss",
+        period=ProfitAndLossPeriod(
+            start_date=start_date.isoformat() if start_date else None,
+            end_date=end_date.isoformat() if end_date else None,
+            label=period_label,
+        ),
+        metrics=ProfitAndLossMetrics(
+            revenue=data["total_revenue"].quantize(Decimal("0.01")).to_eng_string(),
+            expenses=data["total_expenses"].quantize(Decimal("0.01")).to_eng_string(),
+            net_profit=data["net_profit"].quantize(Decimal("0.01")).to_eng_string(),
+        ),
+        reference=ProfitAndLossReference(type="report", report="profit_and_loss", filters=filters),
+    )
+
+
+def _grounding_failure_reply(language: str) -> str:
+    return (
+        "تعذر التحقق من الرقم من بيانات النظام حاليًا. لم يتم تقديم قيمة تقديرية."
+        if language == "ar"
+        else "I could not verify this amount from the accounting data. No estimate was provided."
+    )
 # ── Fallback replies (no Gemini) ──────────────────────────────────────────────
 
 def _fallback_report_reply(
@@ -2331,18 +2373,22 @@ def dispatch_gemini_assistant(
         )
         # 2. Fetch data — always returns a dict with numeric values (never {})
         data = _tool_get_profit_loss(db, company_id, start_date, end_date)
-        # 3. Build context for Gemini
-        context = _build_report_context(data, start_date, end_date, period_label)
-        # 4. Try Gemini, fallback to deterministic
-        gemini_reply = _call_gemini_for_answer(message, context, language, history)
-        reply = gemini_reply or _fallback_report_reply(
-            data, language, start_date, end_date, period_label
-        )
+        grounding = _build_profit_loss_grounding(data, company_id, start_date, end_date, period_label)
+        if grounding.status == "unavailable":
+            return GeminiAssistantReply(
+                reply=_grounding_failure_reply(language),
+                intent="answer_report_question",
+                confidence="low",
+                data_sources=[],
+                grounding=grounding,
+            )
+        reply = _fallback_report_reply(data, language, start_date, end_date, period_label)
         return GeminiAssistantReply(
             reply=reply,
             intent="answer_report_question",
             confidence="high",
             data_sources=["profit_loss_report"],
+            grounding=grounding,
         )
 
     # ── Audit question ───────────────────────────────────────────────────────
