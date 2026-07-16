@@ -22,58 +22,52 @@ from app.modules.accounting.services.ai_providers.base import (
 from app.modules.accounting.services.ai_providers.rules_provider import (
     RulesJournalSuggestionProvider,
 )
+from app.modules.accounting.services.gemini_agent_contract import (
+    build_agent_prompt,
+    default_runtime_context,
+    journal_suggestion_task_instructions,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def _build_system_prompt(language: str) -> str:
-    """Build the system prompt for the OpenAI model."""
-    lang_instruction = (
-        "Respond with the explanation field in Arabic."
-        if language == "ar"
-        else "Respond with the explanation field in English."
+    """Backward-compatible helper backed by the canonical contract."""
+    prompt = build_agent_prompt(
+        runtime_context=default_runtime_context(
+            language=language,
+            provider_name="openai",
+        ),
+        task_instructions=journal_suggestion_task_instructions(language),
+        user_message="",
     )
-
-    return f"""You are an expert accounting assistant that suggests double-entry journal entries.
-
-Rules:
-1. Return ONLY valid JSON, no markdown, no code fences, no extra text.
-2. Use ONLY account IDs from the provided accounts list. Never invent account IDs.
-3. If you are unsure about which account to use, set the account ID to null and include a warning.
-4. The amount must be a positive number or null if not detectable.
-5. Use proper double-entry accounting logic (debits increase assets/expenses, credits increase liabilities/equity/income).
-6. {lang_instruction}
-7. Do not create, post, or save any journal entry. Only suggest.
-
-Your JSON response must have exactly this shape:
-{{
-  "debit_account_id": <int or null>,
-  "credit_account_id": <int or null>,
-  "amount": <positive float or null>,
-  "confidence": "high" | "medium" | "low",
-  "explanation": "<accounting explanation string>",
-  "warnings": ["<optional warning strings>"],
-  "detected_intent": "<intent like rent_lease, salary_payroll, sales_revenue, owner_investment, loan_payment, loan_received, purchase_equipment, or unknown>"
-}}"""
-
+    return prompt.system_instruction
 
 def _build_user_prompt(
     description: str,
     accounts: list[AccountInfo],
 ) -> str:
-    """Build the user prompt with transaction details and available accounts."""
-    accounts_text = "\n".join(
-        f"  - ID: {a.id}, Code: {a.code}, Name: {a.name}, Type: {a.account_type}"
-        for a in accounts
-        if a.is_active
+    """Build bounded user/data content while keeping system instructions separate."""
+    account_data = [
+        {
+            "id": account.id,
+            "code": account.code,
+            "name": account.name,
+            "account_type": account.account_type,
+        }
+        for account in accounts
+        if account.is_active
+    ]
+    prompt = build_agent_prompt(
+        runtime_context=default_runtime_context(
+            language="en",
+            provider_name="openai",
+        ),
+        task_instructions=journal_suggestion_task_instructions("en"),
+        user_message=description,
+        trusted_backend_data={"available_current_company_accounts": account_data},
     )
-
-    return f"""Transaction description: "{description}"
-
-Available accounts:
-{accounts_text}
-
-Suggest a journal entry for this transaction. Return JSON only."""
+    return prompt.user_message
 
 
 def _validate_confidence(value: str) -> str:

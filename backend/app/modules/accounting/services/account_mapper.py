@@ -10,6 +10,7 @@ Never invents accounts — returns clarification when ambiguous.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from app.modules.accounting.schemas.gemini_assistant_schemas import (
@@ -38,7 +39,11 @@ ACCOUNT_ALIASES: dict[str, list[str]] = {
     ],
     "salary": [
         "رواتب", "راتب", "أجور", "اجور", "مكافأة", "مكافأت",
+        "مصروف الرواتب", "الرواتب والأجور", "تكاليف الموظفين",
         "salary", "salaries", "wages", "payroll", "bonus",
+        "salary expense", "salaries expense", "wages expense",
+        "payroll expense", "salaries and wages", "staff costs",
+        "employee costs",
     ],
     "supplies": [
         "مستلزمات", "قرطاسية", "أدوات", "ادوات",
@@ -204,6 +209,95 @@ def _find_best_account(
 
     scored.sort(key=lambda x: x[0], reverse=True)
     return scored[0][1]
+
+
+def _find_unique_best_account(
+    accounts: list[dict[str, Any]],
+    hint: str,
+    required_type: str,
+    exclude_ids: set[int] | None = None,
+) -> dict[str, Any] | None:
+    """Return one best active match, or None when the best score is tied."""
+
+    exclude = exclude_ids or set()
+    alias_category = _find_alias_category(hint)
+    scored = [
+        (_score_account(account, hint, alias_category, required_type), account)
+        for account in accounts
+        if account.get("is_active", True) and account["id"] not in exclude
+    ]
+    scored = [(score, account) for score, account in scored if score > 0]
+    if not scored:
+        return None
+    best_score = max(score for score, _ in scored)
+    best = [account for score, account in scored if score == best_score]
+    return best[0] if len(best) == 1 else None
+
+
+def map_journal_suggestion_accounts(
+    result: dict[str, Any],
+    description: str,
+    accounts: list[Any],
+) -> dict[str, Any]:
+    """Complete missing validated suggestion IDs using the canonical mapper."""
+
+    mapped = dict(result)
+    account_rows = [
+        account.model_dump() if hasattr(account, "model_dump") else dict(account)
+        for account in accounts
+    ]
+    active_ids = {
+        account["id"] for account in account_rows if account.get("is_active", True)
+    }
+    for field in ("debit_account_id", "credit_account_id"):
+        if mapped.get(field) not in active_ids:
+            mapped[field] = None
+
+    if str(mapped.get("detected_intent")) != "salary_payroll":
+        return mapped
+
+    accounts_by_id = {account["id"]: account for account in account_rows}
+    debit_account = accounts_by_id.get(mapped.get("debit_account_id"))
+    credit_account = accounts_by_id.get(mapped.get("credit_account_id"))
+    if debit_account and debit_account.get("account_type") != "expense":
+        mapped["debit_account_id"] = None
+    if credit_account and credit_account.get("account_type") != "asset":
+        mapped["credit_account_id"] = None
+
+    if mapped.get("debit_account_id") is None:
+        debit = _find_unique_best_account(
+            account_rows,
+            "salary expense",
+            required_type="expense",
+        )
+        if debit is None:
+            debit = _find_unique_best_account(
+                account_rows,
+                "expense",
+                required_type="expense",
+            )
+        mapped["debit_account_id"] = debit["id"] if debit else None
+
+    text = _normalize(description)
+    explicit_source = None
+    if re.search(r"\b(bank|bank account)\b", text) or any(
+        value in text for value in ("البنك", "بنك", "المصرف", "مصرف")
+    ):
+        explicit_source = "bank"
+    elif re.search(r"\b(cash|petty cash)\b", text) or any(
+        value in text for value in ("الصندوق", "صندوق", "نقدية", "نقدا")
+    ):
+        explicit_source = "cash"
+
+    if mapped.get("credit_account_id") is None and explicit_source:
+        credit = _find_unique_best_account(
+            account_rows,
+            explicit_source,
+            required_type="asset",
+            exclude_ids={mapped["debit_account_id"]} if mapped.get("debit_account_id") else None,
+        )
+        mapped["credit_account_id"] = credit["id"] if credit else None
+    return mapped
 
 
 def _find_bank_or_cash(

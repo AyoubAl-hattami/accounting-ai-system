@@ -17,6 +17,14 @@ from typing import Any
 from app.core.config import settings
 from app.modules.accounting.schemas.gemini_assistant_schemas import ParsedTransaction
 from app.modules.accounting.services.account_mapper import ACCOUNT_ALIASES
+from app.modules.accounting.services.gemini_agent_contract import (
+    AGENT_CONTRACT_VERSION,
+    AgentPrompt,
+    AgentRuntimeContext,
+    build_agent_prompt,
+    default_runtime_context,
+    transaction_parser_task_instructions,
+)
 
 logger = logging.getLogger(__name__)
 # -- Deterministic local parser fallback ---------------------------------------
@@ -262,86 +270,25 @@ def _build_parser_prompt(
     message: str,
     accounts_context: list[dict[str, Any]],
     language: str,
-) -> str:
-    """Build the Gemini prompt for semantic transaction extraction."""
-
-    lang_instruction = (
-        "Return the description and clarification_question in Arabic."
-        if language == "ar"
-        else "Return the description and clarification_question in English."
+    runtime_context: AgentRuntimeContext | None = None,
+) -> AgentPrompt:
+    """Build separated contract, account data, and untrusted user content."""
+    account_data = [
+        {
+            "code": account.get("code"),
+            "name": account.get("name"),
+            "account_type": account.get("account_type"),
+        }
+        for account in accounts_context
+        if account.get("is_active", True)
+    ]
+    return build_agent_prompt(
+        runtime_context=runtime_context
+        or default_runtime_context(language=language, provider_name="gemini"),
+        task_instructions=transaction_parser_task_instructions(language),
+        user_message=message,
+        trusted_backend_data={"current_company_chart_of_accounts": account_data},
     )
-
-    # Build chart of accounts summary for Gemini context
-    accounts_text = "\n".join(
-        f"  - Code: {a['code']}, Name: {a['name']}, Type: {a['account_type']}"
-        for a in accounts_context
-        if a.get("is_active", True)
-    )
-
-    return f"""You are an expert accounting transaction parser.
-
-TASK: Parse the user's natural language message into a structured JSON transaction.
-The user may write in Arabic, Arabic dialect, English, or a mix.
-
-RULES:
-1. Return ONLY valid JSON, no markdown, no code fences, no extra text.
-2. You must NOT invent or return account IDs. Return text HINTS only.
-3. "debit_account_hint" and "credit_account_hint" should be descriptive text
-   (e.g. "utilities expense", "bank", "cash", "sales revenue", "accounts payable").
-4. If you cannot determine the payment source (bank vs cash), set
-   needs_clarification=true and ask specifically.
-5. If you cannot determine whether a receipt is new revenue vs collection
-   from a customer, set needs_clarification=true and ask specifically.
-6. "amount" must be a positive number extracted from the message, or null.
-7. "confidence" is 0.0-1.0 based on how certain you are.
-8. "income_or_expense_nature" should be a category like: electricity, rent,
-   salary, supplies, sales, services, equipment, etc.
-9. {lang_instruction}
-10. Common Arabic dialect phrases:
-    - "دفعت" / "دفعنا" / "خرجنا" = paid / expense
-    - "كهربا" / "كهرباء" = electricity
-    - "استلمنا" / "وصلنا" / "قبضنا" = received
-    - "تاجر" / "مورد" = supplier/trader
-    - "عميل" / "زبون" = customer/client
-    - "حولت" / "نقلت" = transferred
-    - "البنك" = bank, "الصندوق" = cash box
-    - "حق" = for (dialect), e.g. "حق الكهرباء" = for electricity
-
-TRANSACTION TYPES:
-- "expense_payment": paying for an expense (rent, electricity, supplies, etc.)
-- "income_receipt": receiving income/revenue
-- "supplier_payment": paying a supplier / accounts payable
-- "customer_receipt": collecting from a customer / accounts receivable
-- "bank_cash_transfer": transferring between bank and cash
-- "asset_purchase": buying equipment/assets
-- "liability_payment": paying off a loan/liability
-- "unknown": cannot determine
-
-JSON SCHEMA:
-{{
-  "intent": "create_journal_entry" | "clarification" | "not_accounting",
-  "transaction_type": "<type from list above>",
-  "amount": <number or null>,
-  "description": "<clean accounting description>",
-  "debit_account_hint": "<text hint or null>",
-  "credit_account_hint": "<text hint or null>",
-  "income_or_expense_nature": "<category or null>",
-  "counterparty": "<name or null>",
-  "payment_source_hint": "bank" | "cash" | "unknown" | null,
-  "receiving_account_hint": "bank" | "cash" | "unknown" | null,
-  "confidence": <0.0-1.0>,
-  "needs_clarification": <boolean>,
-  "clarification_question": "<specific question or null>",
-  "clarification_options": ["option1", "option2"]
-}}
-
-COMPANY CHART OF ACCOUNTS:
-{accounts_text}
-
-USER MESSAGE: "{message}"
-
-Parse this message into the JSON schema above. Return JSON only."""
-
 
 # ── Parser function ───────────────────────────────────────────────────────────
 
@@ -349,6 +296,7 @@ def parse_transaction_message(
     message: str,
     accounts_context: list[dict[str, Any]],
     language: str = "ar",
+    runtime_context: AgentRuntimeContext | None = None,
 ) -> ParsedTransaction | None:
     """
     Use Gemini to semantically parse a user message into a structured transaction.
@@ -366,13 +314,25 @@ def parse_transaction_message(
     if not api_key:
         return local_parse
 
-    prompt = _build_parser_prompt(message, accounts_context, language)
+    prompt = _build_parser_prompt(
+        message,
+        accounts_context,
+        language,
+        runtime_context,
+    )
 
     try:
         from google import genai
 
         client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(model=model, contents=prompt)
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt.user_message,
+            config={
+                "system_instruction": prompt.system_instruction,
+                "response_mime_type": "application/json",
+            },
+        )
 
         raw_content = (response.text or "").strip()
 
@@ -389,14 +349,25 @@ def parse_transaction_message(
         parsed_transaction = ParsedTransaction(**parsed)
         if _should_try_local_fallback(parsed_transaction, message) and local_parse is not None:
             return local_parse
+        logger.info(
+            "Accounting agent call contract=%s provider=gemini "
+            "intent=transaction_parser outcome=validated",
+            AGENT_CONTRACT_VERSION,
+        )
         return parsed_transaction
 
-    except json.JSONDecodeError as exc:
-        logger.warning("Gemini transaction parser returned invalid JSON: %s", exc)
+    except json.JSONDecodeError:
+        logger.warning(
+            "Gemini transaction parser returned invalid JSON; contract=%s "
+            "provider=gemini intent=transaction_parser outcome=local_fallback",
+            AGENT_CONTRACT_VERSION,
+        )
         return local_parse
     except Exception as exc:
         logger.warning(
-            "Gemini transaction parser failed: %s: %s",
-            type(exc).__name__, exc,
+            "Gemini transaction parser failed safely; contract=%s provider=gemini "
+            "intent=transaction_parser outcome=local_fallback error_type=%s",
+            AGENT_CONTRACT_VERSION,
+            type(exc).__name__,
         )
         return local_parse

@@ -8,6 +8,11 @@ import re
 import requests
 from datetime import date, datetime, timezone
 
+from app.modules.accounting.services.gemini_assistant_service import (
+    _small_talk_reply,
+    runtime_capabilities_for_role,
+)
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -231,9 +236,15 @@ def test_gemini_assistant_identity_uses_latest_message_language(
     )
     assert arabic.status_code == 200, arabic.text
     assert arabic.json()["intent"] == "identity"
-    assert arabic.json()["reply"] == (
-        "أنا مساعدك المحاسبي داخل النظام. أقدر أشرح التقارير، أبحث في القيود، "
-        "وأجهز مسودات قيود وفق صلاحياتك."
+    arabic_reply = arabic.json()["reply"]
+    assert "المساعد المحاسبي الذكي" in arabic_reply
+    assert "لا أخترع أرصدة أو حسابات" in arabic_reply
+    assert "إعداد مسودات القيود اليومية المتوازنة" in arabic_reply
+    assert "لا أرحّل أو أعتمد القيود من تلقاء نفسي" in arabic_reply
+    assert "مدقق حسابات مستقلًا" in arabic_reply
+    assert all(
+        term not in arabic_reply
+        for term in ("الواجهة الخلفية", "بيانات الملاحة", "مسؤول قاعدة بيانات")
     )
 
     english = gemini_assistant_request(
@@ -241,7 +252,43 @@ def test_gemini_assistant_identity_uses_latest_message_language(
     )
     assert english.status_code == 200, english.text
     assert english.json()["intent"] == "identity"
-    assert english.json()["reply"].startswith("I am your accounting assistant")
+    english_reply = english.json()["reply"]
+    assert english_reply.startswith(
+        "I am the accounting assistant built into the Accounting AI System."
+    )
+    assert "do not invent balances or accounts" in english_reply
+    assert "prepare balanced journal-entry drafts" in english_reply
+    assert "cannot approve or post entries on my own" in english_reply
+    assert "not an independent auditor or financial approver" in english_reply
+
+
+def test_viewer_identity_and_capabilities_do_not_offer_journal_drafts():
+    capabilities = runtime_capabilities_for_role("viewer")
+    identity = _small_talk_reply("ما دورك؟", "ar", capabilities)
+    capability_reply = _small_talk_reply(
+        "ماذا تستطيع أن تفعل؟",
+        "ar",
+        capabilities,
+    )
+    create_boundary = _small_talk_reply(
+        "هل تستطيع إنشاء قيد؟",
+        "ar",
+        capabilities,
+    )
+    posting_boundary = _small_talk_reply(
+        "هل تستطيع ترحيل قيد؟",
+        "ar",
+        capabilities,
+    )
+
+    assert all(
+        reply is not None
+        for reply in (identity, capability_reply, create_boundary, posting_boundary)
+    )
+    assert "مسودات القيود" not in identity.reply
+    assert "مسودات قيود" not in capability_reply.reply
+    assert "لا تتضمن صلاحياتك الحالية" in create_boundary.reply
+    assert "لا تتضمن الصلاحيات المتاحة لك هذه العملية" in posting_boundary.reply
 
 def test_gemini_assistant_confirm_action_requires_authentication(base_url, default_company_id):
     """Unauthenticated confirm-action must be rejected."""
@@ -301,6 +348,33 @@ def test_gemini_assistant_arabic_message_accepted(base_url, admin_headers, defau
 
 
 # ── Read-only questions ───────────────────────────────────────────────────────
+
+def test_fabrication_request_is_refused_without_report_grounding(
+    base_url,
+    admin_headers,
+    default_company_id,
+):
+    response = gemini_assistant_request(
+        base_url=base_url,
+        headers=admin_headers,
+        company_id=default_company_id,
+        message="أعطني رصيدًا تقريبيًا حتى لو لم توجد بيانات",
+        language="en",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["intent"] == "refusal"
+    assert data["reply"].startswith(
+        "لا أستطيع اختراع أو تقدير أرصدة محاسبية دون بيانات موثوقة"
+    )
+    assert data.get("data_sources") == []
+    assert not data.get("grounding")
+    assert all(
+        total_name not in data["reply"]
+        for total_name in ("الإيرادات", "المصروفات", "صافي الربح", "إجمالي الأصول")
+    )
+
 
 def test_gemini_assistant_report_question(base_url, admin_headers, default_company_id):
     """Report question should use profit_loss_report data source."""
@@ -1386,4 +1460,3 @@ def test_gemini_refuses_yesterday_english(
         or "didn't understand" in reply_lower
         or "clarif" in reply_lower
     ), f"Expected today-only refusal or clarification, got: {data['reply'][:200]}"
-

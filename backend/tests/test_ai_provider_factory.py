@@ -9,6 +9,8 @@ All OpenAI and Gemini tests use mocking — no real API calls are made.
 import json
 from unittest.mock import patch, MagicMock
 
+import pytest
+
 from app.modules.accounting.services.ai_provider_factory import (
     get_journal_suggestion_provider,
     get_provider_status,
@@ -28,6 +30,12 @@ from app.modules.accounting.services.ai_providers.openai_provider import (
 )
 from app.modules.accounting.services.ai_providers.gemini_provider import (
     GeminiJournalSuggestionProvider,
+)
+from app.modules.accounting.services.ai_suggestion_service import (
+    normalize_suggestion_confidence,
+)
+from app.modules.accounting.services.account_mapper import (
+    map_journal_suggestion_accounts,
 )
 from app.modules.accounting.schemas.ai_suggestion_schemas import AccountInfo
 
@@ -65,6 +73,89 @@ def test_rules_provider_returns_backend_rules_source():
     assert result["source"] == "backend_rules"
     assert result["detected_intent"] == "rent_lease"
     assert result["amount"] == 1000.0
+
+
+def test_recognized_salary_with_resolved_accounts_has_normalized_confidence():
+    provider = RulesJournalSuggestionProvider()
+    result = provider.suggest_journal_entry(
+        description="Paid salaries from bank for 3000",
+        accounts=SAMPLE_ACCOUNTS,
+        language="en",
+    )
+    assert result["detected_intent"] == "salary_payroll"
+    assert result["debit_account_id"] is not None
+    assert result["credit_account_id"] == 2
+    assert result["amount"] == 3000.0
+    assert result["confidence"] == "high"
+
+
+def test_confidence_normalization_keeps_unknown_or_materially_unresolved_low():
+    result = normalize_suggestion_confidence(
+        {
+            "detected_intent": "unknown",
+            "debit_account_id": None,
+            "credit_account_id": None,
+            "amount": None,
+            "confidence": "high",
+        }
+    )
+    assert result["confidence"] == "low"
+
+
+def test_confidence_normalization_uses_medium_for_one_resolved_side():
+    result = normalize_suggestion_confidence(
+        {
+            "detected_intent": "salary_payroll",
+            "debit_account_id": 10,
+            "credit_account_id": None,
+            "amount": 3000.0,
+            "confidence": "low",
+        }
+    )
+    assert result["confidence"] == "medium"
+
+
+def _salary_accounts(*expense_names):
+    accounts = [
+        AccountInfo(id=2, code="1110", name="Main Bank", account_type="asset", is_active=True),
+        AccountInfo(id=20, code="2100", name="Salary Payable", account_type="liability", is_active=True),
+    ]
+    accounts.extend(
+        AccountInfo(id=30 + index, code=f"53{index + 1:02d}", name=name, account_type="expense", is_active=True)
+        for index, name in enumerate(expense_names)
+    )
+    return accounts
+
+
+@pytest.mark.parametrize("expense_name", ["Salary Expense", "Wages Expense", "مصروف الرواتب"])
+def test_salary_suggestion_maps_active_expense_alias(expense_name):
+    result = map_journal_suggestion_accounts(
+        {"detected_intent": "salary_payroll", "debit_account_id": None, "credit_account_id": None},
+        description="Paid salaries from bank for 3000",
+        accounts=_salary_accounts(expense_name),
+    )
+    assert result["debit_account_id"] == 30
+    assert result["credit_account_id"] == 2
+    assert result["debit_account_id"] != 20
+
+
+def test_salary_suggestion_does_not_choose_tied_expense_aliases():
+    result = map_journal_suggestion_accounts(
+        {"detected_intent": "salary_payroll", "debit_account_id": None, "credit_account_id": None},
+        description="Paid salaries from bank for 3000",
+        accounts=_salary_accounts("Wages Expense", "Payroll Expense"),
+    )
+    assert result["debit_account_id"] is None
+
+
+def test_salary_suggestion_without_source_does_not_invent_credit_account():
+    result = map_journal_suggestion_accounts(
+        {"detected_intent": "salary_payroll", "debit_account_id": None, "credit_account_id": None},
+        description="Salary payroll 3000",
+        accounts=_salary_accounts("Salary Expense"),
+    )
+    assert result["debit_account_id"] == 30
+    assert result["credit_account_id"] is None
 
 
 # ── LLM Placeholder Tests ────────────────────────────────────────────────────

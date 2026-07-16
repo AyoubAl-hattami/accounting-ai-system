@@ -204,6 +204,62 @@ class JournalEvidenceGrounding(BaseModel):
     summary: JournalEvidenceSummary | None = None
     entries: list[JournalEvidenceEntry] = Field(default_factory=list)
 
+class ReportPeriod(BaseModel):
+    start_date: str | None = None
+    end_date: str | None = None
+    as_of_date: str | None = None
+    label: str
+
+class ReportReference(BaseModel):
+    type: Literal["report"]
+    report: Literal["balance_sheet", "trial_balance", "account_ledger", "general_ledger"]
+    filters: dict[str, str | int | None] = Field(default_factory=dict)
+
+class ReportSummary(BaseModel):
+    total_accounts: int = 0
+    returned_accounts: int = 0
+    total_entries: int = 0
+    returned_entries: int = 0
+    has_more: bool = False
+
+class BalanceSheetGrounding(BaseModel):
+    status: Literal["grounded", "unavailable"]
+    kind: Literal["balance_sheet"]
+    requested_metric: Literal["assets", "liabilities", "equity", "current_year_earnings", "prior_year_earnings", "account", "equation"] | None = None
+    period: ReportPeriod | None = None
+    metrics: dict[str, str | bool] | None = None
+    sections: list[dict[str, object]] = Field(default_factory=list)
+    reference: ReportReference | None = None
+
+class TrialBalanceGrounding(BaseModel):
+    status: Literal["grounded", "unavailable"]
+    kind: Literal["trial_balance"]
+    requested_metric: Literal["total_debit", "total_credit", "difference", "balanced", "account", "accounts"] | None = None
+    period: ReportPeriod | None = None
+    metrics: dict[str, str | bool] | None = None
+    accounts: list[dict[str, object]] = Field(default_factory=list)
+    summary: ReportSummary | None = None
+    reference: ReportReference | None = None
+
+class AccountLedgerGrounding(BaseModel):
+    status: Literal["grounded", "unavailable"]
+    kind: Literal["account_ledger"]
+    requested_metric: Literal["balance", "opening_balance", "debits", "credits", "transactions"] | None = None
+    period: ReportPeriod | None = None
+    account: dict[str, object] | None = None
+    metrics: dict[str, str] | None = None
+    entries: list[dict[str, object]] = Field(default_factory=list)
+    summary: ReportSummary | None = None
+    reference: ReportReference | None = None
+
+class GeneralLedgerGrounding(BaseModel):
+    status: Literal["grounded", "unavailable"]
+    kind: Literal["general_ledger"]
+    requested_metric: Literal["accounts", "balances", "transactions"] | None = None
+    period: ReportPeriod | None = None
+    accounts: list[dict[str, object]] = Field(default_factory=list)
+    summary: ReportSummary | None = None
+    reference: ReportReference | None = None
 class GeminiAssistantReply(BaseModel):
     reply: str
     intent: str  # e.g. "answer_report_question", "create_journal_draft", "access_denied", "clarification"
@@ -214,7 +270,7 @@ class GeminiAssistantReply(BaseModel):
     clarification_options: list[ClarificationOption] = Field(default_factory=list)
     pending_context_token: str | None = None
     evidence: list[EvidenceEntry] = Field(default_factory=list)
-    grounding: ProfitAndLossGrounding | JournalEvidenceGrounding | None = None
+    grounding: ProfitAndLossGrounding | JournalEvidenceGrounding | BalanceSheetGrounding | TrialBalanceGrounding | AccountLedgerGrounding | GeneralLedgerGrounding | None = None
 
 
 # ── Confirm-action request ────────────────────────────────────────────────────

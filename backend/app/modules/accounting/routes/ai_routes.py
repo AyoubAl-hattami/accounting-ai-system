@@ -31,6 +31,12 @@ from app.modules.accounting.services.ai_provider_factory import (
     get_journal_suggestion_provider,
     get_provider_status,
 )
+from app.modules.accounting.services.ai_suggestion_service import (
+    normalize_suggestion_confidence,
+)
+from app.modules.accounting.services.account_mapper import (
+    map_journal_suggestion_accounts,
+)
 from app.modules.accounting.services.audit_service import create_audit_log
 from app.modules.accounting.services.assistant_conversation_service import (
     get_owned_conversation,
@@ -83,7 +89,12 @@ def suggest_journal_entry_endpoint(
         language=payload.language,
     )
 
-    return JournalSuggestionResponse(**result)
+    result = map_journal_suggestion_accounts(
+        result,
+        description=payload.description,
+        accounts=payload.accounts,
+    )
+    return JournalSuggestionResponse(**normalize_suggestion_confidence(result))
 
 
 @router.get(
@@ -399,5 +410,3 @@ def _find_open_period_suggestion(db, company_id: int) -> str | None:
         return None
     except Exception:
         return None
-
-

@@ -16,6 +16,10 @@ from app.modules.accounting.schemas.gemini_assistant_schemas import (
     GeminiAssistantReply,
     PendingTransaction,
     ProfitAndLossGrounding,
+    BalanceSheetGrounding,
+    TrialBalanceGrounding,
+    AccountLedgerGrounding,
+    GeneralLedgerGrounding,
 )
 from app.modules.accounting.services.gemini_assistant_service import (
     detect_message_language,
@@ -403,15 +407,18 @@ def _latest_profit_loss_grounding(
         grounding_data = (message.message_metadata or {}).get("grounding")
         if not isinstance(grounding_data, dict):
             continue
-        try:
-            grounding = ProfitAndLossGrounding.model_validate(grounding_data)
-        except Exception:
+        grounding = None
+        for model in (ProfitAndLossGrounding, BalanceSheetGrounding, TrialBalanceGrounding, AccountLedgerGrounding, GeneralLedgerGrounding):
+            try:
+                candidate = model.model_validate(grounding_data)
+            except Exception:
+                continue
+            if candidate.status == "grounded":
+                grounding = candidate
+                break
+        if grounding is None:
             continue
-        if grounding.status != "grounded" or grounding.kind != "profit_and_loss":
-            continue
-        if grounding.period is None or grounding.metrics is None:
-            continue
-        if grounding.requested_metric not in {"revenue", "expenses", "net_profit"}:
+        if grounding.kind == "profit_and_loss" and (grounding.period is None or grounding.metrics is None):
             continue
         return grounding.model_dump(mode="json")
     return None

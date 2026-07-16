@@ -21,6 +21,13 @@ from app.modules.accounting.services.ai_providers.base import (
 from app.modules.accounting.services.ai_providers.rules_provider import (
     RulesJournalSuggestionProvider,
 )
+from app.modules.accounting.services.gemini_agent_contract import (
+    AGENT_CONTRACT_VERSION,
+    AgentPrompt,
+    build_agent_prompt,
+    default_runtime_context,
+    journal_suggestion_task_instructions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,49 +36,27 @@ def _build_prompt(
     description: str,
     accounts: list[AccountInfo],
     language: str,
-) -> str:
-    """Build a single prompt for Gemini with system instructions and user data."""
-    lang_instruction = (
-        "Respond with the explanation field in Arabic."
-        if language == "ar"
-        else "Respond with the explanation field in English."
+) -> AgentPrompt:
+    """Build separated canonical instructions and bounded provider data."""
+    account_data = [
+        {
+            "id": account.id,
+            "code": account.code,
+            "name": account.name,
+            "account_type": account.account_type,
+        }
+        for account in accounts
+        if account.is_active
+    ]
+    return build_agent_prompt(
+        runtime_context=default_runtime_context(
+            language=language,
+            provider_name="gemini",
+        ),
+        task_instructions=journal_suggestion_task_instructions(language),
+        user_message=description,
+        trusted_backend_data={"available_current_company_accounts": account_data},
     )
-
-    accounts_text = "\n".join(
-        f"  - ID: {a.id}, Code: {a.code}, Name: {a.name}, Type: {a.account_type}"
-        for a in accounts
-        if a.is_active
-    )
-
-    return f"""You are an expert accounting assistant that suggests double-entry journal entries.
-
-Rules:
-1. Return ONLY valid JSON, no markdown, no code fences, no extra text.
-2. Use ONLY account IDs from the provided accounts list. Never invent account IDs.
-3. If you are unsure about which account to use, set the account ID to null and include a warning.
-4. The amount must be a positive number or null if not detectable.
-5. Use proper double-entry accounting logic (debits increase assets/expenses, credits increase liabilities/equity/income).
-6. {lang_instruction}
-7. Do not create, post, or save any journal entry. Only suggest.
-
-Your JSON response must have exactly this shape:
-{{
-  "debit_account_id": <int or null>,
-  "credit_account_id": <int or null>,
-  "amount": <positive float or null>,
-  "confidence": "high" | "medium" | "low",
-  "explanation": "<accounting explanation string>",
-  "warnings": ["<optional warning strings>"],
-  "detected_intent": "<intent like rent_lease, salary_payroll, sales_revenue, owner_investment, loan_payment, loan_received, purchase_equipment, or unknown>"
-}}
-
-Transaction description: "{description}"
-
-Available accounts:
-{accounts_text}
-
-Suggest a journal entry for this transaction. Return JSON only."""
-
 
 def _validate_confidence(value: str) -> str:
     """Validate confidence is one of the allowed values."""
@@ -182,7 +167,11 @@ class GeminiJournalSuggestionProvider(BaseJournalSuggestionProvider):
 
         response = client.models.generate_content(
             model=self._model,
-            contents=prompt,
+            contents=prompt.user_message,
+            config={
+                "system_instruction": prompt.system_instruction,
+                "response_mime_type": "application/json",
+            },
         )
 
         raw_content = response.text or ""
@@ -200,7 +189,11 @@ class GeminiJournalSuggestionProvider(BaseJournalSuggestionProvider):
         try:
             parsed = json.loads(content)
         except json.JSONDecodeError:
-            logger.warning("Gemini returned invalid JSON, falling back to rules")
+            logger.warning(
+                "Gemini returned invalid JSON; contract=%s provider=gemini "
+                "intent=journal_suggestion outcome=rules_fallback",
+                AGENT_CONTRACT_VERSION,
+            )
             result = self._fallback.suggest_journal_entry(
                 description=description,
                 accounts=accounts,
@@ -242,6 +235,12 @@ class GeminiJournalSuggestionProvider(BaseJournalSuggestionProvider):
         if detected_intent != "unknown" and debit_id is not None and credit_id is not None:
             confidence = "high" if amount is not None else "medium"
 
+        logger.info(
+            "Accounting agent call contract=%s provider=gemini "
+            "intent=journal_suggestion outcome=validated",
+            AGENT_CONTRACT_VERSION,
+        )
+
         return {
             "debit_account_id": debit_id,
             "credit_account_id": credit_id,
@@ -262,3 +261,7 @@ class GeminiJournalSuggestionProvider(BaseJournalSuggestionProvider):
         if self._is_configured:
             return "gemini"
         return "gemini_fallback_rules"
+
+    @property
+    def contract_version(self) -> str:
+        return AGENT_CONTRACT_VERSION

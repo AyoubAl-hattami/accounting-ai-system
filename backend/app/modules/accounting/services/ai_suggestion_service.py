@@ -13,6 +13,25 @@ import re
 from app.modules.accounting.schemas.ai_suggestion_schemas import AccountInfo
 
 
+def normalize_suggestion_confidence(result: dict) -> dict:
+    """Normalize confidence from validated provider fields without inventing data."""
+
+    normalized = dict(result)
+    known_intent = str(normalized.get("detected_intent") or "unknown") != "unknown"
+    has_amount = normalized.get("amount") is not None
+    resolved_accounts = sum(
+        normalized.get(field) is not None
+        for field in ("debit_account_id", "credit_account_id")
+    )
+    if known_intent and resolved_accounts == 2:
+        normalized["confidence"] = "high" if has_amount else "medium"
+    elif known_intent and has_amount and resolved_accounts == 1:
+        normalized["confidence"] = "medium"
+    else:
+        normalized["confidence"] = "low"
+    return normalized
+
+
 def extract_amount(text: str) -> float | None:
     """
     Extract a numeric transaction amount from the text description.
@@ -85,6 +104,39 @@ def find_bank_cash_account(
 
     # Fallback to first asset account
     return assets[0]
+
+
+def _explicit_payment_source(text: str) -> str | None:
+    if re.search(r"\b(bank|bank account)\b", text, re.IGNORECASE) or any(
+        value in text for value in ("البنك", "بنك", "المصرف", "مصرف")
+    ):
+        return "bank"
+    if re.search(r"\b(cash|petty cash)\b", text, re.IGNORECASE) or any(
+        value in text for value in ("الصندوق", "صندوق", "نقدية", "نقدا")
+    ):
+        return "cash"
+    return None
+
+
+def _find_explicit_payment_account(
+    accounts: list[AccountInfo],
+    text: str,
+) -> AccountInfo | None:
+    source = _explicit_payment_source(text)
+    if source == "bank":
+        keywords = ("bank", "بنك", "مصرف")
+    elif source == "cash":
+        keywords = ("cash", "petty", "صندوق", "نقد")
+    else:
+        return None
+    matches = [
+        account
+        for account in accounts
+        if account.is_active
+        and account.account_type == "asset"
+        and any(keyword in account.name.casefold() for keyword in keywords)
+    ]
+    return matches[0] if len(matches) == 1 else None
 
 
 def find_account_by_type_and_keywords(
@@ -176,7 +228,7 @@ def suggest_journal_entry(
             ],
             ["expense", "expenses", "5000", "مصروف", "مصاريف"],
         )
-        credit_account = find_bank_cash_account(accounts)
+        credit_account = _find_explicit_payment_account(accounts, text)
         explanation = (
             "الرواتب والأجور هي مصاريف، لذلك تزيد بالجانب المدين. البنك/النقدية ينقص بالجانب الدائن."
             if language == "ar"
@@ -486,7 +538,7 @@ def suggest_journal_entry(
     if detected_intent != "unknown" and debit_account and credit_account:
         confidence = "high" if amount is not None else "medium"
 
-    return {
+    return normalize_suggestion_confidence({
         "debit_account_id": debit_account.id if debit_account else None,
         "credit_account_id": credit_account.id if credit_account else None,
         "amount": amount,
@@ -495,4 +547,4 @@ def suggest_journal_entry(
         "warnings": warnings,
         "detected_intent": detected_intent,
         "source": "backend_rules",
-    }
+    })

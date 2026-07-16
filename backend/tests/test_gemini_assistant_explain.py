@@ -451,3 +451,9 @@ class TestExplainBalanceSheet:
         # Should include balance sheet data source
         assert "balance_sheet" in data.get("data_sources", []) or \
             "journal_entries" in data.get("data_sources", [])
+
+
+def test_explain_intent_precedes_structured_balance_sheet():
+    from app.modules.accounting.services.gemini_assistant_service import _classify_intent
+    assert _classify_intent("Explain total assets") == "explain_question"
+    assert _classify_intent("What are total assets") != "explain_question"
