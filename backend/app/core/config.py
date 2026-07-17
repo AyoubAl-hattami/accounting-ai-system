@@ -1,4 +1,11 @@
+from typing import Literal
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+DEFAULT_SECRET_KEY = "change-this-secret-key-in-production"
+MINIMUM_PRODUCTION_SECRET_KEY_LENGTH = 32
 
 
 class Settings(BaseSettings):
@@ -8,9 +15,9 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str
 
-    SECRET_KEY: str = "change-this-secret-key-in-production"
+    SECRET_KEY: str = DEFAULT_SECRET_KEY
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
-    ALGORITHM: str = "HS256"
+    ALGORITHM: Literal["HS256"] = "HS256"
 
     AUTH_FAILED_LOGIN_LIMIT: int = 5
     AUTH_FAILED_LOGIN_WINDOW_SECONDS: int = 60
@@ -35,6 +42,23 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
     )
+
+    @model_validator(mode="after")
+    def validate_production_secret_key(self) -> "Settings":
+        if self.APP_ENV.strip().lower() != "production":
+            return self
+
+        secret_key = self.SECRET_KEY.strip()
+        if (
+            secret_key == DEFAULT_SECRET_KEY
+            or len(secret_key) < MINIMUM_PRODUCTION_SECRET_KEY_LENGTH
+        ):
+            raise ValueError(
+                "Production requires an explicitly configured SECRET_KEY "
+                f"with at least {MINIMUM_PRODUCTION_SECRET_KEY_LENGTH} characters."
+            )
+
+        return self
 
     @property
     def cors_origins_list(self) -> list[str]:
