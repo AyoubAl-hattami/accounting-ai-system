@@ -5,6 +5,7 @@ from unittest.mock import Mock
 import pytest
 import requests
 from fastapi import HTTPException
+from sqlalchemy import select
 
 from app.core.company_access import ensure_company_access
 from app.core.database import SessionLocal
@@ -36,7 +37,7 @@ def test_permission_roles_are_explicit_and_non_mutating_roles_are_distinct():
     assert {"viewer", "auditor"}.isdisjoint({"admin", "accountant", "reviewer", "approver"})
 
 def test_preissued_token_is_rejected_after_global_deactivation(
-    base_url, admin_headers, default_company_id,
+    base_url, admin_headers, superuser_headers, default_company_id,
 ):
     email = f"inactive_token_{uuid.uuid4().hex[:12]}@example.com"
     with SessionLocal() as db:
@@ -59,8 +60,41 @@ def test_preissued_token_is_rejected_after_global_deactivation(
         db.refresh(user)
         user_id = user.id
         old_headers = {"Authorization": f"Bearer {create_user_token(user)}"}
-    deactivate = requests.patch(f"{base_url}/company-users/users/{user_id}/deactivate", headers=admin_headers, params={"company_id": default_company_id})
+    denied = requests.patch(
+        f"{base_url}/company-users/users/{user_id}/deactivate",
+        headers=admin_headers,
+        params={"company_id": default_company_id},
+    )
+    assert denied.status_code == 403, denied.text
+
+    with SessionLocal() as db:
+        unchanged_user = db.get(User, user_id)
+        membership = db.scalar(
+            select(CompanyUser).where(
+                CompanyUser.company_id == default_company_id,
+                CompanyUser.user_id == user_id,
+            )
+        )
+        assert unchanged_user is not None and unchanged_user.is_active is True
+        assert membership is not None and membership.is_active is True
+
+    deactivate = requests.patch(
+        f"{base_url}/company-users/users/{user_id}/deactivate",
+        headers=superuser_headers,
+        params={"company_id": default_company_id},
+    )
     assert deactivate.status_code == 200, deactivate.text
+
+    with SessionLocal() as db:
+        deactivated_user = db.get(User, user_id)
+        membership = db.scalar(
+            select(CompanyUser).where(
+                CompanyUser.company_id == default_company_id,
+                CompanyUser.user_id == user_id,
+            )
+        )
+        assert deactivated_user is not None and deactivated_user.is_active is False
+        assert membership is not None and membership.is_active is True
     protected_requests = [
         ("accounts", lambda: requests.get(f"{base_url}/accounts", headers=old_headers, params={"company_id": default_company_id})),
         ("journals", lambda: requests.get(f"{base_url}/journal-entries", headers=old_headers, params={"company_id": default_company_id})),
@@ -77,7 +111,7 @@ def test_preissued_token_is_rejected_after_global_deactivation(
             assert response.json()["detail"] == "Inactive user"
         assert requests.get(f"{base_url}/health").status_code == 200
     finally:
-        reactivate = requests.patch(f"{base_url}/company-users/users/{user_id}/reactivate", headers=admin_headers, params={"company_id": default_company_id})
+        reactivate = requests.patch(f"{base_url}/company-users/users/{user_id}/reactivate", headers=superuser_headers, params={"company_id": default_company_id})
         assert reactivate.status_code == 200, reactivate.text
 
 

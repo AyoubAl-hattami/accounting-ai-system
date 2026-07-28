@@ -1,10 +1,13 @@
 import uuid
 
 import requests
+from sqlalchemy import func, select
 
 
 from app.core.database import SessionLocal
 from app.core.security import hash_password
+from app.modules.accounting.models.audit_log import AuditLog
+from app.modules.accounting.models.company_user import CompanyUser
 from app.modules.accounting.models.user import User
 from app.modules.accounting.services.auth_service import create_user_token
 
@@ -239,7 +242,12 @@ def test_remove_company_access_flow(base_url, admin_headers, default_company_id)
     assert audit_events[0]["entity_id"] == company_user_id
 
 
-def test_deactivate_user_account_flow(base_url, admin_headers, default_company_id):
+def test_global_deactivation_requires_platform_superuser(
+    base_url,
+    admin_headers,
+    superuser_headers,
+    default_company_id,
+):
     import time
     unique_email = f"deactivate_{int(time.time())}@example.com"
     password = "Password123"
@@ -266,30 +274,85 @@ def test_deactivate_user_account_flow(base_url, admin_headers, default_company_i
     )
     assert bad_deactivate.status_code in (401, 403)
 
-    # 4. Admin can deactivate
-    ok_deactivate = requests.patch(
+    with SessionLocal() as db:
+        audit_count_before = db.scalar(
+            select(func.count()).select_from(AuditLog).where(
+                AuditLog.action == "deactivate_user_account",
+                AuditLog.entity_id == user_id,
+            )
+        ) or 0
+
+    # 4. A company admin cannot globally deactivate
+    denied_deactivate = requests.patch(
         f"{base_url}/company-users/users/{user_id}/deactivate?company_id={default_company_id}",
         headers=admin_headers,
+    )
+    assert denied_deactivate.status_code == 403
+
+    with SessionLocal() as db:
+        db_user = db.get(User, user_id)
+        membership = db.scalar(
+            select(CompanyUser).where(
+                CompanyUser.company_id == default_company_id,
+                CompanyUser.user_id == user_id,
+            )
+        )
+        audit_count_after_denial = db.scalar(
+            select(func.count()).select_from(AuditLog).where(
+                AuditLog.action == "deactivate_user_account",
+                AuditLog.entity_id == user_id,
+            )
+        ) or 0
+        assert db_user is not None and db_user.is_active is True
+        assert membership is not None and membership.is_active is True
+        assert audit_count_after_denial == audit_count_before
+
+    login_after_denial = requests.post(
+        f"{base_url}/auth/login",
+        json={"email": unique_email, "password": password},
+    )
+    assert login_after_denial.status_code == 200
+
+    # 5. A platform superuser can globally deactivate
+    ok_deactivate = requests.patch(
+        f"{base_url}/company-users/users/{user_id}/deactivate?company_id={default_company_id}",
+        headers=superuser_headers,
     )
     assert ok_deactivate.status_code == 200
     assert ok_deactivate.json()["is_active"] is False
 
-    # 5. User login is blocked
+    with SessionLocal() as db:
+        membership = db.scalar(
+            select(CompanyUser).where(
+                CompanyUser.company_id == default_company_id,
+                CompanyUser.user_id == user_id,
+            )
+        )
+        assert membership is not None and membership.is_active is True
+
+    # 6. User login is blocked
     bad_login = requests.post(
         f"{base_url}/auth/login",
         json={"email": unique_email, "password": password},
     )
     assert bad_login.status_code == 401
 
-    # 6. Check audit log
-    audit = requests.get(
-        f"{base_url}/audit-logs?company_id={default_company_id}",
-        headers=admin_headers,
-    )
-    assert audit.status_code == 200
-    audit_events = [ev for ev in audit.json()["items"] if ev["action"] == "deactivate_user_account"]
-    assert len(audit_events) > 0
-    assert audit_events[0]["entity_id"] == user_id
+    # 7. Check the global audit row directly because company-scoped listing excludes it
+    with SessionLocal() as db:
+        audit_event = db.scalar(
+            select(AuditLog).where(
+                AuditLog.action == "deactivate_user_account",
+                AuditLog.entity_id == user_id,
+            ).order_by(AuditLog.id.desc())
+        )
+        assert audit_event is not None
+        assert audit_event.company_id is None
+        assert audit_event.old_values["is_active"] is True
+        assert audit_event.new_values["is_active"] is False
+        assert audit_event.old_values["scope"] == "global"
+        assert audit_event.new_values["scope"] == "global"
+        actor = db.get(User, audit_event.actor_user_id)
+        assert actor is not None and actor.is_superuser is True
 
 
 def test_cannot_deactivate_last_admin(base_url, admin_headers, default_company_id):
@@ -331,8 +394,8 @@ def test_cannot_deactivate_last_admin(base_url, admin_headers, default_company_i
         f"{base_url}/company-users/users/{user_id}/deactivate?company_id={co_id}",
         headers=user_headers,
     )
-    assert res.status_code == 400
-    assert "Cannot delete/deactivate the last active admin" in res.text
+    assert res.status_code == 403
+    assert "platform superuser" in res.text.lower()
 
 
 def test_cancel_invitation_flow(base_url, admin_headers, default_company_id):
@@ -412,7 +475,12 @@ def test_cancel_invitation_flow(base_url, admin_headers, default_company_id):
     assert invite_token not in str(audit_events[0])
 
 
-def test_restore_company_access_flow(base_url, admin_headers, default_company_id):
+def test_restore_company_access_flow(
+    base_url,
+    admin_headers,
+    superuser_headers,
+    default_company_id,
+):
     import time
     unique_email = f"restore_access_{int(time.time())}@example.com"
     password = "Password123"
@@ -473,13 +541,33 @@ def test_restore_company_access_flow(base_url, admin_headers, default_company_id
     )
     assert acc_check_ok.status_code == 200
 
-    # 8. Deactivate user global account
-    requests.patch(
+    # 8. Company admin cannot deactivate the global account
+    denied_global = requests.patch(
         f"{base_url}/company-users/users/{user_id}/deactivate?company_id={default_company_id}",
         headers=admin_headers,
     )
+    assert denied_global.status_code == 403
 
-    # 9. Cannot restore company access for globally deactivated account
+    with SessionLocal() as db:
+        db_user = db.get(User, user_id)
+        membership = db.get(CompanyUser, company_user_id)
+        assert db_user is not None and db_user.is_active is True
+        assert membership is not None and membership.is_active is True
+
+    # 9. Platform superuser deactivates only the global account
+    global_deactivate = requests.patch(
+        f"{base_url}/company-users/users/{user_id}/deactivate?company_id={default_company_id}",
+        headers=superuser_headers,
+    )
+    assert global_deactivate.status_code == 200
+
+    with SessionLocal() as db:
+        db_user = db.get(User, user_id)
+        membership = db.get(CompanyUser, company_user_id)
+        assert db_user is not None and db_user.is_active is False
+        assert membership is not None and membership.is_active is True
+
+    # 10. Cannot restore company access for globally deactivated account
     res_deactivated = requests.patch(
         f"{base_url}/company-users/{company_user_id}/restore-access",
         headers=admin_headers,
@@ -488,7 +576,12 @@ def test_restore_company_access_flow(base_url, admin_headers, default_company_id
     assert "account is deactivated" in res_deactivated.text.lower() or "reactivate account first" in res_deactivated.text.lower()
 
 
-def test_reactivate_user_account_flow(base_url, admin_headers, default_company_id):
+def test_reactivate_user_account_flow(
+    base_url,
+    admin_headers,
+    superuser_headers,
+    default_company_id,
+):
     import time
     unique_email = f"reactivate_{int(time.time())}@example.com"
     password = "Password123"
@@ -507,20 +600,28 @@ def test_reactivate_user_account_flow(base_url, admin_headers, default_company_i
         headers=admin_headers,
     )
 
-    # 3. Deactivate user account
-    requests.patch(
+    # 3. Company admin cannot globally deactivate
+    denied_deactivate = requests.patch(
         f"{base_url}/company-users/users/{user_id}/deactivate?company_id={default_company_id}",
         headers=admin_headers,
     )
+    assert denied_deactivate.status_code == 403
 
-    # 4. Regular login is blocked
+    # 4. Platform superuser globally deactivates
+    deactivate = requests.patch(
+        f"{base_url}/company-users/users/{user_id}/deactivate?company_id={default_company_id}",
+        headers=superuser_headers,
+    )
+    assert deactivate.status_code == 200
+
+    # 5. Regular login is blocked
     bad_login = requests.post(
         f"{base_url}/auth/login",
         json={"email": unique_email, "password": password},
     )
     assert bad_login.status_code == 401
 
-    # 5. Non-admin cannot reactivate user
+    # 6. Non-admin cannot reactivate user
     other_email = f"other_{int(time.time())}@example.com"
     reg_other = requests.post(
         f"{base_url}/auth/register",
@@ -538,30 +639,51 @@ def test_reactivate_user_account_flow(base_url, admin_headers, default_company_i
     )
     assert bad_reactivate.status_code in (401, 403)
 
-    # 6. Admin can reactivate user
-    ok_reactivate = requests.patch(
+    # 7. Company admin cannot globally reactivate
+    admin_reactivate = requests.patch(
         f"{base_url}/company-users/users/{user_id}/reactivate?company_id={default_company_id}",
         headers=admin_headers,
+    )
+    assert admin_reactivate.status_code == 403
+
+    # 8. Platform superuser can globally reactivate
+    ok_reactivate = requests.patch(
+        f"{base_url}/company-users/users/{user_id}/reactivate?company_id={default_company_id}",
+        headers=superuser_headers,
     )
     assert ok_reactivate.status_code == 200
     assert ok_reactivate.json()["is_active"] is True
 
-    # 7. Reactivated user can login again
+    with SessionLocal() as db:
+        membership = db.scalar(
+            select(CompanyUser).where(
+                CompanyUser.company_id == default_company_id,
+                CompanyUser.user_id == user_id,
+            )
+        )
+        assert membership is not None and membership.is_active is True
+
+    # 9. Reactivated user can login again
     ok_login = requests.post(
         f"{base_url}/auth/login",
         json={"email": unique_email, "password": password},
     )
     assert ok_login.status_code == 200
 
-    # 8. Check audit log for reactivation
-    audit = requests.get(
-        f"{base_url}/audit-logs?company_id={default_company_id}",
-        headers=admin_headers,
-    )
-    assert audit.status_code == 200
-    audit_events = [ev for ev in audit.json()["items"] if ev["action"] == "reactivate_user_account"]
-    assert len(audit_events) > 0
-    assert audit_events[0]["entity_id"] == user_id
+    # 10. Check global audit scope and values directly
+    with SessionLocal() as db:
+        audit_event = db.scalar(
+            select(AuditLog).where(
+                AuditLog.action == "reactivate_user_account",
+                AuditLog.entity_id == user_id,
+            ).order_by(AuditLog.id.desc())
+        )
+        assert audit_event is not None
+        assert audit_event.company_id is None
+        assert audit_event.old_values["is_active"] is False
+        assert audit_event.new_values["is_active"] is True
+        assert audit_event.old_values["scope"] == "global"
+        assert audit_event.new_values["scope"] == "global"
 
 
 def test_current_user_company_role_resolutions(base_url, admin_headers, default_company_id):
@@ -680,20 +802,20 @@ def test_company_admin_cannot_deactivate_or_reactivate_user_from_another_company
         f"{base_url}/company-users/users/{user_b_id}/deactivate?company_id={company_a_id}",
         headers=admin_a_headers,
     )
-    assert deactivate.status_code == 404
-    assert "not assigned to this company" in deactivate.text
+    assert deactivate.status_code == 403
+    assert "platform superuser" in deactivate.text.lower()
 
     reactivate = requests.patch(
         f"{base_url}/company-users/users/{user_b_id}/reactivate?company_id={company_a_id}",
         headers=admin_a_headers,
     )
-    assert reactivate.status_code == 404
-    assert "not assigned to this company" in reactivate.text
+    assert reactivate.status_code == 403
+    assert "platform superuser" in reactivate.text.lower()
 
     assert admin_a_id != user_b_id
 
 
-def test_company_admin_can_deactivate_and_reactivate_user_in_same_company(base_url):
+def test_company_admin_cannot_globally_change_user_in_same_company(base_url):
     _, _, admin_headers = _register_and_login(base_url, "same_company_admin", "Same Company Admin")
     target_user_id, target_email, _ = _register_and_login(base_url, "same_company_target", "Same Company Target")
     company_id = _create_company(base_url, admin_headers, "SameCompany")
@@ -703,27 +825,19 @@ def test_company_admin_can_deactivate_and_reactivate_user_in_same_company(base_u
         f"{base_url}/company-users/users/{target_user_id}/deactivate?company_id={company_id}",
         headers=admin_headers,
     )
-    assert deactivate.status_code == 200, deactivate.text
-    assert deactivate.json()["is_active"] is False
+    assert deactivate.status_code == 403, deactivate.text
 
-    blocked_login = requests.post(
+    login_still_allowed = requests.post(
         f"{base_url}/auth/login",
         json={"email": target_email, "password": PASSWORD},
     )
-    assert blocked_login.status_code == 401
+    assert login_still_allowed.status_code == 200
 
     reactivate = requests.patch(
         f"{base_url}/company-users/users/{target_user_id}/reactivate?company_id={company_id}",
         headers=admin_headers,
     )
-    assert reactivate.status_code == 200, reactivate.text
-    assert reactivate.json()["is_active"] is True
-
-    ok_login = requests.post(
-        f"{base_url}/auth/login",
-        json={"email": target_email, "password": PASSWORD},
-    )
-    assert ok_login.status_code == 200
+    assert reactivate.status_code == 403, reactivate.text
 
 
 def test_viewer_cannot_deactivate_or_reactivate_company_user(base_url):
@@ -740,11 +854,11 @@ def test_viewer_cannot_deactivate_or_reactivate_company_user(base_url):
     )
     assert bad_deactivate.status_code == 403
 
-    ok_deactivate = requests.patch(
+    admin_deactivate = requests.patch(
         f"{base_url}/company-users/users/{target_user_id}/deactivate?company_id={company_id}",
         headers=admin_headers,
     )
-    assert ok_deactivate.status_code == 200, ok_deactivate.text
+    assert admin_deactivate.status_code == 403, admin_deactivate.text
 
     bad_reactivate = requests.patch(
         f"{base_url}/company-users/users/{target_user_id}/reactivate?company_id={company_id}",
@@ -752,8 +866,91 @@ def test_viewer_cannot_deactivate_or_reactivate_company_user(base_url):
     )
     assert bad_reactivate.status_code == 403
 
-    restore = requests.patch(
+    admin_reactivate = requests.patch(
         f"{base_url}/company-users/users/{target_user_id}/reactivate?company_id={company_id}",
         headers=admin_headers,
     )
-    assert restore.status_code == 200, restore.text
+    assert admin_reactivate.status_code == 403, admin_reactivate.text
+
+
+def test_cross_company_access_isolated_from_global_account_status(
+    base_url,
+    superuser_headers,
+):
+    _, _, admin_a_headers = _register_and_login(
+        base_url,
+        'cross_tenant_admin_a',
+        'Cross Tenant Admin A',
+    )
+    target_id, target_email, target_headers = _register_and_login(
+        base_url,
+        'cross_tenant_target',
+        'Cross Tenant Target',
+    )
+    company_a_id = _create_company(base_url, admin_a_headers, 'CrossTenantA')
+    company_b_id = _create_company(base_url, target_headers, 'CrossTenantB')
+    membership_a_id = _add_company_user(
+        base_url,
+        admin_a_headers,
+        company_a_id,
+        target_id,
+        'viewer',
+    )
+
+    removed = requests.patch(
+        f'{base_url}/company-users/{membership_a_id}/remove-access',
+        headers=admin_a_headers,
+    )
+    assert removed.status_code == 200, removed.text
+    assert removed.json()['is_active'] is False
+    assert removed.json()['user_is_active'] is True
+
+    company_b_access = requests.get(
+        f'{base_url}/accounts?company_id={company_b_id}',
+        headers=target_headers,
+    )
+    assert company_b_access.status_code == 200, company_b_access.text
+
+    forbidden_global = requests.patch(
+        f'{base_url}/company-users/users/{target_id}/deactivate',
+        params={'company_id': company_a_id},
+        headers=admin_a_headers,
+    )
+    assert forbidden_global.status_code == 403
+
+    globally_deactivated = requests.patch(
+        f'{base_url}/company-users/users/{target_id}/deactivate',
+        params={'company_id': company_a_id},
+        headers=superuser_headers,
+    )
+    assert globally_deactivated.status_code == 200, globally_deactivated.text
+    assert globally_deactivated.json()['is_active'] is False
+
+    with SessionLocal() as db:
+        db_user = db.get(User, target_id)
+        memberships = list(
+            db.scalars(
+                select(CompanyUser).where(CompanyUser.user_id == target_id)
+            ).all()
+        )
+        membership_by_company = {
+            membership.company_id: membership for membership in memberships
+        }
+        assert db_user is not None and db_user.is_active is False
+        assert membership_by_company[company_a_id].is_active is False
+        assert membership_by_company[company_b_id].is_active is True
+
+    rejected_globally = requests.get(
+        f'{base_url}/accounts?company_id={company_b_id}',
+        headers=target_headers,
+    )
+    assert rejected_globally.status_code == 403
+
+    cleanup = requests.patch(
+        f'{base_url}/company-users/users/{target_id}/reactivate',
+        params={'company_id': company_a_id},
+        headers=superuser_headers,
+    )
+    assert cleanup.status_code == 200, cleanup.text
+    assert cleanup.json()['is_active'] is True
+    assert target_email

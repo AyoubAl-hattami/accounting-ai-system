@@ -80,7 +80,6 @@ def test_validate_and_accept_invitation_new_user(base_url, admin_headers, defaul
     assert res_accept.status_code == 200
     assert res_accept.json()["status"] == "success"
 
-    # Validate again - should be 400 Already accepted
+    # Validate again - accepted invitations have a deterministic conflict state
     res_val2 = requests.get(f"{base_url}/company-users/invitations/validate?token={token}")
-    assert res_val2.status_code == 400
-
+    assert res_val2.status_code == 409

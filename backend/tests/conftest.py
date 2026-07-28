@@ -1,6 +1,12 @@
 import os
+import uuid
 import requests
 import pytest
+
+from app.core.database import SessionLocal
+from app.core.security import hash_password
+from app.modules.accounting.models.user import User
+from app.modules.accounting.services.auth_service import create_user_token
 
 
 BASE_URL = os.getenv("ACCOUNTING_TEST_BASE_URL", "http://127.0.0.1:8010")
@@ -45,6 +51,27 @@ def admin_headers():
     assert response.status_code == 200
 
     token = response.json()["access_token"]
+
+    return {
+        "Authorization": f"Bearer {token}",
+    }
+
+
+@pytest.fixture
+def superuser_headers():
+    email = f"platform_superuser_{uuid.uuid4().hex}@example.com"
+    with SessionLocal() as db:
+        user = User(
+            email=email,
+            full_name="Platform Superuser Test",
+            hashed_password=hash_password("Password123"),
+            is_active=True,
+            is_superuser=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        token = create_user_token(user)
 
     return {
         "Authorization": f"Bearer {token}",

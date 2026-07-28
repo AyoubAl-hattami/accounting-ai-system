@@ -2,9 +2,12 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.database import flush_or_rollback
+from app.core.identity import normalize_email
 from app.core.security import hash_password, verify_password
 from app.modules.accounting.models.company import Company
 from app.modules.accounting.models.company_user import CompanyUser
@@ -16,7 +19,73 @@ from app.modules.accounting.schemas.company_user_invitation import (
     CompanyUserInvitationResponse,
     CompanyUserInvitationValidateResponse,
 )
-from app.modules.accounting.services.audit_service import create_audit_log
+from app.modules.accounting.services.audit_service import create_atomic_audit_log
+
+
+def _parse_token(token: str) -> tuple[int, str]:
+    try:
+        invite_id_raw, raw_token = token.split(":", 1)
+        return int(invite_id_raw), raw_token
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid token format.",
+        )
+
+
+def _is_expired(invite: CompanyUserInvitation) -> bool:
+    expires_at = invite.expires_at
+    now = datetime.now(timezone.utc)
+    if expires_at.tzinfo is None:
+        now = now.replace(tzinfo=None)
+    return expires_at < now
+
+
+def _get_invitation_by_token(
+    db: Session,
+    token: str,
+    *,
+    lock: bool,
+) -> CompanyUserInvitation:
+    invite_id, raw_token = _parse_token(token)
+    statement = select(CompanyUserInvitation).where(
+        CompanyUserInvitation.id == invite_id
+    )
+    if lock:
+        statement = statement.with_for_update().execution_options(
+            populate_existing=True
+        )
+    invite = db.scalar(statement)
+    if not invite or not verify_password(raw_token, invite.token_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid invitation token.",
+        )
+    return invite
+
+
+def _ensure_pending(invite: CompanyUserInvitation) -> None:
+    if invite.accepted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Invitation has already been accepted.",
+        )
+    if invite.cancelled_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Invitation has been cancelled.",
+        )
+    if _is_expired(invite):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Invitation has expired.",
+        )
+
+
+def _normalized_user_statement(normalized_email: str):
+    return select(User).where(
+        func.lower(func.trim(User.email)) == normalized_email
+    )
 
 
 def create_invitation(
@@ -24,40 +93,54 @@ def create_invitation(
     invitation_in: CompanyUserInvitationCreate,
     current_user: User,
 ) -> CompanyUserInvitationResponse:
-    # Check if company exists
-    company = db.execute(select(Company).where(Company.id == invitation_in.company_id)).scalar_one_or_none()
+    normalized_email = normalize_email(str(invitation_in.email))
+    company = db.scalar(
+        select(Company).where(Company.id == invitation_in.company_id)
+    )
     if not company:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found",
+        )
 
-    # Check if user already exists
-    existing_user = db.execute(select(User).where(User.email == invitation_in.email)).scalar_one_or_none()
-
+    existing_user = db.scalar(_normalized_user_statement(normalized_email))
     if existing_user:
-        # Check if they are already in the company
-        existing_company_user = db.execute(
+        existing_membership = db.scalar(
             select(CompanyUser).where(
                 CompanyUser.user_id == existing_user.id,
-                CompanyUser.company_id == invitation_in.company_id
-            )
-        ).scalar_one_or_none()
-
-        if existing_company_user:
+                CompanyUser.company_id == invitation_in.company_id,
+            ).with_for_update()
+        )
+        if existing_membership:
+            if not existing_membership.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "User already has an inactive membership in this company. "
+                        "Restore company access instead."
+                    ),
+                )
             return CompanyUserInvitationResponse(
                 status="error",
-                message="User is already a member of this company"
+                message="User is already a member of this company",
             )
 
-        # Add them directly
-        new_cu = CompanyUser(
+        membership = CompanyUser(
             company_id=invitation_in.company_id,
             user_id=existing_user.id,
             role=invitation_in.role,
             is_active=True,
         )
-        db.add(new_cu)
-        db.commit()
+        db.add(membership)
+        try:
+            flush_or_rollback(db)
+        except IntegrityError:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User is already assigned to this company.",
+            )
 
-        create_audit_log(
+        create_atomic_audit_log(
             db=db,
             actor=current_user.email,
             actor_user_id=current_user.id,
@@ -65,53 +148,63 @@ def create_invitation(
             actor_name=current_user.full_name,
             action="add_company_user_direct",
             entity_type="company_user",
-            entity_id=new_cu.id,
+            entity_id=membership.id,
             company_id=invitation_in.company_id,
-            description=f"Added {invitation_in.email} directly",
-            new_values={"role": invitation_in.role, "email": invitation_in.email},
+            description=f"Added {normalized_email} directly",
+            new_values={
+                "role": invitation_in.role,
+                "email": normalized_email,
+            },
         )
-
         return CompanyUserInvitationResponse(
             status="added_existing",
             message="User already had an account and was added directly.",
         )
 
-    # Check for active existing invitations
-    active_invites = db.execute(
-        select(CompanyUserInvitation).where(
-            CompanyUserInvitation.email == invitation_in.email,
-            CompanyUserInvitation.company_id == invitation_in.company_id,
-            CompanyUserInvitation.accepted_at.is_(None),
-            CompanyUserInvitation.expires_at > datetime.now(timezone.utc),
-        )
-    ).scalars().all()
+    now = datetime.now(timezone.utc)
+    live_invitations = list(
+        db.scalars(
+            select(CompanyUserInvitation).where(
+                CompanyUserInvitation.company_id == invitation_in.company_id,
+                CompanyUserInvitation.normalized_email == normalized_email,
+                CompanyUserInvitation.accepted_at.is_(None),
+                CompanyUserInvitation.cancelled_at.is_(None),
+            ).with_for_update()
+        ).all()
+    )
+    superseded_ids: list[int] = []
+    for existing_invite in live_invitations:
+        if not _is_expired(existing_invite):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An active invitation already exists for this email and company.",
+            )
+        existing_invite.cancelled_at = now
+        existing_invite.cancelled_by_user_id = current_user.id
+        superseded_ids.append(existing_invite.id)
+        db.add(existing_invite)
 
-    if active_invites:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An active invitation already exists for this email and company."
-        )
-
-    # Generate token
     raw_token = secrets.token_urlsafe(32)
-    hashed_token = hash_password(raw_token)
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-
-    new_invite = CompanyUserInvitation(
+    invite = CompanyUserInvitation(
         company_id=invitation_in.company_id,
-        email=invitation_in.email,
+        email=normalized_email,
+        normalized_email=normalized_email,
         role=invitation_in.role,
-        token_hash=hashed_token,
-        expires_at=expires_at,
+        token_hash=hash_password(raw_token),
+        expires_at=now + timedelta(days=7),
         invited_by_user_id=current_user.id,
     )
-    db.add(new_invite)
-    db.commit()
-    db.refresh(new_invite)
-    
-    full_token = f"{new_invite.id}:{raw_token}"
+    db.add(invite)
+    try:
+        flush_or_rollback(db)
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An active invitation already exists for this email and company.",
+        )
 
-    create_audit_log(
+    full_token = f"{invite.id}:{raw_token}"
+    create_atomic_audit_log(
         db=db,
         actor=current_user.email,
         actor_user_id=current_user.id,
@@ -119,50 +212,41 @@ def create_invitation(
         actor_name=current_user.full_name,
         action="create_invitation",
         entity_type="invitation",
-        entity_id=new_invite.id,
+        entity_id=invite.id,
         company_id=invitation_in.company_id,
-        description=f"Invited {invitation_in.email}",
-        new_values={"email": invitation_in.email, "role": invitation_in.role},
+        description=f"Invited {normalized_email}",
+        new_values={
+            "email": normalized_email,
+            "role": invitation_in.role,
+            "expires_at": invite.expires_at.isoformat(),
+            "status": "pending",
+            "superseded_expired_invitation_ids": superseded_ids,
+        },
     )
-
     return CompanyUserInvitationResponse(
         status="invited",
         message="Invitation created successfully.",
         token=full_token,
-        invite_url=f"/accept-invite?token={full_token}"
+        invite_url=f"/accept-invite?token={full_token}",
     )
 
 
-def validate_invitation(db: Session, token: str) -> CompanyUserInvitationValidateResponse:
-    try:
-        invite_id_str, raw_token = token.split(":", 1)
-        invite_id = int(invite_id_str)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token format.")
-
-    invite = db.execute(select(CompanyUserInvitation).where(CompanyUserInvitation.id == invite_id)).scalar_one_or_none()
-    
-    if not invite:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found.")
-        
-    if not verify_password(raw_token, invite.token_hash):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token.")
-        
-    if invite.accepted_at is not None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation has already been accepted.")
-        
-    if invite.expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation has expired.")
-        
-    company = db.execute(select(Company).where(Company.id == invite.company_id)).scalar_one_or_none()
-    existing_user = db.execute(select(User).where(User.email == invite.email)).scalar_one_or_none()
-    
+def validate_invitation(
+    db: Session,
+    token: str,
+) -> CompanyUserInvitationValidateResponse:
+    invite = _get_invitation_by_token(db, token, lock=False)
+    _ensure_pending(invite)
+    company = db.scalar(select(Company).where(Company.id == invite.company_id))
+    existing_user = db.scalar(
+        _normalized_user_statement(invite.normalized_email)
+    )
     return CompanyUserInvitationValidateResponse(
         valid=True,
         email=invite.email,
         role=invite.role,
         company_name=company.name if company else "Unknown Company",
-        user_exists=existing_user is not None
+        user_exists=existing_user is not None,
     )
 
 
@@ -171,90 +255,94 @@ def accept_invitation(
     payload: CompanyUserInvitationAccept,
     current_user: User | None = None,
 ) -> dict:
-    try:
-        invite_id_str, raw_token = payload.token.split(":", 1)
-        invite_id = int(invite_id_str)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token format.")
+    invite = _get_invitation_by_token(db, payload.token, lock=True)
+    _ensure_pending(invite)
+    company = db.scalar(
+        select(Company).where(Company.id == invite.company_id).with_for_update()
+    )
+    if not company or not company.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Invitation company is not active.",
+        )
 
-    invite = db.execute(select(CompanyUserInvitation).where(CompanyUserInvitation.id == invite_id)).scalar_one_or_none()
-    
-    if not invite or not verify_password(raw_token, invite.token_hash):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token.")
-        
-    if invite.accepted_at is not None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation already accepted.")
-        
-    if invite.expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation expired.")
-        
-    existing_user = db.execute(select(User).where(User.email == invite.email)).scalar_one_or_none()
-    
-    user_to_add = None
-    
+    existing_user = db.scalar(
+        _normalized_user_statement(invite.normalized_email).with_for_update()
+    )
     if existing_user:
-        # Existing user path
         if not current_user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User exists. Please log in to accept this invitation."
+                detail="User exists. Please log in to accept this invitation.",
             )
-        if current_user.email != invite.email:
+        if normalize_email(current_user.email) != invite.normalized_email:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Logged in user email does not match invitation email."
+                detail="Logged in user email does not match invitation email.",
             )
-        user_to_add = current_user
+        user_to_add = existing_user
     else:
-        # New user path
         if not payload.password or not payload.full_name:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Password and full name are required for new users."
+                detail="Password and full name are required for new users.",
             )
-            
-        hashed_pw = hash_password(payload.password)
-        new_user = User(
-            email=invite.email,
+        user_to_add = User(
+            email=invite.normalized_email,
             full_name=payload.full_name,
-            hashed_password=hashed_pw,
+            hashed_password=hash_password(payload.password),
             is_active=True,
+            is_superuser=False,
         )
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
-        user_to_add = new_user
+        db.add(user_to_add)
+        try:
+            flush_or_rollback(db)
+        except IntegrityError:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "An account for this email was created concurrently. "
+                    "Log in to accept the invitation."
+                ),
+            )
 
-    # Check if they are already in the company (just in case)
-    existing_company_user = db.execute(
+    membership = db.scalar(
         select(CompanyUser).where(
             CompanyUser.user_id == user_to_add.id,
-            CompanyUser.company_id == invite.company_id
-        )
-    ).scalar_one_or_none()
-
-    if existing_company_user:
-        # Already in company, just mark accepted
-        invite.accepted_at = datetime.now(timezone.utc)
-        invite.accepted_by_user_id = user_to_add.id
-        db.commit()
-        return {"status": "success", "message": "Already a member."}
-
-    # Add to company
-    new_cu = CompanyUser(
-        company_id=invite.company_id,
-        user_id=user_to_add.id,
-        role=invite.role,
-        is_active=True,
+            CompanyUser.company_id == invite.company_id,
+        ).with_for_update()
     )
-    db.add(new_cu)
-    
-    invite.accepted_at = datetime.now(timezone.utc)
+    membership_existed = membership is not None
+    if membership and not membership.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "An inactive company membership already exists. "
+                "A company administrator must restore access."
+            ),
+        )
+    if membership is None:
+        membership = CompanyUser(
+            company_id=invite.company_id,
+            user_id=user_to_add.id,
+            role=invite.role,
+            is_active=True,
+        )
+        db.add(membership)
+
+    accepted_at = datetime.now(timezone.utc)
+    invite.accepted_at = accepted_at
     invite.accepted_by_user_id = user_to_add.id
-    
-    db.commit()
-    
-    create_audit_log(
+    db.add(invite)
+    try:
+        flush_or_rollback(db)
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Invitation acceptance conflicted with another request.",
+        )
+
+    create_atomic_audit_log(
         db=db,
         actor=user_to_add.email,
         actor_user_id=user_to_add.id,
@@ -265,10 +353,75 @@ def accept_invitation(
         entity_id=invite.id,
         company_id=invite.company_id,
         description="Invitation accepted",
-        new_values={"email": user_to_add.email, "role": invite.role},
+        old_values={
+            "status": "pending",
+            "email": invite.normalized_email,
+            "role": invite.role,
+        },
+        new_values={
+            "status": "accepted",
+            "accepted_at": accepted_at.isoformat(),
+            "user_id": user_to_add.id,
+            "company_user_id": membership.id,
+            "email": invite.normalized_email,
+            "role": invite.role,
+        },
     )
+    message = (
+        "Already a member. Invitation marked accepted."
+        if membership_existed
+        else "Invitation accepted successfully."
+    )
+    return {"status": "success", "message": message}
 
-    return {"status": "success", "message": "Invitation accepted successfully."}
+
+def cancel_invitation(
+    db: Session,
+    invitation_id: int,
+    current_user: User,
+) -> CompanyUserInvitation:
+    invite = db.scalar(
+        select(CompanyUserInvitation).where(
+            CompanyUserInvitation.id == invitation_id
+        ).with_for_update().execution_options(
+            populate_existing=True
+        )
+    )
+    if not invite:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invitation not found",
+        )
+    _ensure_pending(invite)
+    cancelled_at = datetime.now(timezone.utc)
+    invite.cancelled_at = cancelled_at
+    invite.cancelled_by_user_id = current_user.id
+    db.add(invite)
+    flush_or_rollback(db)
+    create_atomic_audit_log(
+        db=db,
+        company_id=invite.company_id,
+        actor=current_user.email,
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        actor_name=current_user.full_name,
+        action="cancel_invitation",
+        entity_type="invitation",
+        entity_id=invite.id,
+        description=f"Cancelled invitation for {invite.normalized_email}",
+        old_values={
+            "status": "pending",
+            "email": invite.normalized_email,
+            "role": invite.role,
+            "expires_at": invite.expires_at.isoformat(),
+        },
+        new_values={
+            "status": "cancelled",
+            "cancelled_at": cancelled_at.isoformat(),
+            "cancelled_by_user_id": current_user.id,
+        },
+    )
+    return invite
 
 
 def list_pending_invitations(
@@ -276,11 +429,12 @@ def list_pending_invitations(
     company_id: int,
 ) -> list[CompanyUserInvitation]:
     return list(
-        db.execute(
+        db.scalars(
             select(CompanyUserInvitation).where(
                 CompanyUserInvitation.company_id == company_id,
                 CompanyUserInvitation.accepted_at.is_(None),
+                CompanyUserInvitation.cancelled_at.is_(None),
                 CompanyUserInvitation.expires_at > datetime.now(timezone.utc),
             )
-        ).scalars().all()
+        ).all()
     )
