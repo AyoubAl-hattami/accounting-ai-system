@@ -552,7 +552,7 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
                                 </>
                               )}
 
-                              {!user.is_invitation && user.user_is_active !== false && (
+                              {!user.is_invitation && (
                                 <>
                                   <button
                                     onClick={() => handleOpenEditModal(user)}
@@ -583,19 +583,20 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
                                     </button>
                                   )}
 
-                                  <button
-                                    onClick={() => handleOpenDeleteAccount(user)}
-                                    disabled={isOnlyAdmin && user.role === 'admin'}
-                                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-500/10 hover:border-red-500/30 text-xs font-medium text-red-400 hover:text-red-300 bg-red-500/5 hover:bg-red-500/10 transition-all ${isOnlyAdmin && user.role === 'admin' ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                    title={t.companyUsersPage.deleteAccount}
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                    {t.companyUsersPage.deleteAccount}
-                                  </button>
+                                  {authUser?.is_superuser && user.user_is_active !== false && (
+                                    <button
+                                      onClick={() => handleOpenDeleteAccount(user)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-500/10 hover:border-red-500/30 text-xs font-medium text-red-400 hover:text-red-300 bg-red-500/5 hover:bg-red-500/10 transition-all"
+                                      title={t.companyUsersPage.deleteAccount}
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                      {t.companyUsersPage.deleteAccount}
+                                    </button>
+                                  )}
                                 </>
                               )}
 
-                              {!user.is_invitation && user.user_is_active === false && (
+                              {authUser?.is_superuser && !user.is_invitation && user.user_is_active === false && (
                                 <button
                                   onClick={() => handleOpenReactivateAccount(user)}
                                   className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-indigo-500/10 hover:border-indigo-500/30 text-xs font-medium text-indigo-400 hover:text-indigo-300 bg-indigo-500/5 hover:bg-indigo-500/10 transition-all"
@@ -720,7 +721,7 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
                         </>
                       )}
 
-                      {!user.is_invitation && user.user_is_active !== false && (
+                      {!user.is_invitation && (
                         <>
                           {user.is_active ? (
                             <button
@@ -741,18 +742,19 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
                             </button>
                           )}
 
-                          <button
-                            onClick={() => handleOpenDeleteAccount(user)}
-                            disabled={isOnlyAdmin && user.role === 'admin'}
-                            className={`flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-500/10 text-xs font-medium text-red-400 bg-red-500/5 ${isOnlyAdmin && user.role === 'admin' ? 'opacity-40 cursor-not-allowed border-red-500/5' : ''}`}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                            {t.companyUsersPage.deleteAccount}
-                          </button>
+                          {authUser?.is_superuser && user.user_is_active !== false && (
+                            <button
+                              onClick={() => handleOpenDeleteAccount(user)}
+                              className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-500/10 text-xs font-medium text-red-400 bg-red-500/5"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              {t.companyUsersPage.deleteAccount}
+                            </button>
+                          )}
                         </>
                       )}
 
-                      {!user.is_invitation && user.user_is_active === false && (
+                      {authUser?.is_superuser && !user.is_invitation && user.user_is_active === false && (
                         <button
                           onClick={() => handleOpenReactivateAccount(user)}
                           className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg border border-indigo-500/10 text-xs font-medium text-indigo-400 bg-indigo-500/5"
@@ -994,7 +996,7 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
 
       {/* Reactivate Account Confirmation Modal */}
       <AnimatePresence>
-        {reactivateAccountUser && (
+        {authUser?.is_superuser && reactivateAccountUser && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
@@ -1057,7 +1059,7 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
 
       {/* Delete Account Confirmation Modal */}
       <AnimatePresence>
-        {deleteAccountUser && (
+        {authUser?.is_superuser && deleteAccountUser && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
