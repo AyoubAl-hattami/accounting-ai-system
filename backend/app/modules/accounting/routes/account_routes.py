@@ -24,7 +24,7 @@ from app.modules.accounting.services.account_service import (
 from app.modules.accounting.services.default_accounts_service import (
     seed_default_accounts,
 )
-from app.modules.accounting.services.audit_service import create_audit_log
+from app.modules.accounting.services.audit_service import create_atomic_audit_log
 
 
 router = APIRouter(
@@ -93,7 +93,7 @@ def create_account_endpoint(
 
     account = create_account(db=db, payload=payload)
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=account.company_id,
         actor=current_user.email,
@@ -167,7 +167,7 @@ def seed_default_accounts_endpoint(
         company_id=company_id,
     )
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=company_id,
         actor=current_user.email,
@@ -301,7 +301,7 @@ def update_account_endpoint(
 
     updated = update_account(db=db, account=account, payload=payload)
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=updated.company_id,
         actor=current_user.email,

@@ -21,7 +21,10 @@ from app.modules.accounting.services.auth_service import (
     create_user_token,
     get_user_by_email,
 )
-from app.modules.accounting.services.audit_service import create_audit_log
+from app.modules.accounting.services.audit_service import (
+    create_atomic_audit_log,
+    create_audit_log,
+)
 from app.core.auth_dependencies import get_current_user
 from app.modules.accounting.models.user import User
 
@@ -72,7 +75,7 @@ def register_endpoint(
         payload=payload,
     )
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=None,
         actor=new_user.email,

@@ -3,6 +3,7 @@ from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.database import flush_or_rollback
 from app.modules.accounting.models.company import Company
 from app.modules.accounting.models.fiscal_period import FiscalPeriod
 from app.modules.accounting.models.fiscal_year import FiscalYear
@@ -34,8 +35,7 @@ def create_fiscal_year(db: Session, payload: FiscalYearCreate) -> FiscalYear:
     )
 
     db.add(fiscal_year)
-    db.commit()
-    db.refresh(fiscal_year)
+    flush_or_rollback(db)
 
     return fiscal_year
 
@@ -129,8 +129,7 @@ def update_fiscal_year(
         setattr(fiscal_year, field, value)
 
     db.add(fiscal_year)
-    db.commit()
-    db.refresh(fiscal_year)
+    flush_or_rollback(db)
 
     return fiscal_year
 
@@ -164,8 +163,7 @@ def create_fiscal_period(db: Session, payload: FiscalPeriodCreate) -> FiscalPeri
     )
 
     db.add(fiscal_period)
-    db.commit()
-    db.refresh(fiscal_period)
+    flush_or_rollback(db)
 
     return fiscal_period
 
@@ -273,8 +271,7 @@ def update_fiscal_period(
         setattr(fiscal_period, field, value)
 
     db.add(fiscal_period)
-    db.commit()
-    db.refresh(fiscal_period)
+    flush_or_rollback(db)
 
     return fiscal_period
 

@@ -28,3 +28,12 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def flush_or_rollback(db) -> None:
+    '''Flush pending work and restore session usability on database failure.'''
+    try:
+        db.flush()
+    except Exception:
+        db.rollback()
+        raise

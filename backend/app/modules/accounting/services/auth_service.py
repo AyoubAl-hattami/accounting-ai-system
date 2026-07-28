@@ -1,13 +1,17 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.database import flush_or_rollback
+from app.core.identity import normalize_email
 from app.core.security import create_access_token, hash_password, verify_password
 from app.modules.accounting.models.user import User
 from app.modules.accounting.schemas.user import UserCreate
 
 
 def get_user_by_email(db: Session, email: str) -> User | None:
-    statement = select(User).where(User.email == email.lower().strip())
+    statement = select(User).where(
+        func.lower(func.trim(User.email)) == normalize_email(email)
+    )
     return db.scalar(statement)
 
 
@@ -18,7 +22,7 @@ def get_user_by_id(db: Session, user_id: int) -> User | None:
 
 def create_user(db: Session, payload: UserCreate) -> User:
     user = User(
-        email=payload.email.lower().strip(),
+        email=normalize_email(str(payload.email)),
         full_name=payload.full_name,
         hashed_password=hash_password(payload.password),
         is_active=True,
@@ -26,8 +30,7 @@ def create_user(db: Session, payload: UserCreate) -> User:
     )
 
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    flush_or_rollback(db)
 
     return user
 

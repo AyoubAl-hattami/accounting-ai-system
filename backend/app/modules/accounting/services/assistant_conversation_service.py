@@ -6,6 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.database import flush_or_rollback
 from app.modules.accounting.models.assistant_conversation import (
     AssistantConversation,
     AssistantMessage,
@@ -238,7 +239,7 @@ def update_conversation(
 
 def delete_conversation(db: Session, conversation: AssistantConversation) -> None:
     db.delete(conversation)
-    db.commit()
+    flush_or_rollback(db)
 
 
 def list_conversation_messages(
@@ -582,6 +583,7 @@ def record_confirmation_event(
     conversation: AssistantConversation,
     entry_no: str,
     language: str,
+    commit: bool = True,
 ) -> AssistantMessage:
     latest_preview = db.scalar(
         select(AssistantMessage)
@@ -619,6 +621,16 @@ def record_confirmation_event(
     conversation.last_message_at = now
     conversation.updated_at = now
     db.add_all([conversation, event])
-    db.commit()
-    db.refresh(event)
+    if commit:
+        db.commit()
+        db.refresh(event)
+    else:
+        try:
+            db.flush()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            raise
     return event

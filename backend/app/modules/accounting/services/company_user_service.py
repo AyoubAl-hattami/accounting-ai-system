@@ -3,6 +3,7 @@ from sqlalchemy import func, select
 # pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.database import flush_or_rollback
 from app.modules.accounting.models.company import Company
 from app.modules.accounting.models.company_user import CompanyUser
 from app.modules.accounting.models.user import User
@@ -90,8 +91,7 @@ def create_company_user(
     )
 
     db.add(company_user)
-    db.commit()
-    db.refresh(company_user)
+    flush_or_rollback(db)
 
     return company_user
 
@@ -107,8 +107,7 @@ def update_company_user(
         setattr(company_user, field, value)
 
     db.add(company_user)
-    db.commit()
-    db.refresh(company_user)
+    flush_or_rollback(db)
 
     return company_user
 

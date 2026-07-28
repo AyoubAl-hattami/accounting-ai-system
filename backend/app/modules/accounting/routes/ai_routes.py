@@ -6,7 +6,6 @@ AI routes:
   POST /ai/gemini-assistant/confirm-action — confirmed action execution
 """
 
-import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -37,7 +36,7 @@ from app.modules.accounting.services.ai_suggestion_service import (
 from app.modules.accounting.services.account_mapper import (
     map_journal_suggestion_accounts,
 )
-from app.modules.accounting.services.audit_service import create_audit_log
+from app.modules.accounting.services.audit_service import create_atomic_audit_log
 from app.modules.accounting.services.assistant_conversation_service import (
     get_owned_conversation,
     record_confirmation_event,
@@ -345,47 +344,36 @@ def gemini_assistant_confirm_action_endpoint(
         created_by_user_id=current_user.id,
     )
 
-    # ── Audit log (best-effort: journal entry already committed) ────────────
-    try:
-        create_audit_log(
-            db=db,
-            company_id=journal_entry.company_id,
-            actor=current_user.email,
-            actor_user_id=current_user.id,
-            actor_email=current_user.email,
-            actor_name=current_user.full_name,
-            action="create_journal_draft_via_gemini",
-            entity_type="journal_entry",
-            entity_id=journal_entry.id,
-            description=f"Created draft journal entry via Gemini Assistant: {journal_entry.entry_no}",
-            old_values=None,
-            new_values={
-                "entry_no": journal_entry.entry_no,
-                "entry_date": str(journal_entry.entry_date),
-                "description": journal_entry.description,
-                "status": journal_entry.status,
-                "source_type": "gemini_assistant",
-                "total_debit": str(total_debit),
-            },
-        )
-    except Exception:
-        # Journal entry is already committed — log full traceback server-side
-        # but don't fail the user response or expose internal details
-        logging.getLogger(__name__).exception(
-            "Audit log write failed for Gemini journal entry %s (id=%s). "
-            "The journal entry was created successfully but the audit trail is incomplete.",
-            journal_entry.entry_no,
-            journal_entry.id,
-        )
-
     if conversation is not None:
         record_confirmation_event(
             db,
             conversation=conversation,
             entry_no=journal_entry.entry_no,
             language=payload.language,
+            commit=False,
         )
 
+    create_atomic_audit_log(
+        db=db,
+        company_id=journal_entry.company_id,
+        actor=current_user.email,
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        actor_name=current_user.full_name,
+        action="create_journal_draft_via_gemini",
+        entity_type="journal_entry",
+        entity_id=journal_entry.id,
+        description=f"Created draft journal entry via Gemini Assistant: {journal_entry.entry_no}",
+        old_values=None,
+        new_values={
+            "entry_no": journal_entry.entry_no,
+            "entry_date": str(journal_entry.entry_date),
+            "description": journal_entry.description,
+            "status": journal_entry.status,
+            "source_type": "gemini_assistant",
+            "total_debit": str(total_debit),
+        },
+    )
     return ConfirmActionReply(
         success=True,
         message=f"Draft journal entry {journal_entry.entry_no} created successfully.",

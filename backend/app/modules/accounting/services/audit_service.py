@@ -19,6 +19,7 @@ def create_audit_log(
     ip_address: str | None = None,
     user_agent: str | None = None,
     description: str | None = None,
+    commit: bool = True,
 ) -> AuditLog:
     audit_log = AuditLog(
         company_id=company_id,
@@ -37,10 +38,33 @@ def create_audit_log(
     )
 
     db.add(audit_log)
-    db.commit()
-    db.refresh(audit_log)
+    if commit:
+        db.commit()
+        db.refresh(audit_log)
+    else:
+        try:
+            db.flush()
+        except Exception:
+            db.rollback()
+            raise
 
     return audit_log
+
+
+def create_atomic_audit_log(db: Session, **audit_values) -> AuditLog:
+    """Commit a pending mutation and its audit row as one transaction."""
+    try:
+        audit_log = create_audit_log(db=db, commit=False, **audit_values)
+        db.commit()
+        return audit_log
+    except Exception:
+        db.rollback()
+        raise
+
+
+def prepare_audit_log(db: Session, **audit_values) -> AuditLog:
+    '''Flush an audit row without committing the caller-owned transaction.'''
+    return create_audit_log(db=db, commit=False, **audit_values)
 
 
 def list_audit_logs(

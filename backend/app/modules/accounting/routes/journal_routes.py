@@ -14,7 +14,9 @@ from app.modules.accounting.schemas.journal import (
     JournalEntryUpdate,
     OpeningBalanceCreate,
 )
-from app.modules.accounting.services.audit_service import create_audit_log
+from app.modules.accounting.services.audit_service import (
+    create_atomic_audit_log,
+)
 from app.modules.accounting.services.journal_service import (
     calculate_journal_totals,
     count_journal_entries,
@@ -162,7 +164,7 @@ def create_journal_entry_endpoint(
         created_by_user_id=current_user.id,
     )
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=journal_entry.company_id,
         actor=current_user.email,
@@ -276,7 +278,7 @@ def create_opening_balance_endpoint(
         created_by_user_id=current_user.id,
     )
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=opening_entry.company_id,
         actor=current_user.email,
@@ -457,7 +459,7 @@ def update_journal_entry_endpoint(
         fiscal_period=fiscal_period,
     )
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=updated_entry.company_id,
         actor=current_user.email,
@@ -527,7 +529,7 @@ def review_journal_entry_endpoint(
         journal_entry=journal_entry,
     )
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=reviewed_entry.company_id,
         actor=current_user.email,
@@ -621,7 +623,7 @@ def post_journal_entry_endpoint(
         journal_entry=journal_entry,
     )
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=posted_entry.company_id,
         actor=current_user.email,
@@ -742,7 +744,7 @@ def reverse_journal_entry_endpoint(
         created_by_user_id=current_user.id,
     )
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=reversal_entry.company_id,
         actor=current_user.email,
@@ -801,7 +803,7 @@ def void_journal_entry_endpoint(
         journal_entry=journal_entry,
     )
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=voided_entry.company_id,
         actor=current_user.email,

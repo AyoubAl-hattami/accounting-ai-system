@@ -128,6 +128,14 @@ def find_fiscal_period_for_date(
     return db.scalar(statement)
 
 
+def _flush_or_rollback(db: Session) -> None:
+    try:
+        db.flush()
+    except Exception:
+        db.rollback()
+        raise
+
+
 def create_journal_entry(
     db: Session,
     payload: JournalEntryCreate,
@@ -161,10 +169,8 @@ def create_journal_entry(
     ]
 
     db.add(journal_entry)
-    db.commit()
-    db.refresh(journal_entry)
-
-    return get_journal_entry(db=db, journal_entry_id=journal_entry.id)
+    _flush_or_rollback(db)
+    return journal_entry
 
 
 def create_opening_balance_entry(
@@ -200,10 +206,8 @@ def create_opening_balance_entry(
     ]
 
     db.add(journal_entry)
-    db.commit()
-    db.refresh(journal_entry)
-
-    return get_journal_entry(db=db, journal_entry_id=journal_entry.id)
+    _flush_or_rollback(db)
+    return journal_entry
 
 
 def update_journal_entry(
@@ -225,10 +229,8 @@ def update_journal_entry(
         journal_entry.fiscal_period_id = fiscal_period.id
 
     db.add(journal_entry)
-    db.commit()
-    db.refresh(journal_entry)
-
-    return get_journal_entry(db=db, journal_entry_id=journal_entry.id)
+    _flush_or_rollback(db)
+    return journal_entry
 
 
 def calculate_journal_totals(journal_entry: JournalEntry) -> tuple[Decimal, Decimal]:
@@ -252,10 +254,8 @@ def mark_journal_entry_reviewed(
     journal_entry.status = "reviewed"
 
     db.add(journal_entry)
-    db.commit()
-    db.refresh(journal_entry)
-
-    return get_journal_entry(db=db, journal_entry_id=journal_entry.id)
+    _flush_or_rollback(db)
+    return journal_entry
 
 
 def post_journal_entry(
@@ -273,10 +273,8 @@ def post_journal_entry(
             db.add(original_entry)
 
     db.add(journal_entry)
-    db.commit()
-    db.refresh(journal_entry)
-
-    return get_journal_entry(db=db, journal_entry_id=journal_entry.id)
+    _flush_or_rollback(db)
+    return journal_entry
 
 
 def reverse_journal_entry(
@@ -314,10 +312,8 @@ def reverse_journal_entry(
     ]
 
     db.add(reversal_entry)
-    db.commit()
-    db.refresh(reversal_entry)
-
-    return get_journal_entry(db=db, journal_entry_id=reversal_entry.id)
+    _flush_or_rollback(db)
+    return reversal_entry
 
 
 def void_journal_entry(
@@ -327,7 +323,5 @@ def void_journal_entry(
     journal_entry.status = "void"
 
     db.add(journal_entry)
-    db.commit()
-    db.refresh(journal_entry)
-
-    return get_journal_entry(db=db, journal_entry_id=journal_entry.id)
+    _flush_or_rollback(db)
+    return journal_entry

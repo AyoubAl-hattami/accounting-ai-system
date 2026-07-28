@@ -24,7 +24,7 @@ from app.modules.accounting.services.company_service import (
 from app.modules.accounting.services.company_user_service import (
     create_company_user,
 )
-from app.modules.accounting.services.audit_service import create_audit_log
+from app.modules.accounting.services.audit_service import create_atomic_audit_log
 
 
 router = APIRouter(
@@ -55,7 +55,7 @@ def create_company_endpoint(
         ),
     )
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=company.id,
         actor=current_user.email,
@@ -174,7 +174,7 @@ def update_company_endpoint(
         payload=payload,
     )
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=updated.id,
         actor=current_user.email,

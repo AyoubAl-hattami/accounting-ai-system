@@ -33,7 +33,10 @@ from app.modules.accounting.services.fiscal_service import (
     find_overlapping_fiscal_period,
     find_overlapping_fiscal_year,
 )
-from app.modules.accounting.services.audit_service import create_audit_log
+from app.modules.accounting.services.audit_service import (
+    create_atomic_audit_log,
+    prepare_audit_log,
+)
 
 
 router = APIRouter(tags=["Fiscal"])
@@ -94,7 +97,7 @@ def create_fiscal_year_endpoint(
         )
     fiscal_year = create_fiscal_year(db=db, payload=payload)
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=fiscal_year.company_id,
         actor=current_user.email,
@@ -266,7 +269,7 @@ def update_fiscal_year_endpoint(
         payload=payload,
     )
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=updated.company_id,
         actor=current_user.email,
@@ -378,7 +381,7 @@ def create_fiscal_period_endpoint(
 
     fiscal_period = create_fiscal_period(db=db, payload=payload)
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=fiscal_period.company_id,
         actor=current_user.email,
@@ -571,7 +574,7 @@ def update_fiscal_period_endpoint(
         payload=payload,
     )
 
-    create_audit_log(
+    create_atomic_audit_log(
         db=db,
         company_id=updated.company_id,
         actor=current_user.email,
@@ -686,7 +689,7 @@ def quick_setup_fiscal_period_for_today(
                 fiscal_year = create_fiscal_year(db=db, payload=fy_payload)
                 result["fiscal_year_created"] = True
 
-                create_audit_log(
+                prepare_audit_log(
                     db=db,
                     company_id=company_id,
                     actor=current_user.email,
@@ -781,7 +784,7 @@ def quick_setup_fiscal_period_for_today(
             fiscal_period = create_fiscal_period(db=db, payload=fp_payload)
             result["fiscal_period_created"] = True
 
-            create_audit_log(
+            prepare_audit_log(
                 db=db,
                 company_id=company_id,
                 actor=current_user.email,
@@ -812,4 +815,10 @@ def quick_setup_fiscal_period_for_today(
         "period_no": fiscal_period.period_no,
     }
 
-    return result
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return result

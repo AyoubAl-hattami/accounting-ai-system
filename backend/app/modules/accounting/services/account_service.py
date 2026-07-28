@@ -1,6 +1,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.database import flush_or_rollback
 from app.modules.accounting.models.account import Account
 from app.modules.accounting.models.company import Company
 from app.modules.accounting.schemas.account import AccountCreate, AccountUpdate
@@ -67,8 +68,7 @@ def create_account(db: Session, payload: AccountCreate) -> Account:
     )
 
     db.add(account)
-    db.commit()
-    db.refresh(account)
+    flush_or_rollback(db)
 
     return account
 
@@ -90,7 +90,6 @@ def update_account(
         setattr(account, field, value)
 
     db.add(account)
-    db.commit()
-    db.refresh(account)
+    flush_or_rollback(db)
 
     return account

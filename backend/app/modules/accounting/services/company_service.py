@@ -1,6 +1,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.database import flush_or_rollback
 from app.modules.accounting.models.company import Company
 from app.modules.accounting.schemas.company import CompanyCreate, CompanyUpdate
 from app.modules.accounting.models.company_user import CompanyUser
@@ -18,8 +19,7 @@ def create_company(db: Session, payload: CompanyCreate) -> Company:
     )
 
     db.add(company)
-    db.commit()
-    db.refresh(company)
+    flush_or_rollback(db)
 
     return company
 
@@ -59,8 +59,7 @@ def update_company(
         setattr(company, field, value)
 
     db.add(company)
-    db.commit()
-    db.refresh(company)
+    flush_or_rollback(db)
 
     return company
 def list_companies_for_user(
