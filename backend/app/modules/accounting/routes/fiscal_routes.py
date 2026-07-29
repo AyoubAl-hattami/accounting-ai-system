@@ -36,15 +36,11 @@ from app.modules.accounting.schemas.fiscal import (
 )
 from app.modules.accounting.services.fiscal_service import (
     count_journal_entries_for_fiscal_year,
-    create_fiscal_period,
-    create_fiscal_year,
     get_company_or_none,
     get_fiscal_period_by_name,
     get_fiscal_period_by_no,
     get_fiscal_year,
     get_fiscal_year_by_name,
-    list_fiscal_periods,
-    list_fiscal_years,
     find_overlapping_fiscal_period,
     find_overlapping_fiscal_year,
 )
@@ -663,6 +659,7 @@ def quick_setup_fiscal_period_for_today(
         allowed_roles={"admin"},
     )
 
+    repository = SqlAlchemyFiscalRepository(db)
     today = get_today_date()
     year_start = _date(today.year, 1, 1)
     year_end = _date(today.year, 12, 31)
@@ -683,7 +680,11 @@ def quick_setup_fiscal_period_for_today(
     }
 
     # ── Find or create fiscal year ──────────────────────────────────
-    fiscal_years = list_fiscal_years(db=db, company_id=company_id, skip=0, limit=500)
+    fiscal_years = ListFiscalYears(repository).execute(
+        company_id=company_id,
+        skip=0,
+        limit=500,
+    ).items
     fiscal_year = None
     for fy in fiscal_years:
         if fy.start_date <= today <= fy.end_date:
@@ -717,7 +718,14 @@ def quick_setup_fiscal_period_for_today(
             if existing_name:
                 fiscal_year = existing_name
             else:
-                fiscal_year = create_fiscal_year(db=db, payload=fy_payload)
+                command = CreateFiscalYearCommand(
+                    company_id=fy_payload.company_id,
+                    name=fy_payload.name,
+                    start_date=fy_payload.start_date,
+                    end_date=fy_payload.end_date,
+                    status=fy_payload.status,
+                )
+                fiscal_year = CreateFiscalYear(repository).execute(command)
                 result["fiscal_year_created"] = True
 
                 prepare_audit_log(
@@ -751,10 +759,12 @@ def quick_setup_fiscal_period_for_today(
     }
 
     # ── Find or create fiscal period ────────────────────────────────
-    periods = list_fiscal_periods(
-        db=db, company_id=company_id,
-        fiscal_year_id=fiscal_year.id, skip=0, limit=500,
-    )
+    periods = ListFiscalPeriods(repository).execute(
+        company_id=company_id,
+        fiscal_year_id=fiscal_year.id,
+        skip=0,
+        limit=500,
+    ).items
     fiscal_period = None
     for fp in periods:
         if fp.start_date <= today <= fp.end_date:
@@ -812,7 +822,16 @@ def quick_setup_fiscal_period_for_today(
                     detail="Fiscal period dates overlap with an existing fiscal period",
                 )
 
-            fiscal_period = create_fiscal_period(db=db, payload=fp_payload)
+            command = CreateFiscalPeriodCommand(
+                company_id=fp_payload.company_id,
+                fiscal_year_id=fp_payload.fiscal_year_id,
+                period_no=fp_payload.period_no,
+                name=fp_payload.name,
+                start_date=fp_payload.start_date,
+                end_date=fp_payload.end_date,
+                status=fp_payload.status,
+            )
+            fiscal_period = CreateFiscalPeriod(repository).execute(command)
             result["fiscal_period_created"] = True
 
             prepare_audit_log(
