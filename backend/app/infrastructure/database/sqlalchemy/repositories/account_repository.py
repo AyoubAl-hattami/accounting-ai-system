@@ -3,7 +3,11 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.application.accounts.dto import AccountDTO, CreateAccountCommand
+from app.application.accounts.dto import (
+    AccountDTO,
+    CreateAccountCommand,
+    UpdateAccountCommand,
+)
 from app.application.accounts.ports import AccountRepository
 from app.core.database import flush_or_rollback
 from app.modules.accounting.models.account import Account
@@ -44,6 +48,16 @@ class SqlAlchemyAccountRepository(AccountRepository):
         flush_or_rollback(self._db)
         return self._to_dto(account)
 
+    def update(self, command: UpdateAccountCommand) -> AccountDTO:
+        statement = select(Account).where(Account.id == command.account_id)
+        account = self._db.scalar(statement)
+        if account is None:
+            raise RuntimeError(f"Account {command.account_id} disappeared before update staging")
+        for field in command.fields:
+            setattr(account, field, getattr(command, field))
+        self._db.add(account)
+        flush_or_rollback(self._db)
+        return self._to_dto(account)
     def get_by_id(self, account_id: int) -> AccountDTO | None:
         statement = select(Account).where(Account.id == account_id)
         account = self._db.scalar(statement)

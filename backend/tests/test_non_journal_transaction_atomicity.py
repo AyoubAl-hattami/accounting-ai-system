@@ -8,11 +8,16 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.application.accounts.dto import CreateAccountCommand
-from app.application.accounts.use_cases import CreateAccount
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from app.application.accounts.dto import CreateAccountCommand, UpdateAccountCommand
+from app.application.accounts.use_cases import CreateAccount, UpdateAccount
 from app.infrastructure.database.sqlalchemy.repositories.account_repository import (
     SqlAlchemyAccountRepository,
 )
+from app.modules.accounting.models.account import Account
+from app.modules.accounting.models.company import Company
 from app.modules.accounting.services import (
     account_service,
     audit_service,
@@ -191,3 +196,31 @@ def test_opening_balance_rolls_back_when_audit_insert_fails(monkeypatch):
     )
 
     _assert_audit_failure_rolls_back(db, monkeypatch, opening_balance)
+
+
+def test_account_update_use_case_rolls_back_staged_update_when_audit_insert_fails(monkeypatch):
+    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    Company.__table__.create(engine)
+    Account.__table__.create(engine)
+    try:
+        with Session(engine) as db:
+            company = Company(name="Atomic Update", base_currency="USD")
+            db.add(company)
+            db.flush()
+            account = Account(company_id=company.id, code="1000", name="Before", account_type="asset", is_active=True, is_system=False)
+            db.add(account)
+            db.commit()
+            account_id = account.id
+
+            updated = UpdateAccount(SqlAlchemyAccountRepository(db)).execute(
+                UpdateAccountCommand(account_id=account_id, name="After", fields=frozenset({"name"}))
+            )
+            assert updated.name == "After"
+            _fail_audit(monkeypatch)
+            with pytest.raises(RuntimeError, match="audit insert failed"):
+                audit_service.create_atomic_audit_log(db=db, company_id=company.id, action="update_account", entity_type="account", entity_id=account_id)
+
+        with Session(engine) as verification_db:
+            assert verification_db.get(Account, account_id).name == "Before"
+    finally:
+        engine.dispose()

@@ -3,7 +3,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.application.accounts.dto import AccountDTO, CreateAccountCommand
+from app.application.accounts.dto import (
+    AccountDTO,
+    CreateAccountCommand,
+    UpdateAccountCommand,
+)
 from app.core.database import Base
 from app.infrastructure.database.sqlalchemy.repositories.account_repository import (
     SqlAlchemyAccountRepository,
@@ -161,5 +165,75 @@ def test_repository_create_flushes_maps_and_rolls_back_constraint_failure():
             assert db.is_active
             assert db.commit_calls == 0
             assert repository.count_by_company(company.id) == 1
+    finally:
+        engine.dispose()
+
+
+def test_repository_update_mutates_only_supplied_fields_clears_parent_and_does_not_commit():
+    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    Company.__table__.create(engine)
+    Account.__table__.create(engine)
+    try:
+        with CountingSession(engine) as db:
+            company = Company(name="Update Test", base_currency="USD")
+            db.add(company)
+            db.flush()
+            parent = Account(company_id=company.id, code="1000", name="Parent", account_type="asset", is_active=True, is_system=False)
+            account = Account(company_id=company.id, code="1100", name="Before", account_type="asset", parent_id=None, description="keep", is_active=True, is_system=False)
+            db.add_all([parent, account])
+            db.commit()
+            account.parent_id = parent.id
+            db.commit()
+            db.commit_calls = 0
+
+            result = SqlAlchemyAccountRepository(db).update(
+                UpdateAccountCommand(
+                    account_id=account.id,
+                    name="After",
+                    parent_id=None,
+                    fields=frozenset({"name", "parent_id"}),
+                )
+            )
+
+            assert isinstance(result, AccountDTO)
+            assert result.name == "After"
+            assert result.parent_id is None
+            assert result.code == "1100"
+            assert result.description == "keep"
+            assert result.account_type == "asset"
+            assert db.commit_calls == 0
+    finally:
+        engine.dispose()
+
+
+def test_repository_update_constraint_failure_rolls_back_and_is_globally_keyed():
+    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    Company.__table__.create(engine)
+    Account.__table__.create(engine)
+    try:
+        with CountingSession(engine) as db:
+            first = Company(name="First Update", base_currency="USD")
+            second = Company(name="Second Update", base_currency="USD")
+            db.add_all([first, second])
+            db.flush()
+            one = Account(company_id=first.id, code="1000", name="One", account_type="asset", is_active=True, is_system=False)
+            duplicate = Account(company_id=first.id, code="2000", name="Duplicate", account_type="asset", is_active=True, is_system=False)
+            global_target = Account(company_id=second.id, code="1000", name="Global", account_type="asset", is_active=True, is_system=False)
+            db.add_all([one, duplicate, global_target])
+            db.commit()
+            db.commit_calls = 0
+            repository = SqlAlchemyAccountRepository(db)
+
+            global_result = repository.update(UpdateAccountCommand(account_id=global_target.id, name="Changed", fields=frozenset({"name"})))
+            assert global_result.company_id == second.id
+            assert global_result.name == "Changed"
+            assert db.commit_calls == 0
+
+            with pytest.raises(IntegrityError):
+                repository.update(UpdateAccountCommand(account_id=one.id, code="2000", fields=frozenset({"code"})))
+
+            assert db.is_active
+            assert db.commit_calls == 0
+            assert repository.get_by_id(one.id).code == "1000"
     finally:
         engine.dispose()

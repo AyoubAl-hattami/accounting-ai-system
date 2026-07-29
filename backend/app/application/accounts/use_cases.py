@@ -4,6 +4,7 @@ from app.application.accounts.dto import (
     AccountDTO,
     AccountPageDTO,
     CreateAccountCommand,
+    UpdateAccountCommand,
 )
 from app.application.accounts.ports import AccountRepository
 
@@ -25,6 +26,24 @@ class CreateAccount:
         )
         return self._repository.create(normalized_command)
 
+
+class UpdateAccount:
+    def __init__(self, repository: AccountRepository) -> None:
+        self._repository = repository
+
+    def execute(self, command: UpdateAccountCommand) -> AccountDTO:
+        normalized_command = UpdateAccountCommand(
+            account_id=command.account_id,
+            code=(command.code.strip() if "code" in command.fields and command.code else command.code),
+            name=(command.name.strip() if "name" in command.fields and command.name else command.name),
+            account_type=command.account_type,
+            parent_id=command.parent_id,
+            description=command.description,
+            is_active=command.is_active,
+            is_system=command.is_system,
+            fields=command.fields,
+        )
+        return self._repository.update(normalized_command)
 
 class GetAccount:
     def __init__(self, repository: AccountRepository) -> None:
