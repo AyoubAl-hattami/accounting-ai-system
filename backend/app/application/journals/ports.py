@@ -1,11 +1,14 @@
-"""Read-only application port for journal persistence."""
+"""Application port for journal persistence."""
 
 from typing import Protocol
 
-from app.application.journals.dto import JournalEntryDTO
+from app.application.journals.dto import CreateJournalEntryCommand, JournalEntryDTO
 
 
 class JournalRepository(Protocol):
+    def create(self, command: CreateJournalEntryCommand) -> JournalEntryDTO:
+        ...
+
     def get_by_id(self, journal_entry_id: int) -> JournalEntryDTO | None:
         ...
 

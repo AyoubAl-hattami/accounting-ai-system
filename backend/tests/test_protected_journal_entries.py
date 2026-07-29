@@ -5,6 +5,7 @@ import requests
 from app.core.database import SessionLocal
 from app.modules.accounting.models.company import Company
 from app.modules.accounting.models.company_user import CompanyUser
+from app.modules.accounting.models.audit_log import AuditLog
 from app.modules.accounting.models.journal_entry import JournalEntry
 from app.modules.accounting.models.user import User
 from app.modules.accounting.services.auth_service import create_user_token
@@ -188,3 +189,93 @@ def test_journal_read_filter_get_and_error_contracts(
     )
     assert missing.status_code == 404
     assert missing.json() == {"detail": "Journal entry not found"}
+
+def test_journal_create_response_and_audit_contract(
+    base_url,
+    admin_headers,
+    default_company_id,
+    default_bank_account_id,
+    default_owner_capital_account_id,
+):
+    marker = uuid.uuid4().hex[:12]
+    entry_no = f"CREATE-{marker}"
+    response = requests.post(
+        f"{base_url}/journal-entries",
+        headers=admin_headers,
+        json={
+            "company_id": default_company_id,
+            "entry_no": f"  {entry_no}  ",
+            "entry_date": "2026-01-01",
+            "description": " create description unchanged ",
+            "source_type": "manual",
+            "source_id": marker,
+            "lines": [
+                {
+                    "account_id": default_bank_account_id,
+                    "debit": 17,
+                    "credit": 0,
+                    "description": "debit",
+                },
+                {
+                    "account_id": default_owner_capital_account_id,
+                    "debit": 0,
+                    "credit": 17,
+                    "description": "credit",
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    journal = response.json()
+    assert set(journal) == {
+        "id",
+        "company_id",
+        "fiscal_year_id",
+        "fiscal_period_id",
+        "entry_no",
+        "entry_date",
+        "description",
+        "status",
+        "source_type",
+        "source_id",
+        "created_by_user_id",
+        "creator_name",
+        "reversal_of_id",
+        "posted_at",
+        "created_at",
+        "updated_at",
+        "lines",
+    }
+    assert journal["entry_no"] == entry_no
+    assert journal["description"] == " create description unchanged "
+    assert journal["status"] == "draft"
+    assert journal["source_type"] == "manual"
+    assert journal["source_id"] == marker
+    assert journal["created_by_user_id"] is not None
+    assert journal["creator_name"]
+    assert [line["line_no"] for line in journal["lines"]] == [1, 2]
+    assert [line["account_id"] for line in journal["lines"]] == [
+        default_bank_account_id,
+        default_owner_capital_account_id,
+    ]
+
+    with SessionLocal() as db:
+        audits = (
+            db.query(AuditLog)
+            .filter_by(
+                company_id=default_company_id,
+                action="create_journal_entry",
+                entity_type="journal_entry",
+                entity_id=journal["id"],
+            )
+            .all()
+        )
+    assert len(audits) == 1
+    audit = audits[0]
+    assert audit.description == f"Created journal entry {entry_no}"
+    assert audit.new_values == {
+        "entry_no": entry_no,
+        "status": "draft",
+        "entry_date": "2026-01-01",
+    }

@@ -1,8 +1,30 @@
-"""Framework-neutral DTOs for journal read use cases."""
+"""Framework-neutral DTOs and commands for journal use cases."""
 
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class CreateJournalLineCommand:
+    account_id: int
+    debit: Decimal
+    credit: Decimal
+    description: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CreateJournalEntryCommand:
+    company_id: int
+    fiscal_year_id: int
+    fiscal_period_id: int
+    entry_no: str
+    entry_date: date
+    description: str | None
+    source_type: str | None
+    source_id: str | None
+    created_by_user_id: int | None
+    lines: tuple[CreateJournalLineCommand, ...]
 
 
 @dataclass(frozen=True, slots=True)
