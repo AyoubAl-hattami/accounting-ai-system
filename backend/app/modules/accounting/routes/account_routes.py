@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.application.accounts.use_cases import ListAccounts
+from app.application.accounts.use_cases import GetAccount, ListAccounts
 from app.core.auth_dependencies import get_current_user
 from app.core.company_access import ensure_company_access
 from app.core.database import get_db
@@ -192,7 +192,8 @@ def get_account_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    account = get_account(db=db, account_id=account_id)
+    repository = SqlAlchemyAccountRepository(db)
+    account = GetAccount(repository).execute(account_id=account_id)
 
     if not account:
         raise HTTPException(

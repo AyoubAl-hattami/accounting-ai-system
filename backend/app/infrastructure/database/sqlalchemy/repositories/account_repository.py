@@ -28,6 +28,11 @@ class SqlAlchemyAccountRepository(AccountRepository):
             updated_at=account.updated_at,
         )
 
+    def get_by_id(self, account_id: int) -> AccountDTO | None:
+        statement = select(Account).where(Account.id == account_id)
+        account = self._db.scalar(statement)
+        return self._to_dto(account) if account is not None else None
+
     def list_by_company(
         self,
         company_id: int,
