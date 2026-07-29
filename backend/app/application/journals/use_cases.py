@@ -6,6 +6,7 @@ from app.application.journals.dto import (
     CreateJournalEntryCommand,
     JournalEntryDTO,
     JournalEntryPageDTO,
+    UpdateJournalEntryCommand,
 )
 from app.application.journals.ports import JournalRepository
 
@@ -17,6 +18,14 @@ class CreateJournalEntry:
     def execute(self, command: CreateJournalEntryCommand) -> JournalEntryDTO:
         normalized_command = replace(command, entry_no=command.entry_no.strip())
         return self._repository.create(normalized_command)
+
+
+class UpdateJournalEntry:
+    def __init__(self, repository: JournalRepository) -> None:
+        self._repository = repository
+
+    def execute(self, command: UpdateJournalEntryCommand) -> JournalEntryDTO:
+        return self._repository.update(command)
 
 
 class GetJournalEntry:

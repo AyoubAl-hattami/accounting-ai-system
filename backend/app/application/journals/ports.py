@@ -2,11 +2,18 @@
 
 from typing import Protocol
 
-from app.application.journals.dto import CreateJournalEntryCommand, JournalEntryDTO
+from app.application.journals.dto import (
+    CreateJournalEntryCommand,
+    JournalEntryDTO,
+    UpdateJournalEntryCommand,
+)
 
 
 class JournalRepository(Protocol):
     def create(self, command: CreateJournalEntryCommand) -> JournalEntryDTO:
+        ...
+
+    def update(self, command: UpdateJournalEntryCommand) -> JournalEntryDTO:
         ...
 
     def get_by_id(self, journal_entry_id: int) -> JournalEntryDTO | None:
