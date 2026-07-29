@@ -79,5 +79,21 @@ def test_repository_filters_orders_paginates_counts_and_includes_all_statuses():
             assert repository.count_by_company(second_company.id) == 1
             assert any(item.is_system for item in all_items)
             assert any(not item.is_active for item in all_items)
+
+            system_account = next(item for item in all_items if item.is_system)
+            inactive_account = next(item for item in all_items if not item.is_active)
+            other_company_account = repository.list_by_company(
+                company_id=second_company.id,
+                skip=0,
+                limit=1,
+            )[0]
+
+            assert repository.get_by_id(system_account.id) == system_account
+            assert repository.get_by_id(inactive_account.id) == inactive_account
+            assert (
+                repository.get_by_id(other_company_account.id)
+                == other_company_account
+            )
+            assert repository.get_by_id(999_999) is None
     finally:
         engine.dispose()

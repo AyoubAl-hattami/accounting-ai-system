@@ -1,7 +1,15 @@
 """Read-only account application use cases."""
 
-from app.application.accounts.dto import AccountPageDTO
+from app.application.accounts.dto import AccountDTO, AccountPageDTO
 from app.application.accounts.ports import AccountRepository
+
+
+class GetAccount:
+    def __init__(self, repository: AccountRepository) -> None:
+        self._repository = repository
+
+    def execute(self, account_id: int) -> AccountDTO | None:
+        return self._repository.get_by_id(account_id=account_id)
 
 
 class ListAccounts:
