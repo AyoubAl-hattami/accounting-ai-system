@@ -30,6 +30,22 @@ class UpdateAccountCommand:
 
 
 @dataclass(frozen=True, slots=True)
+class DefaultAccountDefinition:
+    code: str
+    name: str
+    account_type: str
+    parent_code: str | None
+    description: str | None
+    is_system: bool
+
+
+@dataclass(frozen=True, slots=True)
+class SeedDefaultAccountsCommand:
+    company_id: int
+    accounts: tuple[DefaultAccountDefinition, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class AccountDTO:
     id: int
     company_id: int
@@ -50,3 +66,12 @@ class AccountPageDTO:
     total: int
     skip: int
     limit: int
+
+
+@dataclass(frozen=True, slots=True)
+class SeedDefaultAccountsResultDTO:
+    company_id: int
+    created_count: int
+    skipped_count: int
+    message: str
+    accounts: list[AccountDTO]

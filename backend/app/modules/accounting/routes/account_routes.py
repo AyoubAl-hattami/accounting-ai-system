@@ -1,11 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.application.accounts.dto import CreateAccountCommand, UpdateAccountCommand
+from app.application.accounts.dto import (
+    CreateAccountCommand,
+    DefaultAccountDefinition,
+    SeedDefaultAccountsCommand,
+    UpdateAccountCommand,
+)
 from app.application.accounts.use_cases import (
     CreateAccount,
     GetAccount,
     ListAccounts,
+    SeedDefaultAccounts,
     UpdateAccount,
 )
 from app.core.auth_dependencies import get_current_user
@@ -27,9 +33,7 @@ from app.modules.accounting.services.account_service import (
     get_account_by_code,
     get_company_or_none,
 )
-from app.modules.accounting.services.default_accounts_service import (
-    seed_default_accounts,
-)
+from app.modules.accounting.services.default_accounts_service import DEFAULT_ACCOUNTS
 from app.modules.accounting.services.audit_service import create_atomic_audit_log
 
 
@@ -174,10 +178,15 @@ def seed_default_accounts_endpoint(
         allowed_roles={"admin", "accountant"},
     )
 
-    result = seed_default_accounts(
-        db=db,
+    command = SeedDefaultAccountsCommand(
         company_id=company_id,
+        accounts=tuple(
+            DefaultAccountDefinition(**account_def)
+            for account_def in DEFAULT_ACCOUNTS
+        ),
     )
+    repository = SqlAlchemyAccountRepository(db)
+    result = SeedDefaultAccounts(repository).execute(command)
 
     create_atomic_audit_log(
         db=db,

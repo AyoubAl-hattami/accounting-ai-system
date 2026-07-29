@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.application.accounts.dto import (
     AccountDTO,
     CreateAccountCommand,
+    DefaultAccountDefinition,
+    SeedDefaultAccountsCommand,
     UpdateAccountCommand,
 )
 from app.core.database import Base
@@ -235,5 +237,54 @@ def test_repository_update_constraint_failure_rolls_back_and_is_globally_keyed()
             assert db.is_active
             assert db.commit_calls == 0
             assert repository.get_by_id(one.id).code == "1000"
+    finally:
+
+        engine.dispose()
+
+def test_repository_seed_defaults_stages_hierarchy_idempotently_without_commit():
+    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    Company.__table__.create(engine)
+    Account.__table__.create(engine)
+    try:
+        with CountingSession(engine) as db:
+            company = Company(name="Repository Seed", base_currency="USD")
+            db.add(company)
+            db.commit()
+            db.commit_calls = 0
+            command = SeedDefaultAccountsCommand(
+                company_id=company.id,
+                accounts=(
+                    DefaultAccountDefinition(
+                        code="1000",
+                        name="Assets",
+                        account_type="asset",
+                        parent_code=None,
+                        description="Main assets category",
+                        is_system=True,
+                    ),
+                    DefaultAccountDefinition(
+                        code="1110",
+                        name="Main Bank",
+                        account_type="asset",
+                        parent_code="1000",
+                        description="Main company bank account",
+                        is_system=True,
+                    ),
+                ),
+            )
+            repository = SqlAlchemyAccountRepository(db)
+
+            first = repository.seed_defaults(command)
+            second = repository.seed_defaults(command)
+
+            assert first.created_count == 2
+            assert first.skipped_count == 0
+            assert [account.code for account in first.accounts] == ["1000", "1110"]
+            assert first.accounts[1].parent_id == first.accounts[0].id
+            assert all(account.is_system for account in first.accounts)
+            assert second.created_count == 0
+            assert second.skipped_count == 2
+            assert second.accounts == []
+            assert db.commit_calls == 0
     finally:
         engine.dispose()
