@@ -5,12 +5,14 @@ from sqlalchemy.orm import Session
 from app.application.journals.dto import (
     CreateJournalEntryCommand,
     CreateJournalLineCommand,
+    ReviewJournalEntryCommand,
     UpdateJournalEntryCommand,
 )
 from app.application.journals.use_cases import (
     CreateJournalEntry,
     GetJournalEntry,
     ListJournalEntries,
+    ReviewJournalEntry,
     UpdateJournalEntry,
 )
 from app.infrastructure.database.sqlalchemy.repositories.journal_repository import (
@@ -41,7 +43,6 @@ from app.modules.accounting.services.journal_service import (
     get_journal_entry,
     get_journal_entry_by_no,
     get_reversal_for_entry,
-    mark_journal_entry_reviewed,
     post_journal_entry,
     reverse_journal_entry,
     void_journal_entry,
@@ -544,10 +545,11 @@ def review_journal_entry_endpoint(
             detail="Journal entry is not balanced",
         )
 
-    reviewed_entry = mark_journal_entry_reviewed(
-        db=db,
-        journal_entry=journal_entry,
+    command = ReviewJournalEntryCommand(
+        journal_entry_id=journal_entry_id,
     )
+    repository = SqlAlchemyJournalRepository(db)
+    reviewed_entry = ReviewJournalEntry(repository).execute(command)
 
     create_atomic_audit_log(
         db=db,

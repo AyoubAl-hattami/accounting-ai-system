@@ -8,6 +8,7 @@ from app.modules.accounting.models.company import Company
 from app.modules.accounting.models.company_user import CompanyUser
 from app.modules.accounting.models.audit_log import AuditLog
 from app.modules.accounting.models.journal_entry import JournalEntry
+from app.modules.accounting.models.journal_line import JournalLine
 from app.modules.accounting.models.user import User
 from app.modules.accounting.services.auth_service import create_user_token
 
@@ -416,3 +417,176 @@ def test_journal_update_contract_fiscal_validation_status_and_audit(
     )
     assert missing.status_code == 404
     assert missing.json() == {"detail": "Journal entry not found"}
+
+def test_journal_review_reviewer_role_response_audit_conflict_and_missing(
+    base_url,
+    admin_headers,
+    default_company_id,
+    default_bank_account_id,
+    default_owner_capital_account_id,
+):
+    marker = uuid.uuid4().hex[:12]
+    created_response = requests.post(
+        f"{base_url}/journal-entries",
+        headers=admin_headers,
+        json={
+            "company_id": default_company_id,
+            "entry_no": f"REVIEW-{marker}",
+            "entry_date": "2026-01-01",
+            "description": "Review contract",
+            "lines": [
+                {
+                    "account_id": default_bank_account_id,
+                    "debit": 29,
+                    "credit": 0,
+                },
+                {
+                    "account_id": default_owner_capital_account_id,
+                    "debit": 0,
+                    "credit": 29,
+                },
+            ],
+        },
+    )
+    assert created_response.status_code == 201, created_response.text
+    before = created_response.json()
+
+    reviewer_email = f"journal-reviewer-{marker}@example.test"
+    with SessionLocal() as db:
+        reviewer = User(
+            email=reviewer_email,
+            full_name="Journal Reviewer",
+            hashed_password="not-used-by-this-test",
+            is_active=True,
+            is_superuser=False,
+        )
+        db.add(reviewer)
+        db.flush()
+        membership = CompanyUser(
+            company_id=default_company_id,
+            user_id=reviewer.id,
+            role="reviewer",
+            is_active=True,
+        )
+        db.add(membership)
+        db.commit()
+        reviewer_id = reviewer.id
+        reviewer_headers = {
+            "Authorization": f"Bearer {create_user_token(reviewer)}"
+        }
+
+    try:
+        response = requests.post(
+            f"{base_url}/journal-entries/{before['id']}/review",
+            headers=reviewer_headers,
+        )
+
+        assert response.status_code == 200, response.text
+        reviewed = response.json()
+        assert set(reviewed) == set(before)
+        assert reviewed["id"] == before["id"]
+        assert reviewed["status"] == "reviewed"
+        assert reviewed["entry_no"] == before["entry_no"]
+        assert reviewed["created_by_user_id"] == before["created_by_user_id"]
+        assert reviewed["creator_name"] == before["creator_name"]
+        assert [line["account_id"] for line in reviewed["lines"]] == [
+            default_bank_account_id,
+            default_owner_capital_account_id,
+        ]
+
+        with SessionLocal() as db:
+            audits = (
+                db.query(AuditLog)
+                .filter_by(
+                    company_id=default_company_id,
+                    action="review_journal_entry",
+                    entity_type="journal_entry",
+                    entity_id=before["id"],
+                )
+                .all()
+            )
+        assert len(audits) == 1
+        audit = audits[0]
+        assert audit.actor == reviewer_email
+        assert audit.actor_user_id == reviewer_id
+        assert audit.actor_email == reviewer_email
+        assert audit.actor_name == "Journal Reviewer"
+        assert audit.description == f"Reviewed journal entry {before['entry_no']}"
+        assert audit.old_values == {"status": "draft"}
+        assert audit.new_values == {"status": "reviewed"}
+
+        repeated = requests.post(
+            f"{base_url}/journal-entries/{before['id']}/review",
+            headers=reviewer_headers,
+        )
+        assert repeated.status_code == 409
+        assert repeated.json() == {
+            "detail": "Only draft journal entries can be reviewed"
+        }
+
+        missing = requests.post(
+            f"{base_url}/journal-entries/2147483647/review",
+            headers=reviewer_headers,
+        )
+        assert missing.status_code == 404
+        assert missing.json() == {"detail": "Journal entry not found"}
+    finally:
+        with SessionLocal() as db:
+            membership = db.query(CompanyUser).filter_by(
+                company_id=default_company_id,
+                user_id=reviewer_id,
+            ).one()
+            db.delete(membership)
+            db.flush()
+            db.delete(db.get(User, reviewer_id))
+            db.commit()
+
+
+def test_journal_review_preserves_unbalanced_error(
+    base_url,
+    admin_headers,
+    default_company_id,
+    default_bank_account_id,
+    default_owner_capital_account_id,
+):
+    marker = uuid.uuid4().hex[:12]
+    created_response = requests.post(
+        f"{base_url}/journal-entries",
+        headers=admin_headers,
+        json={
+            "company_id": default_company_id,
+            "entry_no": f"UNBAL-{marker}",
+            "entry_date": "2026-01-01",
+            "lines": [
+                {
+                    "account_id": default_bank_account_id,
+                    "debit": 31,
+                    "credit": 0,
+                },
+                {
+                    "account_id": default_owner_capital_account_id,
+                    "debit": 0,
+                    "credit": 31,
+                },
+            ],
+        },
+    )
+    assert created_response.status_code == 201, created_response.text
+    journal_id = created_response.json()["id"]
+
+    with SessionLocal() as db:
+        credit_line = (
+            db.query(JournalLine)
+            .filter_by(journal_entry_id=journal_id)
+            .filter(JournalLine.credit > 0)
+            .one()
+        )
+        credit_line.credit = Decimal("30.00")
+        db.commit()
+
+    response = requests.post(
+        f"{base_url}/journal-entries/{journal_id}/review",
+        headers=admin_headers,
+    )
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Journal entry is not balanced"}

@@ -7,6 +7,7 @@ from app.application.journals.dto import (
     CreateJournalEntryCommand,
     JournalEntryDTO,
     JournalLineDTO,
+    ReviewJournalEntryCommand,
     UpdateJournalEntryCommand,
 )
 from app.application.journals.ports import JournalRepository
@@ -106,6 +107,20 @@ class SqlAlchemyJournalRepository(JournalRepository):
         if command.fiscal_period_id is not None:
             entry.fiscal_period_id = command.fiscal_period_id
 
+        self._db.add(entry)
+        try:
+            self._db.flush()
+        except Exception:
+            self._db.rollback()
+            raise
+        return self._entry_to_dto(entry)
+
+    def review(self, command: ReviewJournalEntryCommand) -> JournalEntryDTO:
+        entry = self._db.get(JournalEntry, command.journal_entry_id)
+        if entry is None:
+            raise RuntimeError("Journal entry disappeared before review")
+
+        entry.status = "reviewed"
         self._db.add(entry)
         try:
             self._db.flush()
