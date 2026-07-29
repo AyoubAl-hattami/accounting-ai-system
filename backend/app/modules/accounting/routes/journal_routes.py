@@ -2,7 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.application.journals.use_cases import GetJournalEntry, ListJournalEntries
+from app.application.journals.dto import (
+    CreateJournalEntryCommand,
+    CreateJournalLineCommand,
+)
+from app.application.journals.use_cases import (
+    CreateJournalEntry,
+    GetJournalEntry,
+    ListJournalEntries,
+)
 from app.infrastructure.database.sqlalchemy.repositories.journal_repository import (
     SqlAlchemyJournalRepository,
 )
@@ -23,7 +31,6 @@ from app.modules.accounting.services.audit_service import (
 )
 from app.modules.accounting.services.journal_service import (
     calculate_journal_totals,
-    create_journal_entry,
     create_opening_balance_entry,
     find_fiscal_period_for_date,
     find_fiscal_year_for_date,
@@ -158,13 +165,28 @@ def create_journal_entry_endpoint(
         payload=payload,
     )
 
-    journal_entry = create_journal_entry(
-        db=db,
-        payload=payload,
-        fiscal_year=fiscal_year,
-        fiscal_period=fiscal_period,
+    command = CreateJournalEntryCommand(
+        company_id=payload.company_id,
+        fiscal_year_id=fiscal_year.id,
+        fiscal_period_id=fiscal_period.id,
+        entry_no=payload.entry_no,
+        entry_date=payload.entry_date,
+        description=payload.description,
+        source_type=payload.source_type,
+        source_id=payload.source_id,
         created_by_user_id=current_user.id,
+        lines=tuple(
+            CreateJournalLineCommand(
+                account_id=line.account_id,
+                debit=line.debit,
+                credit=line.credit,
+                description=line.description,
+            )
+            for line in payload.lines
+        ),
     )
+    repository = SqlAlchemyJournalRepository(db)
+    journal_entry = CreateJournalEntry(repository).execute(command)
 
     create_atomic_audit_log(
         db=db,
