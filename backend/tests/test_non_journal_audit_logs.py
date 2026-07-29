@@ -1,5 +1,6 @@
 import os
 import time
+import uuid
 
 import requests
 
@@ -204,3 +205,52 @@ def test_update_company_creates_audit_log():
     assert update_log["entity_type"] == "company"
     assert update_log["entity_id"] == company_id
     assert update_log["company_id"] == company_id
+
+
+def test_create_account_creates_exactly_one_audit_log():
+    headers = login_and_get_headers()
+    create_company_response = requests.post(
+        f"{BASE_URL}/companies",
+        headers=headers,
+        json={
+            "name": f"AccountAuditCo_{uuid.uuid4().hex}",
+            "base_currency": "USD",
+        },
+    )
+    assert create_company_response.status_code == 201
+    company_id = create_company_response.json()["id"]
+
+    create_account_response = requests.post(
+        f"{BASE_URL}/accounts",
+        headers=headers,
+        json={
+            "company_id": company_id,
+            "code": uuid.uuid4().hex[:12],
+            "name": "Audit account",
+            "account_type": "asset",
+            "parent_id": None,
+            "description": None,
+            "is_active": True,
+            "is_system": False,
+        },
+    )
+    assert create_account_response.status_code == 201
+    account = create_account_response.json()
+
+    audit_response = requests.get(
+        f"{BASE_URL}/audit-logs?company_id={company_id}&action=create_account",
+        headers=headers,
+    )
+    assert audit_response.status_code == 200
+    matching_logs = [
+        log
+        for log in audit_response.json()["items"]
+        if log["entity_type"] == "account"
+        and log["entity_id"] == account["id"]
+    ]
+
+    assert len(matching_logs) == 1
+    assert matching_logs[0]["company_id"] == company_id
+    assert matching_logs[0]["description"] == (
+        f"Created account {account['code']} - {account['name']}"
+    )

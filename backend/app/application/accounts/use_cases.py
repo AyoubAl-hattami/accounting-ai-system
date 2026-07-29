@@ -1,7 +1,29 @@
-"""Read-only account application use cases."""
+"""Account application use cases."""
 
-from app.application.accounts.dto import AccountDTO, AccountPageDTO
+from app.application.accounts.dto import (
+    AccountDTO,
+    AccountPageDTO,
+    CreateAccountCommand,
+)
 from app.application.accounts.ports import AccountRepository
+
+
+class CreateAccount:
+    def __init__(self, repository: AccountRepository) -> None:
+        self._repository = repository
+
+    def execute(self, command: CreateAccountCommand) -> AccountDTO:
+        normalized_command = CreateAccountCommand(
+            company_id=command.company_id,
+            code=command.code.strip(),
+            name=command.name.strip(),
+            account_type=command.account_type,
+            parent_id=command.parent_id,
+            description=command.description,
+            is_active=command.is_active,
+            is_system=command.is_system,
+        )
+        return self._repository.create(normalized_command)
 
 
 class GetAccount:

@@ -1,7 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.application.accounts.use_cases import GetAccount, ListAccounts
+from app.application.accounts.dto import CreateAccountCommand
+from app.application.accounts.use_cases import (
+    CreateAccount,
+    GetAccount,
+    ListAccounts,
+)
 from app.core.auth_dependencies import get_current_user
 from app.core.company_access import ensure_company_access
 from app.core.database import get_db
@@ -17,7 +22,6 @@ from app.modules.accounting.schemas.account import (
     AccountUpdate,
 )
 from app.modules.accounting.services.account_service import (
-    create_account,
     get_account,
     get_account_by_code,
     get_company_or_none,
@@ -93,7 +97,18 @@ def create_account_endpoint(
                 detail="Parent account must belong to the same company",
             )
 
-    account = create_account(db=db, payload=payload)
+    command = CreateAccountCommand(
+        company_id=payload.company_id,
+        code=payload.code,
+        name=payload.name,
+        account_type=payload.account_type,
+        parent_id=payload.parent_id,
+        description=payload.description,
+        is_active=payload.is_active,
+        is_system=payload.is_system,
+    )
+    repository = SqlAlchemyAccountRepository(db)
+    account = CreateAccount(repository).execute(command)
 
     create_atomic_audit_log(
         db=db,
