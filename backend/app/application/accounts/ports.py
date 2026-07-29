@@ -2,10 +2,13 @@
 
 from typing import Protocol
 
-from app.application.accounts.dto import AccountDTO
+from app.application.accounts.dto import AccountDTO, CreateAccountCommand
 
 
 class AccountRepository(Protocol):
+    def create(self, command: CreateAccountCommand) -> AccountDTO:
+        ...
+
     def get_by_id(self, account_id: int) -> AccountDTO | None:
         ...
 

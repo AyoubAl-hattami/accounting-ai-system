@@ -3,8 +3,9 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.application.accounts.dto import AccountDTO
+from app.application.accounts.dto import AccountDTO, CreateAccountCommand
 from app.application.accounts.ports import AccountRepository
+from app.core.database import flush_or_rollback
 from app.modules.accounting.models.account import Account
 
 
@@ -27,6 +28,21 @@ class SqlAlchemyAccountRepository(AccountRepository):
             created_at=account.created_at,
             updated_at=account.updated_at,
         )
+
+    def create(self, command: CreateAccountCommand) -> AccountDTO:
+        account = Account(
+            company_id=command.company_id,
+            code=command.code,
+            name=command.name,
+            account_type=command.account_type,
+            parent_id=command.parent_id,
+            description=command.description,
+            is_active=command.is_active,
+            is_system=command.is_system,
+        )
+        self._db.add(account)
+        flush_or_rollback(self._db)
+        return self._to_dto(account)
 
     def get_by_id(self, account_id: int) -> AccountDTO | None:
         statement = select(Account).where(Account.id == account_id)

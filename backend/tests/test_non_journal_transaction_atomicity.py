@@ -8,6 +8,11 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.application.accounts.dto import CreateAccountCommand
+from app.application.accounts.use_cases import CreateAccount
+from app.infrastructure.database.sqlalchemy.repositories.account_repository import (
+    SqlAlchemyAccountRepository,
+)
 from app.modules.accounting.services import (
     account_service,
     audit_service,
@@ -85,6 +90,26 @@ def test_account_creation_rolls_back_when_audit_insert_fails(monkeypatch):
         ),
     )
 
+    _assert_audit_failure_rolls_back(db, monkeypatch, account)
+
+
+def test_account_create_use_case_rolls_back_when_audit_insert_fails(monkeypatch):
+    db = RecordingSession()
+    account = CreateAccount(SqlAlchemyAccountRepository(db)).execute(
+        CreateAccountCommand(
+            company_id=7,
+            code=' 1000 ',
+            name=' Cash ',
+            account_type='asset',
+            parent_id=None,
+            description=None,
+            is_active=True,
+            is_system=False,
+        )
+    )
+
+    assert account.code == '1000'
+    assert account.name == 'Cash'
     _assert_audit_failure_rolls_back(db, monkeypatch, account)
 
 
