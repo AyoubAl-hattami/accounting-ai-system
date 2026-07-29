@@ -5,11 +5,13 @@ from sqlalchemy.orm import Session
 from app.application.journals.dto import (
     CreateJournalEntryCommand,
     CreateJournalLineCommand,
+    UpdateJournalEntryCommand,
 )
 from app.application.journals.use_cases import (
     CreateJournalEntry,
     GetJournalEntry,
     ListJournalEntries,
+    UpdateJournalEntry,
 )
 from app.infrastructure.database.sqlalchemy.repositories.journal_repository import (
     SqlAlchemyJournalRepository,
@@ -42,7 +44,6 @@ from app.modules.accounting.services.journal_service import (
     mark_journal_entry_reviewed,
     post_journal_entry,
     reverse_journal_entry,
-    update_journal_entry,
     void_journal_entry,
 )
 
@@ -467,13 +468,16 @@ def update_journal_entry_endpoint(
                 detail="Fiscal period does not belong to the fiscal year",
             )
 
-    updated_entry = update_journal_entry(
-        db=db,
-        journal_entry=journal_entry,
-        payload=payload,
-        fiscal_year=fiscal_year,
-        fiscal_period=fiscal_period,
+    update_data = payload.model_dump(exclude_unset=True)
+    command = UpdateJournalEntryCommand(
+        journal_entry_id=journal_entry_id,
+        **update_data,
+        fiscal_year_id=fiscal_year.id if fiscal_year is not None else None,
+        fiscal_period_id=fiscal_period.id if fiscal_period is not None else None,
+        fields=frozenset(update_data.keys()),
     )
+    repository = SqlAlchemyJournalRepository(db)
+    updated_entry = UpdateJournalEntry(repository).execute(command)
 
     create_atomic_audit_log(
         db=db,

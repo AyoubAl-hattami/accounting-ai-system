@@ -7,6 +7,7 @@ from app.application.journals.dto import (
     CreateJournalEntryCommand,
     JournalEntryDTO,
     JournalLineDTO,
+    UpdateJournalEntryCommand,
 )
 from app.application.journals.ports import JournalRepository
 from app.modules.accounting.models.journal_entry import JournalEntry
@@ -85,6 +86,26 @@ class SqlAlchemyJournalRepository(JournalRepository):
             )
             for index, line in enumerate(command.lines, start=1)
         ]
+        self._db.add(entry)
+        try:
+            self._db.flush()
+        except Exception:
+            self._db.rollback()
+            raise
+        return self._entry_to_dto(entry)
+
+    def update(self, command: UpdateJournalEntryCommand) -> JournalEntryDTO:
+        entry = self._db.get(JournalEntry, command.journal_entry_id)
+        if entry is None:
+            raise RuntimeError("Journal entry disappeared before update")
+
+        for field in command.fields:
+            setattr(entry, field, getattr(command, field))
+        if command.fiscal_year_id is not None:
+            entry.fiscal_year_id = command.fiscal_year_id
+        if command.fiscal_period_id is not None:
+            entry.fiscal_period_id = command.fiscal_period_id
+
         self._db.add(entry)
         try:
             self._db.flush()

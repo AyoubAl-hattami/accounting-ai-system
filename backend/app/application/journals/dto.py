@@ -28,6 +28,18 @@ class CreateJournalEntryCommand:
 
 
 @dataclass(frozen=True, slots=True)
+class UpdateJournalEntryCommand:
+    journal_entry_id: int
+    entry_date: date | None = None
+    description: str | None = None
+    source_type: str | None = None
+    source_id: str | None = None
+    fiscal_year_id: int | None = None
+    fiscal_period_id: int | None = None
+    fields: frozenset[str] = frozenset()
+
+
+@dataclass(frozen=True, slots=True)
 class JournalLineDTO:
     id: int
     journal_entry_id: int

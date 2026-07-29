@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 import requests
 
@@ -279,3 +280,139 @@ def test_journal_create_response_and_audit_contract(
         "status": "draft",
         "entry_date": "2026-01-01",
     }
+
+def test_journal_update_contract_fiscal_validation_status_and_audit(
+    base_url,
+    admin_headers,
+    default_company_id,
+    default_bank_account_id,
+    default_owner_capital_account_id,
+):
+    marker = uuid.uuid4().hex[:12]
+    created_response = requests.post(
+        f"{base_url}/journal-entries",
+        headers=admin_headers,
+        json={
+            "company_id": default_company_id,
+            "entry_no": f"UPDATE-{marker}",
+            "entry_date": "2026-01-01",
+            "description": "Before update",
+            "source_type": "manual",
+            "source_id": "before-source",
+            "lines": [
+                {
+                    "account_id": default_bank_account_id,
+                    "debit": 23,
+                    "credit": 0,
+                    "description": "debit unchanged",
+                },
+                {
+                    "account_id": default_owner_capital_account_id,
+                    "debit": 0,
+                    "credit": 23,
+                    "description": "credit unchanged",
+                },
+            ],
+        },
+    )
+    assert created_response.status_code == 201, created_response.text
+    before = created_response.json()
+
+    updated_response = requests.patch(
+        f"{base_url}/journal-entries/{before['id']}",
+        headers=admin_headers,
+        json={
+            "entry_date": "2026-01-02",
+            "description": "After update",
+            "source_type": None,
+        },
+    )
+
+    assert updated_response.status_code == 200, updated_response.text
+    updated = updated_response.json()
+    assert set(updated) == set(before)
+    assert updated["id"] == before["id"]
+    assert updated["entry_no"] == before["entry_no"]
+    assert updated["entry_date"] == "2026-01-02"
+    assert updated["description"] == "After update"
+    assert updated["source_type"] is None
+    assert updated["source_id"] == "before-source"
+    assert updated["created_by_user_id"] == before["created_by_user_id"]
+    assert updated["creator_name"] == before["creator_name"]
+    assert [
+        (line["account_id"], line["line_no"], Decimal(line["debit"]), Decimal(line["credit"]))
+        for line in updated["lines"]
+    ] == [
+        (line["account_id"], line["line_no"], Decimal(line["debit"]), Decimal(line["credit"]))
+        for line in before["lines"]
+    ]
+
+    cleared_response = requests.patch(
+        f"{base_url}/journal-entries/{before['id']}",
+        headers=admin_headers,
+        json={"description": None},
+    )
+    assert cleared_response.status_code == 200, cleared_response.text
+    cleared = cleared_response.json()
+    assert cleared["description"] is None
+    assert cleared["entry_date"] == "2026-01-02"
+    assert cleared["source_id"] == "before-source"
+
+    with SessionLocal() as db:
+        audits = (
+            db.query(AuditLog)
+            .filter_by(
+                company_id=default_company_id,
+                action="update_journal_entry",
+                entity_type="journal_entry",
+                entity_id=before["id"],
+            )
+            .all()
+        )
+    assert len(audits) == 2
+    assert all(
+        audit.description
+        == f"Updated draft journal entry {before['entry_no']}"
+        for audit in audits
+    )
+    assert all(
+        audit.old_values == {"status": "draft", "entry_no": before["entry_no"]}
+        for audit in audits
+    )
+    assert all(
+        audit.new_values == {"status": "draft", "entry_no": before["entry_no"]}
+        for audit in audits
+    )
+
+    invalid_date = requests.patch(
+        f"{base_url}/journal-entries/{before['id']}",
+        headers=admin_headers,
+        json={"entry_date": "2035-01-01"},
+    )
+    assert invalid_date.status_code == 400
+    assert invalid_date.json() == {
+        "detail": "No fiscal year found for this entry date"
+    }
+
+    reviewed = requests.post(
+        f"{base_url}/journal-entries/{before['id']}/review",
+        headers=admin_headers,
+    )
+    assert reviewed.status_code == 200, reviewed.text
+    protected = requests.patch(
+        f"{base_url}/journal-entries/{before['id']}",
+        headers=admin_headers,
+        json={"description": "Denied"},
+    )
+    assert protected.status_code == 400
+    assert protected.json() == {
+        "detail": "Only draft journal entries can be updated"
+    }
+
+    missing = requests.patch(
+        f"{base_url}/journal-entries/2147483647",
+        headers=admin_headers,
+        json={"description": "Missing"},
+    )
+    assert missing.status_code == 404
+    assert missing.json() == {"detail": "Journal entry not found"}
