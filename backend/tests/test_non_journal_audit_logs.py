@@ -150,8 +150,11 @@ def test_seed_default_accounts_creates_audit_log():
 
     assert seed_log["entity_type"] == "account"
     assert seed_log["company_id"] == company_id
-    assert "created" in seed_log["description"]
-    assert "skipped" in seed_log["description"]
+    assert seed_log["entity_id"] is None
+    assert seed_log["description"] == (
+        f"Seeded default accounts: {seed_data['created_count']} created, "
+        f"{seed_data['skipped_count']} skipped"
+    )
 
 
 def test_update_company_creates_audit_log():

@@ -1,3 +1,4 @@
+import uuid
 import requests
 
 
@@ -56,3 +57,43 @@ def test_seed_default_accounts_with_token(base_url, admin_headers):
     assert "5200" in account_codes
 
     assert len(account_codes) == len(set(account_codes))
+
+def test_seed_default_accounts_is_idempotent_with_exact_result_contract(
+    base_url,
+    admin_headers,
+):
+    company_response = requests.post(
+        f"{base_url}/companies",
+        headers=admin_headers,
+        json={
+            "name": f"Seed idempotency {uuid.uuid4().hex}",
+            "base_currency": "USD",
+        },
+    )
+    assert company_response.status_code == 201
+    company_id = company_response.json()["id"]
+
+    first = requests.post(
+        f"{base_url}/accounts/seed-defaults?company_id={company_id}",
+        headers=admin_headers,
+    )
+    second = requests.post(
+        f"{base_url}/accounts/seed-defaults?company_id={company_id}",
+        headers=admin_headers,
+    )
+
+    assert first.status_code == 200
+    assert first.json()["company_id"] == company_id
+    assert first.json()["created_count"] == 13
+    assert first.json()["skipped_count"] == 0
+    assert first.json()["message"] == "Default chart of accounts seeded successfully"
+    assert len(first.json()["accounts"]) == 13
+    assert all(account["is_system"] for account in first.json()["accounts"])
+    assert second.status_code == 200
+    assert second.json() == {
+        "company_id": company_id,
+        "created_count": 0,
+        "skipped_count": 13,
+        "message": "Default chart of accounts seeded successfully",
+        "accounts": [],
+    }

@@ -11,8 +11,15 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.application.accounts.dto import CreateAccountCommand, UpdateAccountCommand
-from app.application.accounts.use_cases import CreateAccount, UpdateAccount
+from app.application.accounts.dto import (
+    CreateAccountCommand,
+    DefaultAccountDefinition,
+    SeedDefaultAccountsCommand,
+    UpdateAccountCommand,
+)
+from app.application.accounts.use_cases import (
+    CreateAccount, SeedDefaultAccounts, UpdateAccount,
+)
 from app.infrastructure.database.sqlalchemy.repositories.account_repository import (
     SqlAlchemyAccountRepository,
 )
@@ -222,5 +229,53 @@ def test_account_update_use_case_rolls_back_staged_update_when_audit_insert_fail
 
         with Session(engine) as verification_db:
             assert verification_db.get(Account, account_id).name == "Before"
+    finally:
+        engine.dispose()
+
+def test_seed_default_accounts_rolls_back_when_audit_insert_fails(monkeypatch):
+    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    Company.__table__.create(engine)
+    Account.__table__.create(engine)
+    try:
+        with Session(engine) as db:
+            company = Company(name="Atomic Seed", base_currency="USD")
+            db.add(company)
+            db.commit()
+            company_id = company.id
+            command = SeedDefaultAccountsCommand(
+                company_id=company_id,
+                accounts=(
+                    DefaultAccountDefinition(
+                        code="1000",
+                        name="Assets",
+                        account_type="asset",
+                        parent_code=None,
+                        description="Main assets category",
+                        is_system=True,
+                    ),
+                    DefaultAccountDefinition(
+                        code="1110",
+                        name="Main Bank",
+                        account_type="asset",
+                        parent_code="1000",
+                        description="Main company bank account",
+                        is_system=True,
+                    ),
+                ),
+            )
+
+            seeded = SeedDefaultAccounts(SqlAlchemyAccountRepository(db)).execute(command)
+            assert seeded.created_count == 2
+            _fail_audit(monkeypatch)
+            with pytest.raises(RuntimeError, match="audit insert failed"):
+                audit_service.create_atomic_audit_log(
+                    db=db,
+                    company_id=company_id,
+                    action="seed_default_accounts",
+                    entity_type="account",
+                )
+
+        with Session(engine) as verification_db:
+            assert verification_db.query(Account).count() == 0
     finally:
         engine.dispose()

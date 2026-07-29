@@ -4,6 +4,8 @@ from app.application.accounts.dto import (
     AccountDTO,
     AccountPageDTO,
     CreateAccountCommand,
+    SeedDefaultAccountsCommand,
+    SeedDefaultAccountsResultDTO,
     UpdateAccountCommand,
 )
 from app.application.accounts.ports import AccountRepository
@@ -44,6 +46,18 @@ class UpdateAccount:
             fields=command.fields,
         )
         return self._repository.update(normalized_command)
+
+
+class SeedDefaultAccounts:
+    def __init__(self, repository: AccountRepository) -> None:
+        self._repository = repository
+
+    def execute(
+        self,
+        command: SeedDefaultAccountsCommand,
+    ) -> SeedDefaultAccountsResultDTO:
+        return self._repository.seed_defaults(command)
+
 
 class GetAccount:
     def __init__(self, repository: AccountRepository) -> None:

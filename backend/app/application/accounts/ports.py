@@ -5,6 +5,8 @@ from typing import Protocol
 from app.application.accounts.dto import (
     AccountDTO,
     CreateAccountCommand,
+    SeedDefaultAccountsCommand,
+    SeedDefaultAccountsResultDTO,
     UpdateAccountCommand,
 )
 
@@ -14,6 +16,12 @@ class AccountRepository(Protocol):
         ...
 
     def update(self, command: UpdateAccountCommand) -> AccountDTO:
+        ...
+
+    def seed_defaults(
+        self,
+        command: SeedDefaultAccountsCommand,
+    ) -> SeedDefaultAccountsResultDTO:
         ...
 
     def get_by_id(self, account_id: int) -> AccountDTO | None:
