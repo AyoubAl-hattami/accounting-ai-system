@@ -40,6 +40,11 @@ class UpdateJournalEntryCommand:
 
 
 @dataclass(frozen=True, slots=True)
+class ReviewJournalEntryCommand:
+    journal_entry_id: int
+
+
+@dataclass(frozen=True, slots=True)
 class JournalLineDTO:
     id: int
     journal_entry_id: int

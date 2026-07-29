@@ -5,6 +5,7 @@ from typing import Protocol
 from app.application.journals.dto import (
     CreateJournalEntryCommand,
     JournalEntryDTO,
+    ReviewJournalEntryCommand,
     UpdateJournalEntryCommand,
 )
 
@@ -14,6 +15,9 @@ class JournalRepository(Protocol):
         ...
 
     def update(self, command: UpdateJournalEntryCommand) -> JournalEntryDTO:
+        ...
+
+    def review(self, command: ReviewJournalEntryCommand) -> JournalEntryDTO:
         ...
 
     def get_by_id(self, journal_entry_id: int) -> JournalEntryDTO | None:
