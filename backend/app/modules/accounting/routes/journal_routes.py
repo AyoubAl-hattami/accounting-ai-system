@@ -2,6 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.application.journals.use_cases import GetJournalEntry, ListJournalEntries
+from app.infrastructure.database.sqlalchemy.repositories.journal_repository import (
+    SqlAlchemyJournalRepository,
+)
 from app.core.auth_dependencies import get_current_user
 from app.core.company_access import ensure_company_access
 from app.core.database import get_db
@@ -19,7 +23,6 @@ from app.modules.accounting.services.audit_service import (
 )
 from app.modules.accounting.services.journal_service import (
     calculate_journal_totals,
-    count_journal_entries,
     create_journal_entry,
     create_opening_balance_entry,
     find_fiscal_period_for_date,
@@ -29,7 +32,6 @@ from app.modules.accounting.services.journal_service import (
     get_journal_entry,
     get_journal_entry_by_no,
     get_reversal_for_entry,
-    list_journal_entries,
     mark_journal_entry_reviewed,
     post_journal_entry,
     reverse_journal_entry,
@@ -320,25 +322,19 @@ def list_journal_entries_endpoint(
             detail="Invalid journal entry status",
         )
 
-    journal_entries = list_journal_entries(
-        db=db,
+    repository = SqlAlchemyJournalRepository(db)
+    result = ListJournalEntries(repository).execute(
         company_id=company_id,
         status=status_filter,
         skip=skip,
         limit=limit,
-    )
-
-    total = count_journal_entries(
-        db=db,
-        company_id=company_id,
-        status=status_filter,
     )
 
     return PaginatedResponse[JournalEntryRead](
-        items=journal_entries,
-        total=total,
-        skip=skip,
-        limit=limit,
+        items=result.items,
+        total=result.total,
+        skip=result.skip,
+        limit=result.limit,
     )
 
 
@@ -351,10 +347,8 @@ def get_journal_entry_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    journal_entry = get_journal_entry(
-        db=db,
-        journal_entry_id=journal_entry_id,
-    )
+    repository = SqlAlchemyJournalRepository(db)
+    journal_entry = GetJournalEntry(repository).execute(journal_entry_id)
 
     if not journal_entry:
         raise HTTPException(

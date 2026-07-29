@@ -148,3 +148,43 @@ def test_journal_creator_is_not_exposed_across_companies(
             db.delete(db.get(User, foreign_user_id))
             db.delete(db.get(Company, foreign_company_id))
             db.commit()
+
+def test_journal_read_filter_get_and_error_contracts(
+    base_url,
+    admin_headers,
+    default_company_id,
+):
+    filtered = requests.get(
+        f"{base_url}/journal-entries?company_id={default_company_id}&status=posted",
+        headers=admin_headers,
+    )
+    assert filtered.status_code == 200
+    assert all(entry["status"] == "posted" for entry in filtered.json()["items"])
+
+    invalid = requests.get(
+        f"{base_url}/journal-entries?company_id={default_company_id}&status=invalid",
+        headers=admin_headers,
+    )
+    assert invalid.status_code == 400
+    assert invalid.json() == {"detail": "Invalid journal entry status"}
+
+    listing = requests.get(
+        f"{base_url}/journal-entries?company_id={default_company_id}&limit=1",
+        headers=admin_headers,
+    )
+    assert listing.status_code == 200
+    if listing.json()["items"]:
+        listed = listing.json()["items"][0]
+        detail = requests.get(
+            f"{base_url}/journal-entries/{listed['id']}",
+            headers=admin_headers,
+        )
+        assert detail.status_code == 200
+        assert detail.json() == listed
+
+    missing = requests.get(
+        f"{base_url}/journal-entries/2147483647",
+        headers=admin_headers,
+    )
+    assert missing.status_code == 404
+    assert missing.json() == {"detail": "Journal entry not found"}
