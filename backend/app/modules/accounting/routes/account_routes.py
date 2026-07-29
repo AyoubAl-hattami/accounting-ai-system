@@ -1,10 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.application.accounts.use_cases import ListAccounts
 from app.core.auth_dependencies import get_current_user
 from app.core.company_access import ensure_company_access
 from app.core.database import get_db
 from app.core.pagination import PaginatedResponse
+from app.infrastructure.database.sqlalchemy.repositories.account_repository import (
+    SqlAlchemyAccountRepository,
+)
 from app.modules.accounting.models.user import User
 from app.modules.accounting.schemas.account import (
     AccountCreate,
@@ -13,12 +17,10 @@ from app.modules.accounting.schemas.account import (
     AccountUpdate,
 )
 from app.modules.accounting.services.account_service import (
-    count_accounts,
     create_account,
     get_account,
     get_account_by_code,
     get_company_or_none,
-    list_accounts,
     update_account,
 )
 from app.modules.accounting.services.default_accounts_service import (
@@ -126,23 +128,18 @@ def list_accounts_endpoint(
         company_id=company_id,
     )
 
-    accounts = list_accounts(
-        db=db,
+    repository = SqlAlchemyAccountRepository(db)
+    result = ListAccounts(repository).execute(
         company_id=company_id,
         skip=skip,
         limit=limit,
-    )
-
-    total = count_accounts(
-        db=db,
-        company_id=company_id,
     )
 
     return PaginatedResponse[AccountRead](
-        items=accounts,
-        total=total,
-        skip=skip,
-        limit=limit,
+        items=result.items,
+        total=result.total,
+        skip=result.skip,
+        limit=result.limit,
     )
 
 

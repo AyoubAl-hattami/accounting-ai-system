@@ -1,0 +1,18 @@
+"""Application ports for account persistence."""
+
+from typing import Protocol
+
+from app.application.accounts.dto import AccountDTO
+
+
+class AccountRepository(Protocol):
+    def list_by_company(
+        self,
+        company_id: int,
+        skip: int,
+        limit: int,
+    ) -> list[AccountDTO]:
+        ...
+
+    def count_by_company(self, company_id: int) -> int:
+        ...
