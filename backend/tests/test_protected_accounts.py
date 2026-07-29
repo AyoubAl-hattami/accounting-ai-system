@@ -383,3 +383,94 @@ def test_create_account_role_and_inactive_user_compatibility(
     )
     assert inactive_response.status_code == 403
     assert inactive_response.json() == {"detail": "Inactive user"}
+
+
+def test_update_account_contract_partial_normalization_and_explicit_parent_clear(base_url, admin_headers):
+    company_id = _create_company(base_url, admin_headers, "Account update")
+    parent = requests.post(f"{base_url}/accounts", headers=admin_headers, json=_account_payload(company_id, uuid.uuid4().hex[:12], name="Parent"))
+    assert parent.status_code == 201
+    created = requests.post(f"{base_url}/accounts", headers=admin_headers, json=_account_payload(company_id, uuid.uuid4().hex[:12], name="Before", parent_id=parent.json()["id"], description="before description"))
+    assert created.status_code == 201
+    before = created.json()
+    proposed_code = uuid.uuid4().hex[:12]
+
+    response = requests.patch(
+        f"{base_url}/accounts/{before['id']}",
+        headers=admin_headers,
+        json={"code": f"  {proposed_code}  ", "name": "  After  ", "description": "  unchanged spacing  ", "parent_id": None},
+    )
+
+    assert response.status_code == 200, response.text
+    updated = response.json()
+    assert set(updated) == {"id", "company_id", "code", "name", "account_type", "parent_id", "description", "is_active", "is_system", "created_at", "updated_at"}
+    assert updated["code"] == proposed_code
+    assert updated["name"] == "After"
+    assert updated["description"] == "  unchanged spacing  "
+    assert updated["parent_id"] is None
+    for field in ("id", "company_id", "account_type", "is_active", "is_system", "created_at"):
+        assert updated[field] == before[field]
+
+
+def test_update_account_preserves_validation_errors_and_same_code_reuse(base_url, admin_headers):
+    first_company = _create_company(base_url, admin_headers, "Update validation first")
+    second_company = _create_company(base_url, admin_headers, "Update validation second")
+    first = requests.post(f"{base_url}/accounts", headers=admin_headers, json=_account_payload(first_company, uuid.uuid4().hex[:12]))
+    duplicate = requests.post(f"{base_url}/accounts", headers=admin_headers, json=_account_payload(first_company, uuid.uuid4().hex[:12]))
+    other = requests.post(f"{base_url}/accounts", headers=admin_headers, json=_account_payload(second_company, uuid.uuid4().hex[:12]))
+    assert first.status_code == duplicate.status_code == other.status_code == 201
+    account = first.json()
+
+    same = requests.patch(f"{base_url}/accounts/{account['id']}", headers=admin_headers, json={"code": f" {account['code']} "})
+    assert same.status_code == 200
+    conflict = requests.patch(f"{base_url}/accounts/{account['id']}", headers=admin_headers, json={"code": duplicate.json()["code"]})
+    assert conflict.status_code == 409
+    assert conflict.json() == {"detail": "Account code already exists for this company"}
+    self_parent = requests.patch(f"{base_url}/accounts/{account['id']}", headers=admin_headers, json={"parent_id": account["id"]})
+    assert self_parent.status_code == 400
+    assert self_parent.json() == {"detail": "Account cannot be its own parent"}
+    missing_parent = requests.patch(f"{base_url}/accounts/{account['id']}", headers=admin_headers, json={"parent_id": 2147483647})
+    assert missing_parent.status_code == 404
+    assert missing_parent.json() == {"detail": "Parent account not found"}
+    cross_parent = requests.patch(f"{base_url}/accounts/{account['id']}", headers=admin_headers, json={"parent_id": other.json()["id"]})
+    assert cross_parent.status_code == 400
+    assert cross_parent.json() == {"detail": "Parent account must belong to the same company"}
+
+
+def test_update_account_role_inactive_missing_and_company_access_compatibility(base_url, admin_headers):
+    company_id = _create_company(base_url, admin_headers, "Update roles")
+    created = requests.post(f"{base_url}/accounts", headers=admin_headers, json=_account_payload(company_id, uuid.uuid4().hex[:12]))
+    assert created.status_code == 201
+    account_id = created.json()["id"]
+    accountant = requests.patch(f"{base_url}/accounts/{account_id}", headers=_headers_for_company_role(company_id, "accountant"), json={"name": "Accountant update"})
+    assert accountant.status_code == 200
+    viewer = requests.patch(f"{base_url}/accounts/{account_id}", headers=_headers_for_company_role(company_id, "viewer"), json={"name": "Denied"})
+    assert viewer.status_code == 403
+    assert viewer.json() == {"detail": "You do not have permission to perform this action"}
+    inactive = requests.patch(f"{base_url}/accounts/{account_id}", headers=_headers_for_company_role(company_id, "accountant", is_active=False), json={"name": "Denied"})
+    assert inactive.status_code == 403
+    assert inactive.json() == {"detail": "Inactive user"}
+    missing = requests.patch(f"{base_url}/accounts/2147483647", headers=admin_headers, json={"name": "Missing"})
+    assert missing.status_code == 404
+    assert missing.json() == {"detail": "Account not found"}
+
+
+def test_update_system_account_protected_presence_and_allowed_fields(base_url, admin_headers):
+    company_id = _create_company(base_url, admin_headers, "Update system")
+    with SessionLocal() as db:
+        account = Account(company_id=company_id, code=uuid.uuid4().hex[:12], name="System before", account_type="asset", description="before", is_active=True, is_system=True)
+        db.add(account)
+        db.commit()
+        db.refresh(account)
+        account_id = account.id
+        code = account.code
+
+    protected = requests.patch(f"{base_url}/accounts/{account_id}", headers=admin_headers, json={"code": code, "parent_id": None, "is_active": True})
+    assert protected.status_code == 400
+    assert protected.json() == {"detail": "System accounts cannot update protected fields: code, is_active, parent_id"}
+    unchanged = requests.patch(f"{base_url}/accounts/{account_id}", headers=admin_headers, json={"is_system": True})
+    assert unchanged.status_code == 400
+    assert unchanged.json() == {"detail": "System accounts cannot update protected fields: is_system"}
+    allowed = requests.patch(f"{base_url}/accounts/{account_id}", headers=admin_headers, json={"name": "System after", "description": "allowed"})
+    assert allowed.status_code == 200
+    assert allowed.json()["name"] == "System after"
+    assert allowed.json()["description"] == "allowed"

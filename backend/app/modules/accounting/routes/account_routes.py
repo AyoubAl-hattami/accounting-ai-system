@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.application.accounts.dto import CreateAccountCommand
+from app.application.accounts.dto import CreateAccountCommand, UpdateAccountCommand
 from app.application.accounts.use_cases import (
     CreateAccount,
     GetAccount,
     ListAccounts,
+    UpdateAccount,
 )
 from app.core.auth_dependencies import get_current_user
 from app.core.company_access import ensure_company_access
@@ -25,7 +26,6 @@ from app.modules.accounting.services.account_service import (
     get_account,
     get_account_by_code,
     get_company_or_none,
-    update_account,
 )
 from app.modules.accounting.services.default_accounts_service import (
     seed_default_accounts,
@@ -312,7 +312,20 @@ def update_account_endpoint(
         "is_active": account.is_active,
     }
 
-    updated = update_account(db=db, account=account, payload=payload)
+    update_data = payload.model_dump(exclude_unset=True)
+    command = UpdateAccountCommand(
+        account_id=account_id,
+        code=update_data.get("code"),
+        name=update_data.get("name"),
+        account_type=update_data.get("account_type"),
+        parent_id=update_data.get("parent_id"),
+        description=update_data.get("description"),
+        is_active=update_data.get("is_active"),
+        is_system=update_data.get("is_system"),
+        fields=frozenset(update_data.keys()),
+    )
+    repository = SqlAlchemyAccountRepository(db)
+    updated = UpdateAccount(repository).execute(command)
 
     create_atomic_audit_log(
         db=db,

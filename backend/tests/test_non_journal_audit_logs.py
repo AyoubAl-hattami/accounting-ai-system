@@ -254,3 +254,32 @@ def test_create_account_creates_exactly_one_audit_log():
     assert matching_logs[0]["description"] == (
         f"Created account {account['code']} - {account['name']}"
     )
+
+
+def test_update_account_creates_exactly_one_audit_log_with_before_and_after_values():
+    headers = login_and_get_headers()
+    company_response = requests.post(f"{BASE_URL}/companies", headers=headers, json={"name": f"AccountUpdateAuditCo_{uuid.uuid4().hex}", "base_currency": "USD"})
+    assert company_response.status_code == 201
+    company_id = company_response.json()["id"]
+    account_response = requests.post(
+        f"{BASE_URL}/accounts", headers=headers,
+        json={"company_id": company_id, "code": uuid.uuid4().hex[:12], "name": "Before audit", "account_type": "asset", "parent_id": None, "description": None, "is_active": True, "is_system": False},
+    )
+    assert account_response.status_code == 201
+    before = account_response.json()
+
+    update_response = requests.patch(f"{BASE_URL}/accounts/{before['id']}", headers=headers, json={"name": "After audit", "is_active": False})
+    assert update_response.status_code == 200
+    updated = update_response.json()
+    audit_response = requests.get(f"{BASE_URL}/audit-logs?company_id={company_id}&action=update_account", headers=headers)
+    assert audit_response.status_code == 200
+    matching = [log for log in audit_response.json()["items"] if log["entity_type"] == "account" and log["entity_id"] == before["id"]]
+
+    assert len(matching) == 1
+    log = matching[0]
+    assert log["action"] == "update_account"
+    assert log["company_id"] == company_id
+    assert log["description"] == f"Updated account {updated['code']} - {updated['name']}"
+    assert log["old_values"] == {"name": before["name"], "code": before["code"], "is_active": before["is_active"]}
+    assert log["new_values"] == {"name": updated["name"], "code": updated["code"], "is_active": updated["is_active"]}
+    assert log["actor_email"] is not None

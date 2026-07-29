@@ -17,6 +17,19 @@ class CreateAccountCommand:
 
 
 @dataclass(frozen=True, slots=True)
+class UpdateAccountCommand:
+    account_id: int
+    code: str | None = None
+    name: str | None = None
+    account_type: str | None = None
+    parent_id: int | None = None
+    description: str | None = None
+    is_active: bool | None = None
+    is_system: bool | None = None
+    fields: frozenset[str] = frozenset()
+
+
+@dataclass(frozen=True, slots=True)
 class AccountDTO:
     id: int
     company_id: int
