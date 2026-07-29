@@ -1,6 +1,26 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.application.fiscal.dto import (
+    CreateFiscalPeriodCommand,
+    CreateFiscalYearCommand,
+    UpdateFiscalPeriodCommand,
+    UpdateFiscalYearCommand,
+)
+from app.application.fiscal.use_cases import (
+    CreateFiscalPeriod,
+    CreateFiscalYear,
+    GetFiscalPeriod,
+    GetFiscalYear,
+    ListFiscalPeriods,
+    ListFiscalYears,
+    UpdateFiscalPeriod,
+    UpdateFiscalYear,
+)
+from app.infrastructure.database.sqlalchemy.repositories.fiscal_repository import (
+    SqlAlchemyFiscalRepository,
+)
+
 from app.core.auth_dependencies import get_current_user
 from app.core.company_access import ensure_company_access
 from app.core.database import get_db
@@ -15,21 +35,16 @@ from app.modules.accounting.schemas.fiscal import (
     FiscalYearUpdate,
 )
 from app.modules.accounting.services.fiscal_service import (
-    count_fiscal_periods,
-    count_fiscal_years,
     count_journal_entries_for_fiscal_year,
     create_fiscal_period,
     create_fiscal_year,
     get_company_or_none,
-    get_fiscal_period,
     get_fiscal_period_by_name,
     get_fiscal_period_by_no,
     get_fiscal_year,
     get_fiscal_year_by_name,
     list_fiscal_periods,
     list_fiscal_years,
-    update_fiscal_period,
-    update_fiscal_year,
     find_overlapping_fiscal_period,
     find_overlapping_fiscal_year,
 )
@@ -95,7 +110,15 @@ def create_fiscal_year_endpoint(
             status_code=status.HTTP_409_CONFLICT,
             detail="Fiscal year dates overlap with an existing fiscal year",
         )
-    fiscal_year = create_fiscal_year(db=db, payload=payload)
+    command = CreateFiscalYearCommand(
+        company_id=payload.company_id,
+        name=payload.name,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        status=payload.status,
+    )
+    repository = SqlAlchemyFiscalRepository(db)
+    fiscal_year = CreateFiscalYear(repository).execute(command)
 
     create_atomic_audit_log(
         db=db,
@@ -130,21 +153,16 @@ def list_fiscal_years_endpoint(
         company_id=company_id,
     )
 
-    fiscal_years = list_fiscal_years(
-        db=db,
+    repository = SqlAlchemyFiscalRepository(db)
+    result = ListFiscalYears(repository).execute(
         company_id=company_id,
         skip=skip,
         limit=limit,
     )
 
-    total = count_fiscal_years(
-        db=db,
-        company_id=company_id,
-    )
-
     return PaginatedResponse[FiscalYearRead](
-        items=fiscal_years,
-        total=total,
+        items=result.items,
+        total=result.total,
         skip=skip,
         limit=limit,
     )
@@ -159,7 +177,8 @@ def get_fiscal_year_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    fiscal_year = get_fiscal_year(db=db, fiscal_year_id=fiscal_year_id)
+    repository = SqlAlchemyFiscalRepository(db)
+    fiscal_year = GetFiscalYear(repository).execute(fiscal_year_id)
 
     if not fiscal_year:
         raise HTTPException(
@@ -186,7 +205,8 @@ def update_fiscal_year_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    fiscal_year = get_fiscal_year(db=db, fiscal_year_id=fiscal_year_id)
+    repository = SqlAlchemyFiscalRepository(db)
+    fiscal_year = GetFiscalYear(repository).execute(fiscal_year_id)
 
     if not fiscal_year:
         raise HTTPException(
@@ -263,11 +283,16 @@ def update_fiscal_year_endpoint(
         "end_date": str(fiscal_year.end_date),
     }
 
-    updated = update_fiscal_year(
-        db=db,
-        fiscal_year=fiscal_year,
-        payload=payload,
+    update_data = payload.model_dump(exclude_unset=True)
+    command = UpdateFiscalYearCommand(
+        fiscal_year_id=fiscal_year_id,
+        name=update_data.get("name"),
+        start_date=update_data.get("start_date"),
+        end_date=update_data.get("end_date"),
+        status=update_data.get("status"),
+        fields=frozenset(update_data.keys()),
     )
+    updated = UpdateFiscalYear(repository).execute(command)
 
     create_atomic_audit_log(
         db=db,
@@ -379,7 +404,17 @@ def create_fiscal_period_endpoint(
             detail="Fiscal period name already exists for this fiscal year",
         )
 
-    fiscal_period = create_fiscal_period(db=db, payload=payload)
+    command = CreateFiscalPeriodCommand(
+        company_id=payload.company_id,
+        fiscal_year_id=payload.fiscal_year_id,
+        period_no=payload.period_no,
+        name=payload.name,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        status=payload.status,
+    )
+    repository = SqlAlchemyFiscalRepository(db)
+    fiscal_period = CreateFiscalPeriod(repository).execute(command)
 
     create_atomic_audit_log(
         db=db,
@@ -415,23 +450,17 @@ def list_fiscal_periods_endpoint(
         company_id=company_id,
     )
 
-    fiscal_periods = list_fiscal_periods(
-        db=db,
+    repository = SqlAlchemyFiscalRepository(db)
+    result = ListFiscalPeriods(repository).execute(
         company_id=company_id,
         fiscal_year_id=fiscal_year_id,
         skip=skip,
         limit=limit,
     )
 
-    total = count_fiscal_periods(
-        db=db,
-        company_id=company_id,
-        fiscal_year_id=fiscal_year_id,
-    )
-
     return PaginatedResponse[FiscalPeriodRead](
-        items=fiscal_periods,
-        total=total,
+        items=result.items,
+        total=result.total,
         skip=skip,
         limit=limit,
     )
@@ -446,10 +475,8 @@ def get_fiscal_period_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    fiscal_period = get_fiscal_period(
-        db=db,
-        fiscal_period_id=fiscal_period_id,
-    )
+    repository = SqlAlchemyFiscalRepository(db)
+    fiscal_period = GetFiscalPeriod(repository).execute(fiscal_period_id)
 
     if not fiscal_period:
         raise HTTPException(
@@ -476,10 +503,8 @@ def update_fiscal_period_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    fiscal_period = get_fiscal_period(
-        db=db,
-        fiscal_period_id=fiscal_period_id,
-    )
+    repository = SqlAlchemyFiscalRepository(db)
+    fiscal_period = GetFiscalPeriod(repository).execute(fiscal_period_id)
 
     if not fiscal_period:
         raise HTTPException(
@@ -568,11 +593,17 @@ def update_fiscal_period_endpoint(
         "end_date": str(fiscal_period.end_date),
     }
 
-    updated = update_fiscal_period(
-        db=db,
-        fiscal_period=fiscal_period,
-        payload=payload,
+    update_data = payload.model_dump(exclude_unset=True)
+    command = UpdateFiscalPeriodCommand(
+        fiscal_period_id=fiscal_period_id,
+        period_no=update_data.get("period_no"),
+        name=update_data.get("name"),
+        start_date=update_data.get("start_date"),
+        end_date=update_data.get("end_date"),
+        status=update_data.get("status"),
+        fields=frozenset(update_data.keys()),
     )
+    updated = UpdateFiscalPeriod(repository).execute(command)
 
     create_atomic_audit_log(
         db=db,

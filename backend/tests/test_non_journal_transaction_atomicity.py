@@ -23,6 +23,14 @@ from app.application.accounts.use_cases import (
 from app.infrastructure.database.sqlalchemy.repositories.account_repository import (
     SqlAlchemyAccountRepository,
 )
+from app.application.fiscal.dto import (
+    CreateFiscalPeriodCommand,
+    CreateFiscalYearCommand,
+)
+from app.application.fiscal.use_cases import CreateFiscalPeriod, CreateFiscalYear
+from app.infrastructure.database.sqlalchemy.repositories.fiscal_repository import (
+    SqlAlchemyFiscalRepository,
+)
 from app.modules.accounting.models.account import Account
 from app.modules.accounting.models.company import Company
 from app.modules.accounting.services import (
@@ -127,18 +135,34 @@ def test_account_create_use_case_rolls_back_when_audit_insert_fails(monkeypatch)
 
 def test_fiscal_year_creation_rolls_back_when_audit_insert_fails(monkeypatch):
     db = RecordingSession()
-    fiscal_year = fiscal_service.create_fiscal_year(
-        db,
-        SimpleNamespace(
+    fiscal_year = CreateFiscalYear(SqlAlchemyFiscalRepository(db)).execute(
+        CreateFiscalYearCommand(
             company_id=7,
-            name='FY 2026',
+            name="FY 2026",
             start_date=date(2026, 1, 1),
             end_date=date(2026, 12, 31),
-            status='open',
-        ),
+            status="open",
+        )
     )
 
     _assert_audit_failure_rolls_back(db, monkeypatch, fiscal_year)
+
+
+def test_fiscal_period_creation_rolls_back_when_audit_insert_fails(monkeypatch):
+    db = RecordingSession()
+    fiscal_period = CreateFiscalPeriod(SqlAlchemyFiscalRepository(db)).execute(
+        CreateFiscalPeriodCommand(
+            company_id=7,
+            fiscal_year_id=8,
+            period_no=1,
+            name="January 2026",
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 1, 31),
+            status="open",
+        )
+    )
+
+    _assert_audit_failure_rolls_back(db, monkeypatch, fiscal_period)
 
 
 def test_direct_company_user_add_rolls_back_when_audit_insert_fails(monkeypatch):
