@@ -20,6 +20,8 @@ business behavior.
 8. Architecture boundary, legacy-reference, and transaction guard coverage.
 9. Backend validation runbook and documentation consistency polish.
 10. Conservative pull-request and `main`-branch backend CI validation.
+11. PostgreSQL migration, FastAPI startup, and database-health CI readiness.
+12. Static deterministic-fixture inventory and full-suite enablement guard.
 
 ## Current backend architecture
 
@@ -87,11 +89,15 @@ legacy accounting references.
 dependencies, compiles backend sources, runs the architecture guards, and
 checks for deleted-service references. Its database-backed job starts an
 ephemeral PostgreSQL service, applies and inspects Alembic migrations, starts
-FastAPI, verifies database health, and runs the health endpoint tests.
+FastAPI, verifies database health, and runs the self-contained health,
+authentication, rate-limit, and password-policy tests.
 
 The full HTTP integration suite remains manual because its shared fixtures
 assume pre-existing user, company, account, and fiscal rows that migrations do
-not create. Full-suite CI requires a deterministic seed/bootstrap design.
+not create. `backend/tests/fixture_readiness.py` now records the exact HTTP,
+implicit-seed, and direct-session consumers, and CI fails if that inventory
+drifts without review. Full-suite CI still requires deterministic factories,
+isolation, and cleanup.
 
 ## Historical validation baseline
 

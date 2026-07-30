@@ -31,8 +31,8 @@ The backend workflow uses Ubuntu and Python 3.13. It:
 - Starts an ephemeral PostgreSQL 16 service with CI-only credentials.
 - Applies all Alembic migrations and verifies the current revision and a single
   migration head.
-- Starts FastAPI on `127.0.0.1:8010`, waits for `/health/db`, and runs the three
-  reproducible health endpoint tests.
+- Starts FastAPI on `127.0.0.1:8010`, waits for `/health/db`, and runs the
+  self-contained health, authentication, rate-limit, and password-policy tests.
 
 The workflow uses only non-secret, job-local database credentials and sets the
 backend configuration explicitly. AI providers remain in deterministic rules
@@ -43,6 +43,35 @@ integration fixtures assume an existing admin user, company ID 3, account IDs
 5 and 11, and fiscal data that migrations do not seed. Reproducing that state
 requires a separately reviewed, deterministic test-data bootstrap rather than
 depending on a developer database snapshot or test ordering.
+
+## Deterministic fixture readiness inventory
+
+`backend/tests/fixture_readiness.py` is the source-controlled inventory for the
+remaining migration work. `backend/tests/test_fixture_readiness.py` statically
+checks that inventory in CI and prevents the workflow from silently enabling
+the full suite while the fixture contract is unresolved.
+
+The current inventory identifies:
+
+- 33 modules that make live HTTP requests to the configured API server.
+- 29 modules that consume the shared admin/company/account/fiscal seed contract.
+- 4 self-contained HTTP modules that create their own state or require no seed.
+- 6 modules that directly use the application `SessionLocal` in addition to
+  HTTP requests.
+- Provider tests that use fake keys and mocked clients rather than external AI
+  services.
+
+Already deterministic unit, use-case, repository, architecture, and fixture-
+readiness tests can run without the historical seed snapshot. The four
+self-contained HTTP modules still require PostgreSQL and FastAPI, which CI now
+provides.
+
+The next fixture phase should replace fixed row IDs with session-scoped factory
+fixtures that create a unique administrator, company membership, chart of
+accounts, open fiscal year/period, and any required posted journal history.
+Tests must consume returned identifiers, isolate mutations per run, and clean
+up without depending on file order. Only after the inventory reaches zero
+should CI replace the health subset with `pytest tests -v`.
 
 ### CI-equivalent database readiness locally
 
@@ -58,7 +87,12 @@ alembic heads
 Start FastAPI as documented below, then in another prepared backend shell run:
 
 ```powershell
-python -m pytest -p no:cacheprovider tests/test_health.py -v
+python -m pytest -p no:cacheprovider `
+  tests/test_health.py `
+  tests/test_auth.py `
+  tests/test_auth_rate_limit.py `
+  tests/test_password_policy.py `
+  -v
 ```
 
 The local commands use the database configured in `backend/.env`; verify that
@@ -171,4 +205,5 @@ If full-suite CI is added later, it should extend the current PostgreSQL job and
 retain the same backend working directory, `PYTHONPATH`, dependency lock input,
 and full pytest command documented above. A deterministic fixture bootstrap,
 per-run isolation, and cleanup must replace assumptions about pre-existing row
-IDs. Adding that bootstrap remains a separate behavior-preservation task.
+IDs. The readiness guard must be updated as each consumer is migrated; adding
+the bootstrap remains a separate behavior-preservation task.
