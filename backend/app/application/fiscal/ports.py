@@ -23,6 +23,22 @@ class FiscalRepository(Protocol):
     def get_year_by_id(self, fiscal_year_id: int) -> FiscalYearDTO | None:
         ...
 
+    def get_year_by_name(
+        self,
+        company_id: int,
+        name: str,
+    ) -> FiscalYearDTO | None:
+        ...
+
+    def find_overlapping_year(
+        self,
+        company_id: int,
+        start_date: date,
+        end_date: date,
+        exclude_fiscal_year_id: int | None,
+    ) -> FiscalYearDTO | None:
+        ...
+
     def find_year_for_date(
         self,
         company_id: int,
@@ -48,6 +64,30 @@ class FiscalRepository(Protocol):
         ...
 
     def get_period_by_id(self, fiscal_period_id: int) -> FiscalPeriodDTO | None:
+        ...
+
+    def get_period_by_no(
+        self,
+        fiscal_year_id: int,
+        period_no: int,
+    ) -> FiscalPeriodDTO | None:
+        ...
+
+    def get_period_by_name(
+        self,
+        fiscal_year_id: int,
+        name: str,
+    ) -> FiscalPeriodDTO | None:
+        ...
+
+    def find_overlapping_period(
+        self,
+        company_id: int,
+        fiscal_year_id: int,
+        start_date: date,
+        end_date: date,
+        exclude_fiscal_period_id: int | None,
+    ) -> FiscalPeriodDTO | None:
         ...
 
     def find_period_for_date(

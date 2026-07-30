@@ -1,6 +1,7 @@
 """Journal application use cases."""
 
 from dataclasses import replace
+from decimal import Decimal
 
 from app.application.journals.dto import (
     CreateJournalEntryCommand,
@@ -135,3 +136,11 @@ class CountJournalEntries:
             company_id=company_id,
             status=status,
         )
+
+
+def calculate_journal_totals(
+    journal_entry: JournalEntryDTO,
+) -> tuple[Decimal, Decimal]:
+    total_debit = sum((line.debit for line in journal_entry.lines), Decimal("0"))
+    total_credit = sum((line.credit for line in journal_entry.lines), Decimal("0"))
+    return total_debit, total_credit

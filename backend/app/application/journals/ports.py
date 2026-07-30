@@ -48,6 +48,12 @@ class JournalRepository(Protocol):
     ) -> JournalEntryDTO | None:
         ...
 
+    def get_reversal_by_original_id(
+        self,
+        original_entry_id: int,
+    ) -> JournalEntryDTO | None:
+        ...
+
     def list_by_company(
         self,
         company_id: int,
@@ -62,4 +68,7 @@ class JournalRepository(Protocol):
         company_id: int,
         status: str | None,
     ) -> int:
+        ...
+
+    def count_by_fiscal_year(self, fiscal_year_id: int) -> int:
         ...

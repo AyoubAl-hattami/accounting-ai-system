@@ -27,6 +27,9 @@ class AccountRepository(Protocol):
     def get_by_id(self, account_id: int) -> AccountDTO | None:
         ...
 
+    def get_by_code(self, company_id: int, code: str) -> AccountDTO | None:
+        ...
+
     def list_by_company(
         self,
         company_id: int,

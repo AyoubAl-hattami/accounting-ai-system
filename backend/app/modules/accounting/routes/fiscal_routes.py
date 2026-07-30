@@ -34,7 +34,7 @@ from app.modules.accounting.schemas.fiscal import (
     FiscalYearRead,
     FiscalYearUpdate,
 )
-from app.modules.accounting.services.fiscal_service import (
+from app.modules.accounting.services.accounting_lookup_facade import (
     count_journal_entries_for_fiscal_year,
     get_company_or_none,
     get_fiscal_period_by_name,

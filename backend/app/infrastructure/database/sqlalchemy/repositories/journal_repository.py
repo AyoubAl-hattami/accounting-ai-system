@@ -267,6 +267,18 @@ class SqlAlchemyJournalRepository(JournalRepository):
         entry = self._db.scalar(statement)
         return self._entry_to_dto(entry) if entry is not None else None
 
+    def get_reversal_by_original_id(
+        self,
+        original_entry_id: int,
+    ) -> JournalEntryDTO | None:
+        statement = self._with_response_relationships(
+            select(JournalEntry).where(
+                JournalEntry.reversal_of_id == original_entry_id,
+            )
+        )
+        entry = self._db.scalar(statement)
+        return self._entry_to_dto(entry) if entry is not None else None
+
     def list_by_company(
         self,
         company_id: int,
@@ -297,4 +309,12 @@ class SqlAlchemyJournalRepository(JournalRepository):
         )
         if status is not None:
             statement = statement.where(JournalEntry.status == status)
+        return int(self._db.scalar(statement) or 0)
+
+    def count_by_fiscal_year(self, fiscal_year_id: int) -> int:
+        statement = (
+            select(func.count())
+            .select_from(JournalEntry)
+            .where(JournalEntry.fiscal_year_id == fiscal_year_id)
+        )
         return int(self._db.scalar(statement) or 0)
