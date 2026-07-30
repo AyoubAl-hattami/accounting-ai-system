@@ -45,7 +45,8 @@ jobs:
       - name: Run architecture guards
         run: >-
           python -m pytest -p no:cacheprovider
-          tests/test_architecture_guards.py -v
+          tests/test_architecture_guards.py
+          tests/test_fixture_readiness.py -v
 
       - name: Check for deleted accounting service references
         working-directory: .
@@ -126,7 +127,7 @@ jobs:
             exit 1
           fi
 
-      - name: Start API and run database health tests
+      - name: Start API and run deterministic HTTP tests
         shell: bash
         run: |
           set -euo pipefail
@@ -157,4 +158,9 @@ jobs:
             exit 1
           fi
 
-          python -m pytest -p no:cacheprovider tests/test_health.py -v
+          python -m pytest -p no:cacheprovider \
+            tests/test_health.py \
+            tests/test_auth.py \
+            tests/test_auth_rate_limit.py \
+            tests/test_password_policy.py \
+            -v
