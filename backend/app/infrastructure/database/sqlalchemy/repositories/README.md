@@ -2,9 +2,10 @@
 
 Purpose: implement application repository ports with SQLAlchemy.
 
-May later contain focused account, journal, fiscal, company, invitation, user,
-audit, conversation, and report-reader adapters. It must not expose unrestricted
-query builders, commit independently, or implement HTTP behavior.
+Contains focused account, fiscal, journal, and report-reader adapters. These
+adapters may use SQLAlchemy models and sessions, but must not implement HTTP
+behavior or commit independently. The report repository remains read-only;
+mutation repositories may flush only at their established mutation seams.
 
-Status: scaffolding only. Existing service queries remain under
-`backend/app/modules/accounting`.
+Status: active for the migrated accounting slices. Static repository rules are
+enforced by `backend/tests/test_architecture_guards.py`.

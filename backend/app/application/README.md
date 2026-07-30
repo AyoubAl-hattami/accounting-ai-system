@@ -1,11 +1,13 @@
 # Application Layer
 
-Purpose: coordinate use cases around domain policy and abstract ports.
+Purpose: coordinate use cases around domain policy and abstract repository
+ports.
 
-May later contain commands, queries, use cases, DTOs, repository ports, and
-unit-of-work ports. It must not contain FastAPI responses, concrete SQLAlchemy
-repositories, provider SDKs, or direct commits outside an application unit of
-work.
+Contains accounting commands, queries, use cases, DTOs, and repository ports.
+It must not import FastAPI, SQLAlchemy sessions or ORM models, accounting API
+schemas, or AI provider SDKs. It must not mutate database sessions; transaction
+ownership remains at the route boundary.
 
-Status: scaffolding only. Existing services and routes remain in
-`backend/app/modules/accounting`.
+Status: active for Accounts, Fiscal, Journals, Reports, and AI/Gemini
+accounting access. Static rules are enforced by
+`backend/tests/test_architecture_guards.py`.
