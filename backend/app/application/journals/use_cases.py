@@ -4,10 +4,14 @@ from dataclasses import replace
 
 from app.application.journals.dto import (
     CreateJournalEntryCommand,
+    CreateOpeningBalanceCommand,
     JournalEntryDTO,
     JournalEntryPageDTO,
+    PostJournalEntryCommand,
     ReviewJournalEntryCommand,
+    ReverseJournalEntryCommand,
     UpdateJournalEntryCommand,
+    VoidJournalEntryCommand,
 )
 from app.application.journals.ports import JournalRepository
 
@@ -19,6 +23,15 @@ class CreateJournalEntry:
     def execute(self, command: CreateJournalEntryCommand) -> JournalEntryDTO:
         normalized_command = replace(command, entry_no=command.entry_no.strip())
         return self._repository.create(normalized_command)
+
+
+class CreateOpeningBalance:
+    def __init__(self, repository: JournalRepository) -> None:
+        self._repository = repository
+
+    def execute(self, command: CreateOpeningBalanceCommand) -> JournalEntryDTO:
+        normalized_command = replace(command, entry_no=command.entry_no.strip())
+        return self._repository.create_opening_balance(normalized_command)
 
 
 class UpdateJournalEntry:
@@ -35,6 +48,31 @@ class ReviewJournalEntry:
 
     def execute(self, command: ReviewJournalEntryCommand) -> JournalEntryDTO:
         return self._repository.review(command)
+
+
+class PostJournalEntry:
+    def __init__(self, repository: JournalRepository) -> None:
+        self._repository = repository
+
+    def execute(self, command: PostJournalEntryCommand) -> JournalEntryDTO:
+        return self._repository.post(command)
+
+
+class VoidJournalEntry:
+    def __init__(self, repository: JournalRepository) -> None:
+        self._repository = repository
+
+    def execute(self, command: VoidJournalEntryCommand) -> JournalEntryDTO:
+        return self._repository.void(command)
+
+
+class ReverseJournalEntry:
+    def __init__(self, repository: JournalRepository) -> None:
+        self._repository = repository
+
+    def execute(self, command: ReverseJournalEntryCommand) -> JournalEntryDTO:
+        normalized_command = replace(command, entry_no=command.entry_no.strip())
+        return self._repository.reverse(normalized_command)
 
 
 class GetJournalEntry:

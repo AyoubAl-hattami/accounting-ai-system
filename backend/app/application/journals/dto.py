@@ -28,6 +28,18 @@ class CreateJournalEntryCommand:
 
 
 @dataclass(frozen=True, slots=True)
+class CreateOpeningBalanceCommand:
+    company_id: int
+    fiscal_year_id: int
+    fiscal_period_id: int
+    entry_no: str
+    entry_date: date
+    description: str | None
+    created_by_user_id: int | None
+    lines: tuple[CreateJournalLineCommand, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class UpdateJournalEntryCommand:
     journal_entry_id: int
     entry_date: date | None = None
@@ -42,6 +54,27 @@ class UpdateJournalEntryCommand:
 @dataclass(frozen=True, slots=True)
 class ReviewJournalEntryCommand:
     journal_entry_id: int
+
+
+@dataclass(frozen=True, slots=True)
+class PostJournalEntryCommand:
+    journal_entry_id: int
+
+
+@dataclass(frozen=True, slots=True)
+class VoidJournalEntryCommand:
+    journal_entry_id: int
+
+
+@dataclass(frozen=True, slots=True)
+class ReverseJournalEntryCommand:
+    original_entry_id: int
+    fiscal_year_id: int
+    fiscal_period_id: int
+    entry_no: str
+    entry_date: date
+    description: str | None
+    created_by_user_id: int | None
 
 
 @dataclass(frozen=True, slots=True)
