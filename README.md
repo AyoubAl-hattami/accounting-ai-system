@@ -643,8 +643,10 @@ expected result for a new change.
 
 Pull requests and pushes to `main` run the conservative backend workflow in
 `.github/workflows/backend-validation.yml`. It compiles backend sources, runs
-the architecture guards, and checks for deleted accounting service references.
-The full HTTP/database suite remains a manual validation step.
+the architecture guards, checks for deleted accounting service references,
+applies migrations to an ephemeral PostgreSQL service, starts FastAPI, and runs
+database health tests. The full integration suite remains manual until its
+pre-existing fixture data can be bootstrapped deterministically.
 
 ---
 

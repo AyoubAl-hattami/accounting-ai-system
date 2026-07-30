@@ -28,12 +28,41 @@ The backend workflow uses Ubuntu and Python 3.13. It:
 - Runs `backend/tests/test_architecture_guards.py` with pytest caching disabled.
 - Searches application, test, documentation, README, and workflow files for
   deleted accounting service references.
+- Starts an ephemeral PostgreSQL 16 service with CI-only credentials.
+- Applies all Alembic migrations and verifies the current revision and a single
+  migration head.
+- Starts FastAPI on `127.0.0.1:8010`, waits for `/health/db`, and runs the three
+  reproducible health endpoint tests.
 
-The workflow intentionally does not start PostgreSQL or the API server, seed
-test data, run the complete backend suite, or invoke Alembic. The existing HTTP
-integration suite depends on a configured database, a running API, and known
-seed state; reproducing those requirements in CI needs a separately reviewed
-test-environment design.
+The workflow uses only non-secret, job-local database credentials and sets the
+backend configuration explicitly. AI providers remain in deterministic rules
+mode with no provider keys.
+
+The workflow intentionally does not run the complete backend suite. Shared
+integration fixtures assume an existing admin user, company ID 3, account IDs
+5 and 11, and fiscal data that migrations do not seed. Reproducing that state
+requires a separately reviewed, deterministic test-data bootstrap rather than
+depending on a developer database snapshot or test ordering.
+
+### CI-equivalent database readiness locally
+
+Only against an approved disposable database, prepare the backend shell and
+run:
+
+```powershell
+alembic upgrade head
+alembic current
+alembic heads
+```
+
+Start FastAPI as documented below, then in another prepared backend shell run:
+
+```powershell
+python -m pytest -p no:cacheprovider tests/test_health.py -v
+```
+
+The local commands use the database configured in `backend/.env`; verify that
+target before applying migrations.
 
 ## Shell setup
 
@@ -138,9 +167,8 @@ current change.
 
 ## Future full-suite CI parity checklist
 
-If full-suite CI is added later, it should use the same backend working
-directory, `PYTHONPATH`, dependency lock input, full pytest command, and
-Alembic read-only checks documented above. Database creation, migrations, seed
-state, API-server lifecycle, and cleanup must be explicit. Adding those
-services remains a separate change because credentials, isolation, and branch
-policy require project-level decisions.
+If full-suite CI is added later, it should extend the current PostgreSQL job and
+retain the same backend working directory, `PYTHONPATH`, dependency lock input,
+and full pytest command documented above. A deterministic fixture bootstrap,
+per-run isolation, and cleanup must replace assumptions about pre-existing row
+IDs. Adding that bootstrap remains a separate behavior-preservation task.
