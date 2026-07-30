@@ -5,15 +5,23 @@ from sqlalchemy.orm import Session
 from app.application.journals.dto import (
     CreateJournalEntryCommand,
     CreateJournalLineCommand,
+    CreateOpeningBalanceCommand,
+    PostJournalEntryCommand,
     ReviewJournalEntryCommand,
+    ReverseJournalEntryCommand,
     UpdateJournalEntryCommand,
+    VoidJournalEntryCommand,
 )
 from app.application.journals.use_cases import (
     CreateJournalEntry,
+    CreateOpeningBalance,
     GetJournalEntry,
     ListJournalEntries,
+    PostJournalEntry,
     ReviewJournalEntry,
+    ReverseJournalEntry,
     UpdateJournalEntry,
+    VoidJournalEntry,
 )
 from app.infrastructure.database.sqlalchemy.repositories.journal_repository import (
     SqlAlchemyJournalRepository,
@@ -35,7 +43,6 @@ from app.modules.accounting.services.audit_service import (
 )
 from app.modules.accounting.services.journal_service import (
     calculate_journal_totals,
-    create_opening_balance_entry,
     find_fiscal_period_for_date,
     find_fiscal_year_for_date,
     get_account,
@@ -43,9 +50,6 @@ from app.modules.accounting.services.journal_service import (
     get_journal_entry,
     get_journal_entry_by_no,
     get_reversal_for_entry,
-    post_journal_entry,
-    reverse_journal_entry,
-    void_journal_entry,
 )
 
 
@@ -296,13 +300,26 @@ def create_opening_balance_endpoint(
         payload=payload,
     )
 
-    opening_entry = create_opening_balance_entry(
-        db=db,
-        payload=payload,
-        fiscal_year=fiscal_year,
-        fiscal_period=fiscal_period,
+    command = CreateOpeningBalanceCommand(
+        company_id=payload.company_id,
+        fiscal_year_id=fiscal_year.id,
+        fiscal_period_id=fiscal_period.id,
+        entry_no=payload.entry_no,
+        entry_date=payload.entry_date,
+        description=payload.description,
         created_by_user_id=current_user.id,
+        lines=tuple(
+            CreateJournalLineCommand(
+                account_id=line.account_id,
+                debit=line.debit,
+                credit=line.credit,
+                description=line.description,
+            )
+            for line in payload.lines
+        ),
     )
+    repository = SqlAlchemyJournalRepository(db)
+    opening_entry = CreateOpeningBalance(repository).execute(command)
 
     create_atomic_audit_log(
         db=db,
@@ -640,10 +657,11 @@ def post_journal_entry_endpoint(
             detail="Journal entry is not balanced",
         )
 
-    posted_entry = post_journal_entry(
-        db=db,
-        journal_entry=journal_entry,
+    command = PostJournalEntryCommand(
+        journal_entry_id=journal_entry_id,
     )
+    repository = SqlAlchemyJournalRepository(db)
+    posted_entry = PostJournalEntry(repository).execute(command)
 
     create_atomic_audit_log(
         db=db,
@@ -757,14 +775,17 @@ def reverse_journal_entry_endpoint(
             detail="Fiscal period does not belong to the fiscal year",
         )
 
-    reversal_entry = reverse_journal_entry(
-        db=db,
-        original_entry=original_entry,
-        payload=payload,
-        fiscal_year=fiscal_year,
-        fiscal_period=fiscal_period,
+    command = ReverseJournalEntryCommand(
+        original_entry_id=original_entry.id,
+        fiscal_year_id=fiscal_year.id,
+        fiscal_period_id=fiscal_period.id,
+        entry_no=payload.entry_no,
+        entry_date=payload.entry_date,
+        description=payload.description,
         created_by_user_id=current_user.id,
     )
+    repository = SqlAlchemyJournalRepository(db)
+    reversal_entry = ReverseJournalEntry(repository).execute(command)
 
     create_atomic_audit_log(
         db=db,
@@ -820,10 +841,11 @@ def void_journal_entry_endpoint(
             detail="Only draft journal entries can be voided",
         )
 
-    voided_entry = void_journal_entry(
-        db=db,
-        journal_entry=journal_entry,
+    command = VoidJournalEntryCommand(
+        journal_entry_id=journal_entry_id,
     )
+    repository = SqlAlchemyJournalRepository(db)
+    voided_entry = VoidJournalEntry(repository).execute(command)
 
     create_atomic_audit_log(
         db=db,
