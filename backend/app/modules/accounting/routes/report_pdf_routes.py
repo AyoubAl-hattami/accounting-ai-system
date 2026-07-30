@@ -12,18 +12,28 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.application.reports.dto import (
+    AccountLedgerQuery,
+    BalanceSheetQuery,
+    GeneralLedgerQuery,
+    ProfitAndLossQuery,
+    TrialBalanceQuery,
+)
+from app.application.reports.errors import MissingFiscalYearForReportError
+from app.application.reports.use_cases import (
+    GetAccountLedger,
+    GetBalanceSheet,
+    GetGeneralLedger,
+    GetProfitAndLoss,
+    GetTrialBalance,
+)
 from app.core.auth_dependencies import get_current_user
 from app.core.company_access import ensure_company_access
 from app.core.database import get_db
-from app.modules.accounting.models.user import User
-from app.modules.accounting.services.report_service import (
-    MissingFiscalYearForReportError,
-    get_trial_balance,
-    get_profit_and_loss,
-    get_balance_sheet,
-    get_account_ledger,
-    get_general_ledger,
+from app.infrastructure.database.sqlalchemy.repositories.report_repository import (
+    SqlAlchemyReportRepository,
 )
+from app.modules.accounting.models.user import User
 from app.modules.accounting.services.report_pdf_service import (
     trial_balance_to_pdf,
     profit_and_loss_to_pdf,
@@ -63,10 +73,9 @@ def export_trial_balance_pdf(
         company_id=company_id,
     )
 
-    report = get_trial_balance(
-        db=db,
-        company_id=company_id,
-        as_of_date=as_of_date,
+    repository = SqlAlchemyReportRepository(db)
+    report = GetTrialBalance(repository).execute(
+        TrialBalanceQuery(company_id=company_id, as_of_date=as_of_date)
     )
 
     pdf_bytes = trial_balance_to_pdf(report)
@@ -87,11 +96,13 @@ def export_profit_loss_pdf(
         company_id=company_id,
     )
 
-    report = get_profit_and_loss(
-        db=db,
-        company_id=company_id,
-        start_date=start_date,
-        end_date=end_date,
+    repository = SqlAlchemyReportRepository(db)
+    report = GetProfitAndLoss(repository).execute(
+        ProfitAndLossQuery(
+            company_id=company_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
     )
 
     pdf_bytes = profit_and_loss_to_pdf(report)
@@ -112,10 +123,9 @@ def export_balance_sheet_pdf(
     )
 
     try:
-        report = get_balance_sheet(
-            db=db,
-            company_id=company_id,
-            as_of_date=as_of_date,
+        repository = SqlAlchemyReportRepository(db)
+        report = GetBalanceSheet(repository).execute(
+            BalanceSheetQuery(company_id=company_id, as_of_date=as_of_date)
         )
     except MissingFiscalYearForReportError as exc:
         raise HTTPException(
@@ -142,12 +152,14 @@ def export_account_ledger_pdf(
         company_id=company_id,
     )
 
-    result = get_account_ledger(
-        db=db,
-        company_id=company_id,
-        account_id=account_id,
-        start_date=start_date,
-        end_date=end_date,
+    repository = SqlAlchemyReportRepository(db)
+    result = GetAccountLedger(repository).execute(
+        AccountLedgerQuery(
+            company_id=company_id,
+            account_id=account_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
     )
 
     if result is None:
@@ -174,11 +186,13 @@ def export_general_ledger_pdf(
         company_id=company_id,
     )
 
-    report = get_general_ledger(
-        db=db,
-        company_id=company_id,
-        start_date=start_date,
-        end_date=end_date,
+    repository = SqlAlchemyReportRepository(db)
+    report = GetGeneralLedger(repository).execute(
+        GeneralLedgerQuery(
+            company_id=company_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
     )
 
     pdf_bytes = general_ledger_to_pdf(report)

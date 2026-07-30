@@ -82,7 +82,7 @@ from app.modules.accounting.services.gemini_agent_contract import (
 )
 from app.modules.accounting.services.account_mapper import map_to_accounts
 from app.modules.accounting.services.audit_service import list_audit_logs
-from app.modules.accounting.services.report_service import (
+from app.modules.accounting.services.reports_application_facade import (
     get_profit_and_loss,
     get_balance_sheet,
     get_trial_balance,
