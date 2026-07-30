@@ -11,6 +11,10 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.application.journals.dto import (
+    CreateJournalEntryCommand,
+    CreateJournalLineCommand,
+)
 from app.core.auth_dependencies import get_current_user
 from app.core.company_access import ensure_company_access
 from app.core.database import get_db
@@ -42,18 +46,15 @@ from app.modules.accounting.services.assistant_conversation_service import (
     record_confirmation_event,
 )
 from app.modules.accounting.services.gemini_assistant_service import dispatch_gemini_assistant
-from app.modules.accounting.services.journal_service import (
+from app.modules.accounting.services.ai_accounting_application_facade import (
     create_journal_entry,
     find_fiscal_period_for_date,
     find_fiscal_year_for_date,
     get_account,
-    get_company_or_none,
     get_journal_entry_by_no,
+    list_fiscal_periods,
 )
-from app.modules.accounting.schemas.journal import (
-    JournalEntryCreate,
-    JournalLineCreate,
-)
+from app.modules.accounting.services.company_service import get_company
 
 
 router = APIRouter(
@@ -218,7 +219,7 @@ def gemini_assistant_confirm_action_endpoint(
         )
 
     # ── Validate company ─────────────────────────────────────────────────────
-    company = get_company_or_none(db=db, company_id=payload.company_id)
+    company = get_company(db=db, company_id=payload.company_id)
     if not company:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
 
@@ -318,30 +319,30 @@ def gemini_assistant_confirm_action_endpoint(
         entry_no = f"{base_entry_no}-{suffix}"
 
     # ── Create journal entry ─────────────────────────────────────────────────
-    journal_create = JournalEntryCreate(
+    journal_create = CreateJournalEntryCommand(
         company_id=payload.company_id,
+        fiscal_year_id=fiscal_year.id,
+        fiscal_period_id=fiscal_period.id,
         entry_no=entry_no,
         entry_date=jp.entry_date,
         description=jp.description,
         source_type="gemini_assistant",
         source_id=None,
-        lines=[
-            JournalLineCreate(
+        created_by_user_id=current_user.id,
+        lines=tuple(
+            CreateJournalLineCommand(
                 account_id=line.account_id,
                 debit=line.debit,
                 credit=line.credit,
                 description=line.description,
             )
             for line in jp.lines
-        ],
+        ),
     )
 
     journal_entry = create_journal_entry(
         db=db,
-        payload=journal_create,
-        fiscal_year=fiscal_year,
-        fiscal_period=fiscal_period,
-        created_by_user_id=current_user.id,
+        command=journal_create,
     )
 
     if conversation is not None:
@@ -389,7 +390,6 @@ def _find_open_period_suggestion(db, company_id: int) -> str | None:
     as an ISO date string, to suggest a valid date to the user.
     Returns None if no open period exists.
     """
-    from app.modules.accounting.services.fiscal_service import list_fiscal_periods
     try:
         periods = list_fiscal_periods(db=db, company_id=company_id, limit=50)
         open_periods = [p for p in periods if p.status == "open"]
