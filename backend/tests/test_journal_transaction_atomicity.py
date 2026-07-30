@@ -2,13 +2,31 @@
 
 These tests use a recording session double to exercise transaction boundaries.
 """
-from datetime import date
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 
 import pytest
 
+from app.application.journals.dto import (
+    CreateJournalEntryCommand,
+    CreateJournalLineCommand,
+    PostJournalEntryCommand,
+    ReviewJournalEntryCommand,
+    ReverseJournalEntryCommand,
+    VoidJournalEntryCommand,
+)
+from app.application.journals.use_cases import (
+    CreateJournalEntry,
+    PostJournalEntry,
+    ReviewJournalEntry,
+    ReverseJournalEntry,
+    VoidJournalEntry,
+)
+from app.infrastructure.database.sqlalchemy.repositories.journal_repository import (
+    SqlAlchemyJournalRepository,
+)
 from app.modules.accounting.models.audit_log import AuditLog
-from app.modules.accounting.services import audit_service, journal_service
+from app.modules.accounting.services import audit_service
 
 
 class RecordingSession:
@@ -31,6 +49,21 @@ class RecordingSession:
             if hasattr(value, "id") and value.id is None:
                 value.id = self._next_id
                 self._next_id += 1
+            now = datetime.now(timezone.utc)
+            if getattr(value, "created_at", None) is None:
+                value.created_at = now
+            if getattr(value, "updated_at", None) is None:
+                value.updated_at = now
+            for line in getattr(value, "lines", []):
+                if getattr(line, "id", None) is None:
+                    line.id = self._next_id
+                    self._next_id += 1
+                if getattr(line, "journal_entry_id", None) is None:
+                    line.journal_entry_id = value.id
+                if getattr(line, "created_at", None) is None:
+                    line.created_at = now
+                if getattr(line, "updated_at", None) is None:
+                    line.updated_at = now
 
     def commit(self):
         self.commits += 1
@@ -47,6 +80,7 @@ class RecordingSession:
 
 
 def _entry(status="draft", *, entry_id=1, reversal_of_id=None):
+    now = datetime.now(timezone.utc)
     return SimpleNamespace(
         id=entry_id,
         company_id=7,
@@ -61,10 +95,31 @@ def _entry(status="draft", *, entry_id=1, reversal_of_id=None):
         reversal_of_id=reversal_of_id,
         posted_at=None,
         created_by_user_id=9,
+        creator_name=None,
+        created_at=now,
+        updated_at=now,
         lines=[
-            SimpleNamespace(account_id=10, debit=100, credit=0, description="Debit"),
-            SimpleNamespace(account_id=11, debit=0, credit=100, description="Credit"),
+            SimpleNamespace(id=10, journal_entry_id=entry_id, company_id=7, line_no=1, account_id=10, debit=100, credit=0, description="Debit", created_at=now, updated_at=now),
+            SimpleNamespace(id=11, journal_entry_id=entry_id, company_id=7, line_no=2, account_id=11, debit=0, credit=100, description="Credit", created_at=now, updated_at=now),
         ],
+    )
+
+
+def _review(db, entry):
+    return ReviewJournalEntry(SqlAlchemyJournalRepository(db)).execute(
+        ReviewJournalEntryCommand(journal_entry_id=entry.id)
+    )
+
+
+def _post(db, entry):
+    return PostJournalEntry(SqlAlchemyJournalRepository(db)).execute(
+        PostJournalEntryCommand(journal_entry_id=entry.id)
+    )
+
+
+def _void(db, entry):
+    return VoidJournalEntry(SqlAlchemyJournalRepository(db)).execute(
+        VoidJournalEntryCommand(journal_entry_id=entry.id)
     )
 
 
@@ -94,17 +149,27 @@ def _fail_audit(monkeypatch):
 
 def test_journal_creation_rolls_back_when_audit_insert_fails(monkeypatch):
     db = RecordingSession()
-    payload = SimpleNamespace(
-        company_id=7,
-        entry_no="JE-CREATE",
-        entry_date=date(2026, 7, 17),
-        description="Create",
-        source_type="manual",
-        source_id=None,
-        lines=_entry().lines,
-    )
-    entry = journal_service.create_journal_entry(
-        db, payload, SimpleNamespace(id=2), SimpleNamespace(id=3), 9
+    entry = CreateJournalEntry(SqlAlchemyJournalRepository(db)).execute(
+        CreateJournalEntryCommand(
+            company_id=7,
+            fiscal_year_id=2,
+            fiscal_period_id=3,
+            entry_no="JE-CREATE",
+            entry_date=date(2026, 7, 17),
+            description="Create",
+            source_type="manual",
+            source_id=None,
+            created_by_user_id=9,
+            lines=tuple(
+                CreateJournalLineCommand(
+                    account_id=line.account_id,
+                    debit=line.debit,
+                    credit=line.credit,
+                    description=line.description,
+                )
+                for line in _entry().lines
+            ),
+        )
     )
     _fail_audit(monkeypatch)
 
@@ -113,15 +178,15 @@ def test_journal_creation_rolls_back_when_audit_insert_fails(monkeypatch):
 
     assert db.commits == 0
     assert db.rollbacks == 1
-    assert entry not in db.added
+    assert db.added == []
 
 
 @pytest.mark.parametrize(
     ("initial_status", "mutate", "action"),
     [
-        ("draft", journal_service.mark_journal_entry_reviewed, "review_journal_entry"),
-        ("reviewed", journal_service.post_journal_entry, "post_journal_entry"),
-        ("draft", journal_service.void_journal_entry, "void_journal_entry"),
+        ("draft", _review, "review_journal_entry"),
+        ("reviewed", _post, "post_journal_entry"),
+        ("draft", _void, "void_journal_entry"),
     ],
 )
 def test_lifecycle_mutation_rolls_back_when_audit_insert_fails(
@@ -143,11 +208,16 @@ def test_lifecycle_mutation_rolls_back_when_audit_insert_fails(
 def test_reversal_rolls_back_when_audit_insert_fails(monkeypatch):
     original = _entry("posted")
     db = RecordingSession([original])
-    payload = SimpleNamespace(
-        entry_no="REV-1", entry_date=date(2026, 7, 17), description="Reverse"
-    )
-    reversal = journal_service.reverse_journal_entry(
-        db, original, payload, SimpleNamespace(id=2), SimpleNamespace(id=3), 9
+    reversal = ReverseJournalEntry(SqlAlchemyJournalRepository(db)).execute(
+        ReverseJournalEntryCommand(
+            original_entry_id=original.id,
+            fiscal_year_id=2,
+            fiscal_period_id=3,
+            entry_no="REV-1",
+            entry_date=date(2026, 7, 17),
+            description="Reverse",
+            created_by_user_id=9,
+        )
     )
     _fail_audit(monkeypatch)
 
@@ -156,13 +226,13 @@ def test_reversal_rolls_back_when_audit_insert_fails(monkeypatch):
 
     assert db.commits == 0
     assert db.rollbacks == 1
-    assert reversal not in db.added
+    assert db.added == []
 
 
 def test_success_commits_mutation_and_exactly_one_audit_event_once():
     entry = _entry("draft")
     db = RecordingSession([entry])
-    reviewed = journal_service.mark_journal_entry_reviewed(db, entry)
+    reviewed = _review(db, entry)
 
     audit = _audit(db, reviewed, "review_journal_entry")
 

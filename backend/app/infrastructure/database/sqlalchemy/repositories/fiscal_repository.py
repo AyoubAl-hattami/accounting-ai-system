@@ -83,6 +83,36 @@ class SqlAlchemyFiscalRepository(FiscalRepository):
         )
         return self._year_to_dto(fiscal_year) if fiscal_year is not None else None
 
+    def get_year_by_name(
+        self,
+        company_id: int,
+        name: str,
+    ) -> FiscalYearDTO | None:
+        fiscal_year = self._db.scalar(
+            select(FiscalYear).where(
+                FiscalYear.company_id == company_id,
+                FiscalYear.name == name,
+            )
+        )
+        return self._year_to_dto(fiscal_year) if fiscal_year is not None else None
+
+    def find_overlapping_year(
+        self,
+        company_id: int,
+        start_date: date,
+        end_date: date,
+        exclude_fiscal_year_id: int | None,
+    ) -> FiscalYearDTO | None:
+        statement = select(FiscalYear).where(
+            FiscalYear.company_id == company_id,
+            FiscalYear.start_date <= end_date,
+            FiscalYear.end_date >= start_date,
+        )
+        if exclude_fiscal_year_id is not None:
+            statement = statement.where(FiscalYear.id != exclude_fiscal_year_id)
+        fiscal_year = self._db.scalar(statement)
+        return self._year_to_dto(fiscal_year) if fiscal_year is not None else None
+
     def find_year_for_date(
         self,
         company_id: int,
@@ -152,6 +182,51 @@ class SqlAlchemyFiscalRepository(FiscalRepository):
         fiscal_period = self._db.scalar(
             select(FiscalPeriod).where(FiscalPeriod.id == fiscal_period_id)
         )
+        return self._period_to_dto(fiscal_period) if fiscal_period is not None else None
+
+    def get_period_by_no(
+        self,
+        fiscal_year_id: int,
+        period_no: int,
+    ) -> FiscalPeriodDTO | None:
+        fiscal_period = self._db.scalar(
+            select(FiscalPeriod).where(
+                FiscalPeriod.fiscal_year_id == fiscal_year_id,
+                FiscalPeriod.period_no == period_no,
+            )
+        )
+        return self._period_to_dto(fiscal_period) if fiscal_period is not None else None
+
+    def get_period_by_name(
+        self,
+        fiscal_year_id: int,
+        name: str,
+    ) -> FiscalPeriodDTO | None:
+        fiscal_period = self._db.scalar(
+            select(FiscalPeriod).where(
+                FiscalPeriod.fiscal_year_id == fiscal_year_id,
+                FiscalPeriod.name == name,
+            )
+        )
+        return self._period_to_dto(fiscal_period) if fiscal_period is not None else None
+
+    def find_overlapping_period(
+        self,
+        company_id: int,
+        fiscal_year_id: int,
+        start_date: date,
+        end_date: date,
+        exclude_fiscal_period_id: int | None,
+    ) -> FiscalPeriodDTO | None:
+        statement = select(FiscalPeriod).where(
+            FiscalPeriod.company_id == company_id,
+            FiscalPeriod.fiscal_year_id == fiscal_year_id,
+            FiscalPeriod.start_date <= end_date,
+            FiscalPeriod.end_date >= start_date,
+        )
+        if exclude_fiscal_period_id is not None:
+            statement = statement.where(FiscalPeriod.id != exclude_fiscal_period_id)
+        fiscal_period = self._db.scalar(statement)
         return self._period_to_dto(fiscal_period) if fiscal_period is not None else None
 
     def find_period_for_date(

@@ -123,6 +123,14 @@ class SqlAlchemyAccountRepository(AccountRepository):
         account = self._db.scalar(statement)
         return self._to_dto(account) if account is not None else None
 
+    def get_by_code(self, company_id: int, code: str) -> AccountDTO | None:
+        statement = select(Account).where(
+            Account.company_id == company_id,
+            Account.code == code,
+        )
+        account = self._db.scalar(statement)
+        return self._to_dto(account) if account is not None else None
+
     def list_by_company(
         self,
         company_id: int,

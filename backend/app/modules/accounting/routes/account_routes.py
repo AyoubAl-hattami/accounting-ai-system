@@ -3,10 +3,10 @@ from sqlalchemy.orm import Session
 
 from app.application.accounts.dto import (
     CreateAccountCommand,
-    DefaultAccountDefinition,
     SeedDefaultAccountsCommand,
     UpdateAccountCommand,
 )
+from app.application.accounts.defaults import DEFAULT_ACCOUNTS
 from app.application.accounts.use_cases import (
     CreateAccount,
     GetAccount,
@@ -28,12 +28,11 @@ from app.modules.accounting.schemas.account import (
     AccountSeedResult,
     AccountUpdate,
 )
-from app.modules.accounting.services.account_service import (
+from app.modules.accounting.services.accounting_lookup_facade import (
     get_account,
     get_account_by_code,
     get_company_or_none,
 )
-from app.modules.accounting.services.default_accounts_service import DEFAULT_ACCOUNTS
 from app.modules.accounting.services.audit_service import create_atomic_audit_log
 
 
@@ -180,10 +179,7 @@ def seed_default_accounts_endpoint(
 
     command = SeedDefaultAccountsCommand(
         company_id=company_id,
-        accounts=tuple(
-            DefaultAccountDefinition(**account_def)
-            for account_def in DEFAULT_ACCOUNTS
-        ),
+        accounts=DEFAULT_ACCOUNTS,
     )
     repository = SqlAlchemyAccountRepository(db)
     result = SeedDefaultAccounts(repository).execute(command)

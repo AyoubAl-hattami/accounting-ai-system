@@ -31,15 +31,20 @@ from app.application.fiscal.use_cases import CreateFiscalPeriod, CreateFiscalYea
 from app.infrastructure.database.sqlalchemy.repositories.fiscal_repository import (
     SqlAlchemyFiscalRepository,
 )
+from app.application.journals.dto import (
+    CreateJournalLineCommand,
+    CreateOpeningBalanceCommand,
+)
+from app.application.journals.use_cases import CreateOpeningBalance
+from app.infrastructure.database.sqlalchemy.repositories.journal_repository import (
+    SqlAlchemyJournalRepository,
+)
 from app.modules.accounting.models.account import Account
 from app.modules.accounting.models.company import Company
 from app.modules.accounting.services import (
-    account_service,
     audit_service,
     company_service,
     company_user_service,
-    fiscal_service,
-    journal_service,
 )
 
 
@@ -92,25 +97,6 @@ def _assert_audit_failure_rolls_back(db, monkeypatch, entity):
     assert db.commits == 0
     assert db.rollbacks == 1
     assert db.added == []
-
-
-def test_account_creation_rolls_back_when_audit_insert_fails(monkeypatch):
-    db = RecordingSession()
-    account = account_service.create_account(
-        db,
-        SimpleNamespace(
-            company_id=7,
-            code='1000',
-            name='Cash',
-            account_type='asset',
-            parent_id=None,
-            description=None,
-            is_active=True,
-            is_system=False,
-        ),
-    )
-
-    _assert_audit_failure_rolls_back(db, monkeypatch, account)
 
 
 def test_account_create_use_case_rolls_back_when_audit_insert_fails(monkeypatch):
@@ -199,31 +185,30 @@ def test_company_and_initial_membership_roll_back_when_audit_insert_fails(monkey
 
 def test_opening_balance_rolls_back_when_audit_insert_fails(monkeypatch):
     db = RecordingSession()
-    opening_balance = journal_service.create_opening_balance_entry(
-        db,
-        SimpleNamespace(
+    opening_balance = CreateOpeningBalance(SqlAlchemyJournalRepository(db)).execute(
+        CreateOpeningBalanceCommand(
             company_id=7,
+            fiscal_year_id=2,
+            fiscal_period_id=3,
             entry_no='OB-2026',
             entry_date=date(2026, 1, 1),
             description='Opening balance',
-            lines=[
-                SimpleNamespace(
+            created_by_user_id=9,
+            lines=(
+                CreateJournalLineCommand(
                     account_id=10,
                     debit=100,
                     credit=0,
                     description='Opening debit',
                 ),
-                SimpleNamespace(
+                CreateJournalLineCommand(
                     account_id=11,
                     debit=0,
                     credit=100,
                     description='Opening credit',
                 ),
-            ],
-        ),
-        SimpleNamespace(id=2),
-        SimpleNamespace(id=3),
-        9,
+            ),
+        )
     )
 
     _assert_audit_failure_rolls_back(db, monkeypatch, opening_balance)

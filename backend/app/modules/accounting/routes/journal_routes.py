@@ -13,6 +13,7 @@ from app.application.journals.dto import (
     VoidJournalEntryCommand,
 )
 from app.application.journals.use_cases import (
+    calculate_journal_totals,
     CreateJournalEntry,
     CreateOpeningBalance,
     GetJournalEntry,
@@ -41,8 +42,7 @@ from app.modules.accounting.schemas.journal import (
 from app.modules.accounting.services.audit_service import (
     create_atomic_audit_log,
 )
-from app.modules.accounting.services.journal_service import (
-    calculate_journal_totals,
+from app.modules.accounting.services.accounting_lookup_facade import (
     find_fiscal_period_for_date,
     find_fiscal_year_for_date,
     get_account,
