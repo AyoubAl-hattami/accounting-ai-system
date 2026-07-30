@@ -28,10 +28,8 @@ from app.application.reports.errors import (
     MissingFiscalYearForReportError,
     NO_FISCAL_YEAR_FOR_REPORT_MESSAGE,
 )
+from app.application.reports.policies import REPORTABLE_ENTRY_STATUSES
 from app.application.reports.ports import ReportRepository
-
-
-REPORTABLE_ENTRY_STATUSES = ("posted", "reversed")
 def _official_entry_filter(
     start_date: date | None = None,
     end_date: date | None = None,

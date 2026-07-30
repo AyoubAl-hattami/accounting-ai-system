@@ -1,4 +1,3 @@
-from dataclasses import asdict
 from datetime import date
 from decimal import Decimal
 
@@ -21,7 +20,6 @@ from app.modules.accounting.models.account import Account
 from app.modules.accounting.models.fiscal_year import FiscalYear
 from app.modules.accounting.models.journal_entry import JournalEntry
 from app.modules.accounting.models.journal_line import JournalLine
-from app.modules.accounting.services import report_service
 
 
 class CountingSession(Session):
@@ -56,11 +54,7 @@ def _entry(company_id, number, entry_date, status, fiscal_year_id, lines):
     return entry
 
 
-def _legacy_dict(result):
-    return result.model_dump(mode="python") if result is not None else None
-
-
-def test_sqlalchemy_report_repository_matches_every_legacy_report_and_never_commits():
+def test_sqlalchemy_report_repository_calculates_every_report_and_never_commits():
     engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
     for table in (
         FiscalYear.__table__,
@@ -168,8 +162,11 @@ def test_sqlalchemy_report_repository_matches_every_legacy_report_and_never_comm
             trial = repository.get_trial_balance(
                 TrialBalanceQuery(company_id=1, as_of_date=end)
             )
-            legacy_trial = report_service.get_trial_balance(db, 1, end)
-            assert asdict(trial) == _legacy_dict(legacy_trial)
+            assert trial.total_debit == Decimal("1200.00")
+            assert trial.total_credit == Decimal("1200.00")
+            assert trial.total_debit_balance == Decimal("1100.00")
+            assert trial.total_credit_balance == Decimal("1100.00")
+            assert trial.is_balanced is True
             assert [line.account_code for line in trial.lines] == [
                 "1000", "2000", "3000", "4000", "5000"
             ]
@@ -177,18 +174,15 @@ def test_sqlalchemy_report_repository_matches_every_legacy_report_and_never_comm
             profit = repository.get_profit_and_loss(
                 ProfitAndLossQuery(company_id=1, start_date=start, end_date=end)
             )
-            assert asdict(profit) == _legacy_dict(
-                report_service.get_profit_and_loss(db, 1, start, end)
-            )
             assert profit.total_income == Decimal("1000.00")
             assert profit.total_expenses == Decimal("100.00")
 
             balance = repository.get_balance_sheet(
                 BalanceSheetQuery(company_id=1, as_of_date=end)
             )
-            assert asdict(balance) == _legacy_dict(
-                report_service.get_balance_sheet(db, 1, end)
-            )
+            assert balance.total_assets == Decimal("1000.00")
+            assert balance.total_equity == Decimal("1000.00")
+            assert balance.total_liabilities_and_equity == Decimal("1000.00")
             assert balance.prior_year_earnings == Decimal("100.00")
             assert balance.current_year_earnings == Decimal("900.00")
             assert balance.is_balanced is True
@@ -201,9 +195,6 @@ def test_sqlalchemy_report_repository_matches_every_legacy_report_and_never_comm
                     end_date=end,
                 )
             )
-            assert asdict(account) == _legacy_dict(
-                report_service.get_account_ledger(db, 1, cash.id, start, end)
-            )
             assert account.opening_balance == Decimal("100.00")
             assert [line.entry_no for line in account.lines] == [
                 "POSTED", "REVERSED"
@@ -212,9 +203,6 @@ def test_sqlalchemy_report_repository_matches_every_legacy_report_and_never_comm
 
             general = repository.get_general_ledger(
                 GeneralLedgerQuery(company_id=1, start_date=start, end_date=end)
-            )
-            assert asdict(general) == _legacy_dict(
-                report_service.get_general_ledger(db, 1, start, end)
             )
             assert [ledger.account_code for ledger in general.accounts] == [
                 "1000", "2000", "3000", "4000", "5000"

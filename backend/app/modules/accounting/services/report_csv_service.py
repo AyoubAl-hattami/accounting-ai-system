@@ -1,8 +1,8 @@
 """
 CSV formatting utilities for accounting reports.
 
-Converts report data structures (from report_service) into CSV strings.
-All accounting logic is delegated to report_service; this module only
+Converts report application DTOs into CSV strings.
+All accounting logic is delegated to the reports application seam; this module only
 handles column layout and string formatting.
 
 UTF-8 BOM is prepended for Excel and Arabic text compatibility.

@@ -2,8 +2,8 @@
 PDF formatting utilities for accounting reports.
 
 Uses ReportLab to generate professional PDF documents from report data
-structures produced by report_service.  All accounting logic is
-delegated to report_service; this module only handles layout and
+structures produced by the reports application seam. All accounting logic is
+delegated to report use cases; this module only handles layout and
 rendering.
 
 Key design decisions:
