@@ -18,6 +18,8 @@ business behavior.
 7. Removal of the legacy account, fiscal, journal, report, and default-account
    services after their consumers were migrated.
 8. Architecture boundary, legacy-reference, and transaction guard coverage.
+9. Backend validation runbook and documentation consistency polish.
+10. Conservative pull-request and `main`-branch backend CI validation.
 
 ## Current backend architecture
 
@@ -80,6 +82,12 @@ preserving slices.
 imports and session calls, repository HTTP/transaction rules, report-reader
 immutability, the existing journal flush allowlist, and absence of deleted
 legacy accounting references.
+
+`.github/workflows/backend-validation.yml` installs existing backend
+dependencies, compiles backend sources, runs the architecture guards, and
+checks for deleted-service references. Full HTTP integration tests and Alembic
+state checks remain manual until CI has an explicitly designed PostgreSQL,
+seed-data, and API-server lifecycle.
 
 ## Historical validation baseline
 

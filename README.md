@@ -641,6 +641,11 @@ database prerequisites, the fast architecture check, Alembic state checks, and
 the result-recording checklist. Do not treat a historical test count as the
 expected result for a new change.
 
+Pull requests and pushes to `main` run the conservative backend workflow in
+`.github/workflows/backend-validation.yml`. It compiles backend sources, runs
+the architecture guards, and checks for deleted accounting service references.
+The full HTTP/database suite remains a manual validation step.
+
 ---
 
 ## Development Commands
