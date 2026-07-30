@@ -611,7 +611,8 @@ http://127.0.0.1:3000
 
 ## Tests
 
-Tests are smoke/integration tests that expect the backend server to be running at:
+The suite contains both isolated tests and HTTP integration tests. Integration
+tests expect the backend server to be running at:
 
 ```text
 http://127.0.0.1:8010
@@ -620,20 +621,25 @@ http://127.0.0.1:8010
 Run the backend first:
 
 ```powershell
+cd C:\ayoub\accounting-ai-system\backend
+.venv\Scripts\activate
+$env:PYTHONPATH = "C:\ayoub\accounting-ai-system\backend"
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
 ```
 
 Then in another terminal:
 
 ```powershell
+cd C:\ayoub\accounting-ai-system\backend
+.venv\Scripts\activate
+$env:PYTHONPATH = "C:\ayoub\accounting-ai-system\backend"
 pytest tests -v
 ```
 
-Expected result:
-
-```text
-30 passed
-```
+See the [backend validation runbook](docs/backend-validation-runbook.md) for
+database prerequisites, the fast architecture check, Alembic state checks, and
+the result-recording checklist. Do not treat a historical test count as the
+expected result for a new change.
 
 ---
 
@@ -668,6 +674,9 @@ pip freeze > requirements.txt
 ### Run tests
 
 ```powershell
+cd C:\ayoub\accounting-ai-system\backend
+.venv\Scripts\activate
+$env:PYTHONPATH = "C:\ayoub\accounting-ai-system\backend"
 pytest tests -v
 ```
 

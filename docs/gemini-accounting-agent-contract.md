@@ -35,11 +35,12 @@ Higher priorities override lower ones.
 
 ## Source-of-truth hierarchy
 
-- Report services own report totals.
-- Journal services own journal data and lifecycle status.
+- Report application queries and the read-only repository own report totals.
+- Journal use cases and the journal repository own journal data and lifecycle
+  status.
 - Ledger services own ledger and running balances.
 - The current company's chart of accounts owns valid account choices.
-- Fiscal services own valid accounting periods.
+- Fiscal use cases and the fiscal repository own valid accounting periods.
 - Authenticated backend context owns company scope and role.
 - Persisted validated grounding owns same-conversation follow-up context.
 

@@ -22,7 +22,8 @@ Use this map to select focused verification before and after each refactor.
 
 **Inspect**
 
-- `journal_routes.py`, `journal_service.py`, journal schemas/models.
+- Journal routes, application use cases, SQLAlchemy journal repository, and
+  journal schemas/models.
 - `test_journal_lifecycle_policy.py`
 - `test_journal_transaction_atomicity.py`
 - `test_opening_balance_workflow.py`
@@ -47,7 +48,8 @@ Use this map to select focused verification before and after each refactor.
 
 **Inspect**
 
-- `report_service.py`, report routes/schemas, CSV/PDF services.
+- Report application use cases and repository, report routes/schemas, and
+  CSV/PDF services.
 - `test_reports_smoke.py`
 - `test_protected_reports.py`
 - `test_report_csv_exports.py`

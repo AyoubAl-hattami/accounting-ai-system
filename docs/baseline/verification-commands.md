@@ -46,14 +46,19 @@ cd C:\ayoub\accounting-ai-system\backend
 $env:PYTHONPATH = "C:\ayoub\accounting-ai-system\backend"
 alembic current
 alembic heads
-alembic upgrade head
 ```
 
 Expected baseline:
 
 - `alembic heads` reports the intended single current head.
 - `alembic current` identifies the database revision.
-- `alembic upgrade head` succeeds without rewriting migration history.
+
+Applying a migration is a separate state-changing operation. Run it only when
+the task requires it and the selected database is approved:
+
+```powershell
+alembic upgrade head
+```
 
 Only on a disposable database:
 

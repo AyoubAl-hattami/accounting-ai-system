@@ -207,8 +207,8 @@ helpers.
 
 ## Report calculation strategy
 
-`report_service.py` currently combines SQL and accounting semantics. The target
-uses:
+The former report service combined SQL and accounting semantics. The migrated
+report slice now uses:
 
 - Application report queries for authorization and requested scope.
 - Report-reader ports returning defined projections.
@@ -237,15 +237,15 @@ The current provider base and deterministic fallback are foundations to retain,
 but the large Gemini assistant service should be decomposed behind its current
 API facade rather than rewritten wholesale.
 
-## High-risk migration areas
+## High-risk areas retained after migration
 
-- `journal_routes.py` and `journal_service.py`
-- `report_service.py`
+- Journal routes and the SQLAlchemy journal repository.
+- Report routes, report use cases, and the read-only report repository.
 - `gemini_assistant_service.py`
 - `ai_routes.py`
 - `audit_service.py`
-- Any service or route that currently commits or rolls back
+- Any route that currently owns a final commit or rollback.
 - Alembic metadata imports
 
-These areas require focused compatibility and atomicity verification before each
-incremental change.
+These areas require focused compatibility and atomicity verification before
+future changes.

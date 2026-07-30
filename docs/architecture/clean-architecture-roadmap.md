@@ -1,21 +1,21 @@
 # Clean Architecture Roadmap
 
-## Why this migration is needed
+## Historical migration starting point
 
-The project has grown into a substantial accounting platform with authentication,
-company-scoped RBAC, accounts, fiscal calendars, journals, reports, audit logs,
-exports, and AI assistants. Its feature naming is clear, but several files now
-combine too many responsibilities:
+At the Phase 0 baseline, the project had grown into a substantial accounting
+platform and several files combined too many responsibilities. The accounting
+migration described by this roadmap is now complete; see
+`clean-architecture-migration-status.md` for the current state.
 
 - `journal_routes.py` contains HTTP handling, authorization, accounting
   validation, lifecycle orchestration, transaction completion, and auditing.
-- `journal_service.py` combines SQLAlchemy access with journal lifecycle
+- The former journal service combined SQLAlchemy access with journal lifecycle
   mutations and accounting calculations.
-- `report_service.py` combines optimized SQL, accounting classification,
+- The former report service combined optimized SQL, accounting classification,
   calculations, and response construction.
 - `gemini_assistant_service.py` combines intent handling, permissions, grounding,
   report access, provider calls, fallback replies, localization, and dispatch.
-- Backend transaction ownership is divided among routes, services, and audit
+- Backend transaction ownership was divided among routes, services, and audit
   helpers.
 - Frontend pages and assistant components combine API state, permissions,
   workflow logic, presentation, responsive variants, and extensive Tailwind
