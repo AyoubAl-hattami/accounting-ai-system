@@ -12,11 +12,28 @@ of reporting a pass.
   no project `pytest.ini` or `pyproject.toml` test configuration.
 - Alembic is configured by `backend/alembic.ini` with migrations under
   `backend/alembic`.
-- The repository currently has no `.github/workflows` directory, so backend
-  validation is manual rather than CI-enforced.
+- `.github/workflows/backend-validation.yml` provides conservative backend
+  validation for pull requests and pushes to `main`.
 
-These absences are documented facts, not instructions to add configuration
-without a separate review of test and workflow semantics.
+The lack of project pytest configuration is a documented fact, not an
+instruction to add configuration without a separate review of test semantics.
+
+## Automated CI validation
+
+The backend workflow uses Ubuntu and Python 3.13. It:
+
+- Installs the pinned backend requirements with pip caching.
+- Compiles `backend/app` to catch Python syntax errors without importing the
+  application or contacting external services.
+- Runs `backend/tests/test_architecture_guards.py` with pytest caching disabled.
+- Searches application, test, documentation, README, and workflow files for
+  deleted accounting service references.
+
+The workflow intentionally does not start PostgreSQL or the API server, seed
+test data, run the complete backend suite, or invoke Alembic. The existing HTTP
+integration suite depends on a configured database, a running API, and known
+seed state; reproducing those requirements in CI needs a separately reviewed
+test-environment design.
 
 ## Shell setup
 
@@ -110,10 +127,20 @@ Record:
 Never reuse a historical test or Alembic result as if it were produced by the
 current change.
 
-## Future CI parity checklist
+## Warning interpretation
 
-If CI is added later, it should use the same backend working directory,
-`PYTHONPATH`, dependency lock input, full pytest command, and Alembic read-only
-checks documented above. Database and API-server lifecycle must be explicit.
-Adding CI remains a separate change because service setup, secrets, and branch
+- A pytest cache warning means the runner could not write `.pytest_cache`; it
+  does not by itself mean a test failed. The CI architecture command disables
+  the cache provider, while local full-suite runs should record any warning.
+- Git LF/CRLF messages describe line-ending conversion policy. They are not
+  `git diff --check` failures. Do not change repository line-ending policy as a
+  side effect of validation work.
+
+## Future full-suite CI parity checklist
+
+If full-suite CI is added later, it should use the same backend working
+directory, `PYTHONPATH`, dependency lock input, full pytest command, and
+Alembic read-only checks documented above. Database creation, migrations, seed
+state, API-server lifecycle, and cleanup must be explicit. Adding those
+services remains a separate change because credentials, isolation, and branch
 policy require project-level decisions.
