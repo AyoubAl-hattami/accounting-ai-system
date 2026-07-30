@@ -1,8 +1,10 @@
 # Accounting Domain Baseline
 
-This document records current accounting expectations, not a proposed redesign.
-The implementation is primarily in `journal_routes.py`, `journal_service.py`,
-`fiscal_service.py`, and `report_service.py`.
+This document records the Phase 0 accounting expectations, not a proposed
+redesign. The legacy service filenames from that baseline have since been
+removed. Current implementation seams are the accounting routes,
+`backend/app/application` use cases and ports, and SQLAlchemy repositories under
+`backend/app/infrastructure/database/sqlalchemy/repositories`.
 
 ## Journal balance and lines
 

@@ -58,7 +58,7 @@ Follow-up context is usable only when the authenticated service has established 
 
 ## Backend authorization boundary
 
-The decision object describes a request; it grants no access. The assistant service continues to enforce company scope and role capabilities before calling existing trusted handlers. Report services remain authoritative for totals, account and ledger services for account data, and journal services for lifecycle operations. Existing Decimal arithmetic, fiscal-period checks, account validation, idempotency, grounding validation, and conversation ownership remain unchanged.
+The decision object describes a request; it grants no access. The assistant service continues to enforce company scope and role capabilities before calling existing trusted handlers. Report application queries remain authoritative for totals, account and ledger application seams for account data, and journal use cases plus repository policy for lifecycle operations. Existing Decimal arithmetic, fiscal-period checks, account validation, idempotency, grounding validation, and conversation ownership remain unchanged.
 
 ## Adding an intent safely
 

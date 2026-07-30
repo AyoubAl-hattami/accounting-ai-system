@@ -89,7 +89,9 @@ results, not Phase 8 validation claims.
 
 ## Manual validation
 
-Run the following from PowerShell after reviewing the Phase 8 diff:
+Run the following from PowerShell after reviewing a backend architecture diff.
+The complete developer checklist is in
+`docs/backend-validation-runbook.md`.
 
 ```powershell
 cd C:\ayoub\accounting-ai-system\backend
@@ -103,14 +105,12 @@ alembic heads
 
 cd C:\ayoub\accounting-ai-system
 
-git grep -n "AccountService\|account_service\|FiscalService\|fiscal_service\|JournalService\|journal_service\|ReportService\|report_service\|default_accounts_service\|create_default_accounts" -- backend/app backend/tests
-
 git status --short
 git diff --stat
 git diff --name-only
 git diff --check
 ```
 
-The legacy-reference grep is expected to produce no output. Newly added,
+The architecture guard includes the legacy-reference check. Newly added,
 untracked files appear in `git status`, but not in ordinary `git diff` output
 until staged.
