@@ -1,14 +1,13 @@
 # Architecture Direction
 
-This directory records the target Clean Architecture direction for the
-Accounting AI System. It is a migration guide, not a description of a completed
-refactor.
+This directory records the Clean Architecture direction for the Accounting AI
+System. The accounting backend migration is complete for Accounts, Fiscal,
+Journals, Reports, and AI/Gemini accounting access; other areas remain
+incremental migration candidates.
 
-The system already has valuable boundaries: FastAPI routes and Pydantic schemas
-are separated, accounting features have named services, AI providers have a
-common abstraction, and the React application is grouped by feature. The next
-step is to make dependency direction and responsibility ownership explicit
-without disrupting working behavior.
+The migrated backend uses framework-neutral application use cases and ports,
+SQLAlchemy repository adapters, and route-owned HTTP, access, audit, and
+transaction concerns. Static architecture guards protect these boundaries.
 
 The migration must be incremental. Existing endpoints, database mappings,
 accounting results, permissions, audit guarantees, assistant safeguards, route
@@ -18,6 +17,7 @@ after behavioral parity has been demonstrated.
 
 ## Documents
 
+- [Migration status and manual validation](clean-architecture-migration-status.md)
 - [Clean Architecture roadmap](clean-architecture-roadmap.md)
 - [Dependency rules](dependency-rules.md)
 - [Backend target architecture](backend-target-architecture.md)

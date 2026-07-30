@@ -1,0 +1,116 @@
+# Clean Architecture Migration Status
+
+Status date: 2026-07-30
+
+The accounting backend migration is complete for the Accounts, Fiscal,
+Journals, Reports, and AI/Gemini accounting-access slices. Phase 8 adds static
+dependency guards and records the resulting boundary; it does not change
+business behavior.
+
+## Completed phases
+
+1. Clean Architecture foundation and migration baseline.
+2. Accounts application and repository migration.
+3. Fiscal application and repository migration.
+4. Journals application and repository migration.
+5. Reports application and read-repository migration.
+6. AI/Gemini accounting access migration to application seams.
+7. Removal of the legacy account, fiscal, journal, report, and default-account
+   services after their consumers were migrated.
+8. Architecture boundary, legacy-reference, and transaction guard coverage.
+
+## Current backend architecture
+
+- `backend/app/application/` contains framework-neutral accounting use cases,
+  data transfer objects, and repository ports.
+- `backend/app/infrastructure/database/sqlalchemy/repositories/` contains the
+  concrete SQLAlchemy account, fiscal, journal, and report repositories.
+- FastAPI accounting routes assemble repositories and use cases, enforce HTTP
+  and access concerns, translate errors, call audit helpers, and own the final
+  transaction boundary.
+- The Gemini assistant retains response formatting and prompt/context assembly
+  while reading accounting data through application-facing seams.
+
+## Boundary rules
+
+### Application layer
+
+- Must not import FastAPI or its `Request`, `Depends`, or `HTTPException`
+  types.
+- Must not import SQLAlchemy sessions or ORM models.
+- Must not import accounting API schemas or Gemini/OpenAI clients.
+- Must not call database-session `commit`, `flush`, `add`, or `delete` methods.
+
+### Repository layer
+
+- May use SQLAlchemy models and sessions to implement application ports.
+- Must not import FastAPI or HTTP concerns.
+- Must not commit; the route remains the transaction owner.
+- Mutation repositories may flush only at their established mutation seams.
+- The report repository remains read-only and must not add, delete, flush, or
+  commit.
+
+### Routes
+
+- Own authentication, RBAC, company access, HTTP validation/error translation,
+  audit integration, and final commit/rollback behavior.
+- May compose application use cases with infrastructure repositories.
+- Must not import the deleted legacy accounting services.
+
+## Removed legacy services
+
+The former account, fiscal, journal, report, and default-account service
+modules have been removed. Static guards prevent their module or class names
+from returning under `backend/app` or `backend/tests`.
+
+Legitimate names such as the seed-default-accounts route and use case are not
+legacy references and remain supported.
+
+## Known non-clean areas
+
+The completed boundary applies to the migrated accounting slices. Other
+backend modules, including company, user, invitation, audit, conversation,
+authentication, and export workflows, may still use module-service patterns.
+They are outside this migration and should be handled as separate behavior-
+preserving slices.
+
+## Automated guards
+
+`backend/tests/test_architecture_guards.py` statically verifies application
+imports and session calls, repository HTTP/transaction rules, report-reader
+immutability, the existing journal flush allowlist, and absence of deleted
+legacy accounting references.
+
+## Historical validation baseline
+
+The latest known full-suite result belongs to Phase 7: **673 passed, 3
+skipped**. The recorded Alembic head was `a6f4c2d8e1b7`. These are historical
+results, not Phase 8 validation claims.
+
+## Manual validation
+
+Run the following from PowerShell after reviewing the Phase 8 diff:
+
+```powershell
+cd C:\ayoub\accounting-ai-system\backend
+.venv\Scripts\activate
+$env:PYTHONPATH = "C:\ayoub\accounting-ai-system\backend"
+
+pytest tests -v
+
+alembic current
+alembic heads
+
+cd C:\ayoub\accounting-ai-system
+
+git grep -n "AccountService\|account_service\|FiscalService\|fiscal_service\|JournalService\|journal_service\|ReportService\|report_service\|default_accounts_service\|create_default_accounts" -- backend/app backend/tests
+
+git status --short
+git diff --stat
+git diff --name-only
+git diff --check
+```
+
+The legacy-reference grep is expected to produce no output. Newly added,
+untracked files appear in `git status`, but not in ordinary `git diff` output
+until staged.
