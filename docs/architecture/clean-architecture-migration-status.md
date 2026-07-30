@@ -85,9 +85,13 @@ legacy accounting references.
 
 `.github/workflows/backend-validation.yml` installs existing backend
 dependencies, compiles backend sources, runs the architecture guards, and
-checks for deleted-service references. Full HTTP integration tests and Alembic
-state checks remain manual until CI has an explicitly designed PostgreSQL,
-seed-data, and API-server lifecycle.
+checks for deleted-service references. Its database-backed job starts an
+ephemeral PostgreSQL service, applies and inspects Alembic migrations, starts
+FastAPI, verifies database health, and runs the health endpoint tests.
+
+The full HTTP integration suite remains manual because its shared fixtures
+assume pre-existing user, company, account, and fiscal rows that migrations do
+not create. Full-suite CI requires a deterministic seed/bootstrap design.
 
 ## Historical validation baseline
 

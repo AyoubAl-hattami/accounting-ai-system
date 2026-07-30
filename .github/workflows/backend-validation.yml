@@ -63,3 +63,98 @@ jobs:
           fi
 
           echo "No deleted accounting service references found."
+
+  db-backed-readiness:
+    name: PostgreSQL migration and API readiness
+    needs: backend-static-validation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      APP_ENV: development
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/accounting_ai
+      SECRET_KEY: ci-only-backend-validation-secret-key
+      AI_JOURNAL_PROVIDER: rules
+      OPENAI_API_KEY: ""
+      GEMINI_API_KEY: ""
+      ACCOUNTING_TEST_BASE_URL: http://127.0.0.1:8010
+      PYTHONPATH: ${{ github.workspace }}/backend
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: accounting_ai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d accounting_ai"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Apply and inspect migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          alembic upgrade head
+          alembic current
+          alembic heads
+
+          head_count="$(alembic heads | grep -c '(head)')"
+          if [ "$head_count" -ne 1 ]; then
+            echo "::error::Expected one Alembic head, found $head_count."
+            exit 1
+          fi
+
+      - name: Start API and run database health tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          api_log="${RUNNER_TEMP}/accounting-api.log"
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8010 >"$api_log" 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+
+          ready=false
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:8010/health/db >/dev/null; then
+              ready=true
+              break
+            fi
+
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              echo "::error::FastAPI exited before becoming ready."
+              cat "$api_log"
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          if [ "$ready" != true ]; then
+            echo "::error::FastAPI database health endpoint did not become ready."
+            cat "$api_log"
+            exit 1
+          fi
+
+          python -m pytest -p no:cacheprovider tests/test_health.py -v
