@@ -83,6 +83,18 @@ class GetJournalEntry:
         return self._repository.get_by_id(journal_entry_id)
 
 
+class GetJournalEntryByNo:
+    def __init__(self, repository: JournalRepository) -> None:
+        self._repository = repository
+
+    def execute(
+        self,
+        company_id: int,
+        entry_no: str,
+    ) -> JournalEntryDTO | None:
+        return self._repository.get_by_entry_no(company_id, entry_no.strip())
+
+
 class ListJournalEntries:
     def __init__(self, repository: JournalRepository) -> None:
         self._repository = repository
@@ -107,4 +119,19 @@ class ListJournalEntries:
             ),
             skip=skip,
             limit=limit,
+        )
+
+
+class CountJournalEntries:
+    def __init__(self, repository: JournalRepository) -> None:
+        self._repository = repository
+
+    def execute(
+        self,
+        company_id: int,
+        status: str | None = None,
+    ) -> int:
+        return self._repository.count_by_company(
+            company_id=company_id,
+            status=status,
         )

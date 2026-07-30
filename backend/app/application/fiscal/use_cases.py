@@ -1,5 +1,7 @@
 """Fiscal application use cases."""
 
+from datetime import date
+
 from app.application.fiscal.dto import (
     CreateFiscalPeriodCommand,
     CreateFiscalYearCommand,
@@ -54,6 +56,18 @@ class GetFiscalYear:
 
     def execute(self, fiscal_year_id: int) -> FiscalYearDTO | None:
         return self._repository.get_year_by_id(fiscal_year_id)
+
+
+class FindFiscalYearForDate:
+    def __init__(self, repository: FiscalRepository) -> None:
+        self._repository = repository
+
+    def execute(
+        self,
+        company_id: int,
+        entry_date: date,
+    ) -> FiscalYearDTO | None:
+        return self._repository.find_year_for_date(company_id, entry_date)
 
 
 class ListFiscalYears:
@@ -113,6 +127,18 @@ class GetFiscalPeriod:
 
     def execute(self, fiscal_period_id: int) -> FiscalPeriodDTO | None:
         return self._repository.get_period_by_id(fiscal_period_id)
+
+
+class FindFiscalPeriodForDate:
+    def __init__(self, repository: FiscalRepository) -> None:
+        self._repository = repository
+
+    def execute(
+        self,
+        company_id: int,
+        entry_date: date,
+    ) -> FiscalPeriodDTO | None:
+        return self._repository.find_period_for_date(company_id, entry_date)
 
 
 class ListFiscalPeriods:

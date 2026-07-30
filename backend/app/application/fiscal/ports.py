@@ -1,5 +1,6 @@
 """Application ports for fiscal persistence."""
 
+from datetime import date
 from typing import Protocol
 
 from app.application.fiscal.dto import (
@@ -22,6 +23,13 @@ class FiscalRepository(Protocol):
     def get_year_by_id(self, fiscal_year_id: int) -> FiscalYearDTO | None:
         ...
 
+    def find_year_for_date(
+        self,
+        company_id: int,
+        entry_date: date,
+    ) -> FiscalYearDTO | None:
+        ...
+
     def list_years(
         self,
         company_id: int,
@@ -40,6 +48,13 @@ class FiscalRepository(Protocol):
         ...
 
     def get_period_by_id(self, fiscal_period_id: int) -> FiscalPeriodDTO | None:
+        ...
+
+    def find_period_for_date(
+        self,
+        company_id: int,
+        entry_date: date,
+    ) -> FiscalPeriodDTO | None:
         ...
 
     def list_periods(

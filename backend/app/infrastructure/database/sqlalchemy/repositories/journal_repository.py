@@ -253,6 +253,20 @@ class SqlAlchemyJournalRepository(JournalRepository):
         entry = self._db.scalar(statement)
         return self._entry_to_dto(entry) if entry is not None else None
 
+    def get_by_entry_no(
+        self,
+        company_id: int,
+        entry_no: str,
+    ) -> JournalEntryDTO | None:
+        statement = self._with_response_relationships(
+            select(JournalEntry).where(
+                JournalEntry.company_id == company_id,
+                JournalEntry.entry_no == entry_no,
+            )
+        )
+        entry = self._db.scalar(statement)
+        return self._entry_to_dto(entry) if entry is not None else None
+
     def list_by_company(
         self,
         company_id: int,

@@ -64,6 +64,12 @@ def test_sqlalchemy_fiscal_repository_crud_lists_and_never_commits():
 
             assert isinstance(older, FiscalYearDTO)
             assert repository.get_year_by_id(other.id) == other
+            assert repository.find_year_for_date(
+                first.id, date(2200, 6, 1)
+            ).id == older.id
+            assert repository.find_year_for_date(
+                second.id, date(2201, 6, 1)
+            ) is None
             assert [item.id for item in repository.list_years(first.id, 0, 10)] == [
                 newer.id, older.id,
             ]
@@ -86,6 +92,12 @@ def test_sqlalchemy_fiscal_repository_crud_lists_and_never_commits():
             )
             assert isinstance(period, FiscalPeriodDTO)
             assert repository.get_period_by_id(period.id) == period
+            assert repository.find_period_for_date(
+                first.id, date(2200, 1, 15)
+            ).id == period.id
+            assert repository.find_period_for_date(
+                second.id, date(2200, 1, 15)
+            ) is None
             assert repository.count_periods(first.id, older.id) == 1
             assert repository.count_periods(second.id, None) == 0
             updated_period = repository.update_period(

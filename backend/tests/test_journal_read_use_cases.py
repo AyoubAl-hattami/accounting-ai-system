@@ -1,7 +1,12 @@
 from datetime import date, datetime, timezone
 
 from app.application.journals.dto import JournalEntryDTO, JournalEntryPageDTO
-from app.application.journals.use_cases import GetJournalEntry, ListJournalEntries
+from app.application.journals.use_cases import (
+    CountJournalEntries,
+    GetJournalEntry,
+    GetJournalEntryByNo,
+    ListJournalEntries,
+)
 
 
 class FakeJournalRepository:
@@ -30,6 +35,10 @@ class FakeJournalRepository:
 
     def get_by_id(self, journal_entry_id):
         self.calls.append(("get", journal_entry_id))
+        return self.entry
+
+    def get_by_entry_no(self, company_id, entry_no):
+        self.calls.append(("get_by_no", (company_id, entry_no)))
         return self.entry
 
     def list_by_company(self, company_id, status, skip, limit):
@@ -65,5 +74,16 @@ def test_list_journal_entries_preserves_filter_and_pagination():
     assert (result.total, result.skip, result.limit) == (1, 5, 10)
     assert repository.calls == [
         ("list", (4, "posted", 5, 10)),
+        ("count", (4, "posted")),
+    ]
+
+
+def test_ai_journal_read_helpers_preserve_scope_filter_and_trim_number():
+    repository = FakeJournalRepository()
+
+    assert GetJournalEntryByNo(repository).execute(4, "  JE-9  ") is repository.entry
+    assert CountJournalEntries(repository).execute(4, "posted") == 1
+    assert repository.calls == [
+        ("get_by_no", (4, "JE-9")),
         ("count", (4, "posted")),
     ]

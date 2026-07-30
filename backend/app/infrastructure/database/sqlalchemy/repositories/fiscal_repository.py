@@ -1,5 +1,7 @@
 """SQLAlchemy implementation of the fiscal repository port."""
 
+from datetime import date
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -81,6 +83,20 @@ class SqlAlchemyFiscalRepository(FiscalRepository):
         )
         return self._year_to_dto(fiscal_year) if fiscal_year is not None else None
 
+    def find_year_for_date(
+        self,
+        company_id: int,
+        entry_date: date,
+    ) -> FiscalYearDTO | None:
+        fiscal_year = self._db.scalar(
+            select(FiscalYear).where(
+                FiscalYear.company_id == company_id,
+                FiscalYear.start_date <= entry_date,
+                FiscalYear.end_date >= entry_date,
+            )
+        )
+        return self._year_to_dto(fiscal_year) if fiscal_year is not None else None
+
     def list_years(
         self,
         company_id: int,
@@ -137,6 +153,24 @@ class SqlAlchemyFiscalRepository(FiscalRepository):
             select(FiscalPeriod).where(FiscalPeriod.id == fiscal_period_id)
         )
         return self._period_to_dto(fiscal_period) if fiscal_period is not None else None
+
+    def find_period_for_date(
+        self,
+        company_id: int,
+        entry_date: date,
+    ) -> FiscalPeriodDTO | None:
+        fiscal_period = self._db.scalar(
+            select(FiscalPeriod).where(
+                FiscalPeriod.company_id == company_id,
+                FiscalPeriod.start_date <= entry_date,
+                FiscalPeriod.end_date >= entry_date,
+            )
+        )
+        return (
+            self._period_to_dto(fiscal_period)
+            if fiscal_period is not None
+            else None
+        )
 
     def list_periods(
         self,

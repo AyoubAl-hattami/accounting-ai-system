@@ -11,6 +11,8 @@ from app.application.fiscal.dto import (
 from app.application.fiscal.use_cases import (
     CreateFiscalPeriod,
     CreateFiscalYear,
+    FindFiscalPeriodForDate,
+    FindFiscalYearForDate,
     GetFiscalPeriod,
     GetFiscalYear,
     ListFiscalPeriods,
@@ -45,6 +47,10 @@ class FakeFiscalRepository:
         self.calls.append(("get_year", fiscal_year_id))
         return self.year
 
+    def find_year_for_date(self, company_id, entry_date):
+        self.calls.append(("find_year", (company_id, entry_date)))
+        return self.year
+
     def list_years(self, company_id, skip, limit):
         self.calls.append(("list_years", (company_id, skip, limit)))
         return [self.year]
@@ -63,6 +69,10 @@ class FakeFiscalRepository:
 
     def get_period_by_id(self, fiscal_period_id):
         self.calls.append(("get_period", fiscal_period_id))
+        return self.period
+
+    def find_period_for_date(self, company_id, entry_date):
+        self.calls.append(("find_period", (company_id, entry_date)))
         return self.period
 
     def list_periods(self, company_id, fiscal_year_id, skip, limit):
@@ -120,3 +130,15 @@ def test_fiscal_period_use_cases_normalize_and_preserve_fields():
     assert normalized_update.fields is fields
     assert page.items == [repository.period]
     assert (page.total, page.skip, page.limit) == (1, 0, 20)
+
+
+def test_fiscal_date_lookups_preserve_company_and_date():
+    repository = FakeFiscalRepository()
+    entry_date = date(2200, 1, 15)
+
+    assert FindFiscalYearForDate(repository).execute(7, entry_date) is repository.year
+    assert FindFiscalPeriodForDate(repository).execute(7, entry_date) is repository.period
+    assert repository.calls == [
+        ("find_year", (7, entry_date)),
+        ("find_period", (7, entry_date)),
+    ]

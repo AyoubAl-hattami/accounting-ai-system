@@ -147,6 +147,8 @@ def test_sqlalchemy_journal_repository_preserves_read_contract():
             assert [entry.entry_no for entry in page] == ["JE-OLD"]
             assert repository.count_by_company(first.id, None) == 2
             assert repository.count_by_company(first.id, "draft") == 1
+            assert repository.get_by_entry_no(first.id, "JE-NEW").id == newer.id
+            assert repository.get_by_entry_no(second.id, "JE-NEW") is None
             assert global_foreign.company_id == second.id
             assert posted[0].creator_name == "Journal Reader"
             assert posted[0].lines[0].debit == Decimal("10.00")

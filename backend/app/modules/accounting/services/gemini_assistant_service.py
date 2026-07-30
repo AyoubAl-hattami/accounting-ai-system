@@ -90,8 +90,8 @@ from app.modules.accounting.services.reports_application_facade import (
     get_general_ledger,
     REPORTABLE_ENTRY_STATUSES,
 )
-from app.modules.accounting.services.account_service import list_accounts
-from app.modules.accounting.services.journal_service import (
+from app.modules.accounting.services.ai_accounting_application_facade import (
+    list_accounts,
     list_journal_entries,
     count_journal_entries,
 )
