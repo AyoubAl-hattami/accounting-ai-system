@@ -21,6 +21,12 @@ jobs:
       run:
         working-directory: backend
     env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/accounting_ai
+      SECRET_KEY: ci-static-validation-secret-key-not-for-production
+      AI_JOURNAL_PROVIDER: rules
+      OPENAI_API_KEY: ""
+      GEMINI_API_KEY: ""
       PYTHONPATH: ${{ github.workspace }}/backend
 
     steps:
