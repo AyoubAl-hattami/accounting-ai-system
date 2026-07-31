@@ -22,7 +22,7 @@ jobs:
         working-directory: backend
     env:
       APP_ENV: test
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/accounting_ai
+      DATABASE_URL: sqlite+pysqlite:///:memory:
       SECRET_KEY: ci-static-validation-secret-key-not-for-production
       AI_JOURNAL_PROVIDER: rules
       OPENAI_API_KEY: ""
