@@ -33,7 +33,7 @@ The backend workflow uses Ubuntu and Python 3.13. It:
   migration head.
 - Starts FastAPI on `127.0.0.1:8010`, waits for `/health/db`, and runs the
   self-contained health, authentication, rate-limit, password-policy, and
-  deterministic protected-reports tests.
+  factory-backed report/export tests.
 
 The workflow uses only non-secret, job-local database credentials and sets the
 backend configuration explicitly. AI providers remain in deterministic rules
@@ -55,8 +55,10 @@ the full suite while the fixture contract is unresolved.
 The current inventory identifies:
 
 - 33 modules that make live HTTP requests to the configured API server.
-- 28 modules that consume the shared admin/company/account/fiscal seed contract.
+- 25 modules that consume the shared admin/company/account/fiscal seed contract.
 - 4 self-contained HTTP modules that create their own state or require no seed.
+- 4 factory-backed HTTP modules that create deterministic company/accounting
+  state before calling the API.
 - 6 modules that directly use the application `SessionLocal` in addition to
   HTTP requests.
 - Provider tests that use fake keys and mocked clients rather than external AI
@@ -64,8 +66,8 @@ The current inventory identifies:
 
 Already deterministic unit, use-case, repository, architecture, and fixture-
 readiness tests can run without the historical seed snapshot. The four
-self-contained HTTP modules and migrated protected-reports module still require
-PostgreSQL and FastAPI, which CI now provides.
+self-contained HTTP modules and four factory-backed report/export modules still
+require PostgreSQL and FastAPI, which CI now provides.
 
 `backend/tests/factories/accounting.py` provides the initial deterministic
 test-only factory layer. It creates unique users, companies, memberships,
@@ -74,9 +76,10 @@ balanced journal entries. Tests should consume returned objects or IDs from
 the `deterministic_accounting_bootstrap` fixture rather than assuming
 `admin@example.com`, company ID 3, account IDs 5 and 11, or fiscal year ID 2.
 
-`backend/tests/test_protected_reports.py` is the first migrated HTTP module.
-It now uses the factory-backed bootstrap for the authenticated trial-balance
-case and no longer depends on the shared company fixture.
+Factory-backed HTTP modules now include `backend/tests/test_protected_reports.py`,
+`backend/tests/test_reports_smoke.py`, `backend/tests/test_report_csv_exports.py`,
+and `backend/tests/test_report_pdf_exports.py`. They use the generated
+bootstrap company, auth headers, and account IDs instead of shared fixture IDs.
 
 Future fixture phases should migrate the remaining fixed row IDs to this
 factory pattern, adding posted journal history only where a test actually
@@ -105,6 +108,9 @@ python -m pytest -p no:cacheprovider `
   tests/test_auth_rate_limit.py `
   tests/test_password_policy.py `
   tests/test_protected_reports.py `
+  tests/test_reports_smoke.py `
+  tests/test_report_csv_exports.py `
+  tests/test_report_pdf_exports.py `
   -v
 ```
 

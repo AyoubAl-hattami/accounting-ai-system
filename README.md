@@ -645,8 +645,8 @@ Pull requests and pushes to `main` run the conservative backend workflow in
 `.github/workflows/backend-validation.yml`. It compiles backend sources, runs
 the architecture guards, checks for deleted accounting service references,
 applies migrations to an ephemeral PostgreSQL service, starts FastAPI, and runs
-the self-contained health/authentication test subset plus the first factory-
-backed protected-reports test. It also guards the explicit fixture-readiness
+the self-contained health/authentication test subset plus factory-backed report
+and report-export tests. It also guards the explicit fixture-readiness
 inventory. The full integration suite remains manual until the remaining
 pre-existing fixture assumptions are migrated to deterministic factories.
 

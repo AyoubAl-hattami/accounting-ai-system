@@ -92,9 +92,6 @@ EXPECTED_IMPLICIT_SEED_CONSUMERS = frozenset(
         "test_protected_fiscal.py",
         "test_protected_journal_entries.py",
         "test_rbac_permission_matrix.py",
-        "test_report_csv_exports.py",
-        "test_report_pdf_exports.py",
-        "test_reports_smoke.py",
         "test_reset_script.py",
         "test_semantic_transaction.py",
     }
@@ -112,6 +109,9 @@ EXPECTED_SELF_CONTAINED_HTTP_FILES = frozenset(
 EXPECTED_FACTORY_BACKED_HTTP_FILES = frozenset(
     {
         "test_protected_reports.py",
+        "test_report_csv_exports.py",
+        "test_report_pdf_exports.py",
+        "test_reports_smoke.py",
     }
 )
 
