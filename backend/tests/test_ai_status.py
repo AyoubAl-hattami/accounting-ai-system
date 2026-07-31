@@ -9,10 +9,11 @@ def test_ai_status_requires_authentication(base_url):
     assert response.status_code in (401, 403)
 
 
-def test_ai_status_returns_valid_provider(base_url, admin_headers):
+def test_ai_status_returns_valid_provider(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
     response = requests.get(
         f"{base_url}/ai/status",
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 200
@@ -29,10 +30,11 @@ def test_ai_status_returns_valid_provider(base_url, admin_headers):
     assert len(data["message"]) > 0
 
 
-def test_ai_status_has_all_required_fields(base_url, admin_headers):
+def test_ai_status_has_all_required_fields(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
     response = requests.get(
         f"{base_url}/ai/status",
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 200
