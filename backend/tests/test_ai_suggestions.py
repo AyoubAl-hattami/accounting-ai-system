@@ -46,6 +46,13 @@ SAMPLE_ACCOUNTS = [
         "is_active": True,
     },
     {
+        "id": 13,
+        "code": "2200",
+        "name": "Loan Payable",
+        "account_type": "liability",
+        "is_active": True,
+    },
+    {
         "id": 6,
         "code": "3000",
         "name": "Equity",

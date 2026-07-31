@@ -163,4 +163,5 @@ jobs:
             tests/test_auth.py \
             tests/test_auth_rate_limit.py \
             tests/test_password_policy.py \
+            tests/test_protected_reports.py \
             -v

@@ -3,6 +3,7 @@
 from fixture_readiness import (
     BACKEND_ROOT,
     EXPECTED_DIRECT_SESSION_FILES,
+    EXPECTED_FACTORY_BACKED_HTTP_FILES,
     EXPECTED_HTTP_INTEGRATION_FILES,
     EXPECTED_IMPLICIT_SEED_CONSUMERS,
     EXPECTED_SELF_CONTAINED_HTTP_FILES,
@@ -27,6 +28,7 @@ def test_implicit_seed_consumer_inventory_is_explicit():
 def test_self_contained_http_subset_is_explicit():
     self_contained = (
         discover_http_integration_files() - discover_implicit_seed_consumers()
+        - EXPECTED_FACTORY_BACKED_HTTP_FILES
     )
     assert self_contained == EXPECTED_SELF_CONTAINED_HTTP_FILES
 
@@ -59,3 +61,6 @@ def test_ci_keeps_full_suite_disabled_until_fixture_contract_is_replaced():
     assert "tests/test_fixture_readiness.py" in workflow
     for relative_path in EXPECTED_SELF_CONTAINED_HTTP_FILES:
         assert f"tests/{relative_path}" in workflow
+    for relative_path in EXPECTED_FACTORY_BACKED_HTTP_FILES:
+        assert f"tests/{relative_path}" in workflow
+    assert "tests/test_protected_reports.py" in workflow
