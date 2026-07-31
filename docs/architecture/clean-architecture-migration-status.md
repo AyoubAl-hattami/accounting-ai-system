@@ -94,7 +94,7 @@ checks for deleted-service references. Its database-backed job starts an
 ephemeral PostgreSQL service, applies and inspects Alembic migrations, starts
 FastAPI, verifies database health, and runs the self-contained health,
 authentication, rate-limit, password-policy, and factory-backed report/export
-tests.
+and accounts tests.
 
 The full HTTP integration suite remains manual because its shared fixtures
 assume pre-existing user, company, account, and fiscal rows that migrations do
@@ -105,9 +105,10 @@ test-only factory foundation for replacing fixed IDs with generated users,
 companies, memberships, default accounts, fiscal periods, and optional journal
 data. `test_protected_reports.py`, `test_reports_smoke.py`,
 `test_report_csv_exports.py`, `test_report_pdf_exports.py`,
-`test_default_accounts_seed.py`, and `test_protected_fiscal.py` are now
-factory-backed. Full-suite CI still requires migrating the remaining 23
-implicit-seed consumers to deterministic factories with isolation and cleanup.
+`test_default_accounts_seed.py`, `test_protected_fiscal.py`, and
+`test_protected_accounts.py` are now factory-backed. Full-suite CI still
+requires migrating the remaining 22 implicit-seed consumers to deterministic
+factories with isolation and cleanup.
 
 ## Historical validation baseline
 

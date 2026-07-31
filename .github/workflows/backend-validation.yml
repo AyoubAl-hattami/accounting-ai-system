@@ -21,6 +21,12 @@ jobs:
       run:
         working-directory: backend
     env:
+      APP_ENV: test
+      DATABASE_URL: sqlite+pysqlite:///:memory:
+      SECRET_KEY: ci-static-validation-secret-key-not-for-production
+      AI_JOURNAL_PROVIDER: rules
+      OPENAI_API_KEY: ""
+      GEMINI_API_KEY: ""
       PYTHONPATH: ${{ github.workspace }}/backend
 
     steps:
@@ -169,4 +175,5 @@ jobs:
             tests/test_report_pdf_exports.py \
             tests/test_default_accounts_seed.py \
             tests/test_protected_fiscal.py \
+            tests/test_protected_accounts.py \
             -v
