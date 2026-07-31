@@ -24,6 +24,7 @@ business behavior.
 12. Static deterministic-fixture inventory and full-suite enablement guard.
 13. Initial deterministic backend test factories and first HTTP fixture
     migration.
+14. Factory-backed report smoke and report export HTTP test migration.
 
 ## Current backend architecture
 
@@ -92,8 +93,8 @@ dependencies, compiles backend sources, runs the architecture guards, and
 checks for deleted-service references. Its database-backed job starts an
 ephemeral PostgreSQL service, applies and inspects Alembic migrations, starts
 FastAPI, verifies database health, and runs the self-contained health,
-authentication, rate-limit, password-policy, and deterministic protected-
-reports tests.
+authentication, rate-limit, password-policy, and factory-backed report/export
+tests.
 
 The full HTTP integration suite remains manual because its shared fixtures
 assume pre-existing user, company, account, and fiscal rows that migrations do
@@ -102,8 +103,10 @@ implicit-seed, and direct-session consumers, and CI fails if that inventory
 drifts without review. `backend/tests/factories/accounting.py` is the initial
 test-only factory foundation for replacing fixed IDs with generated users,
 companies, memberships, default accounts, fiscal periods, and optional journal
-data. Full-suite CI still requires migrating the remaining implicit-seed
-consumers to deterministic factories with isolation and cleanup.
+data. `test_protected_reports.py`, `test_reports_smoke.py`,
+`test_report_csv_exports.py`, and `test_report_pdf_exports.py` are now
+factory-backed. Full-suite CI still requires migrating the remaining 25
+implicit-seed consumers to deterministic factories with isolation and cleanup.
 
 ## Historical validation baseline
 

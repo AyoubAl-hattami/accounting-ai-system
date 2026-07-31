@@ -164,4 +164,7 @@ jobs:
             tests/test_auth_rate_limit.py \
             tests/test_password_policy.py \
             tests/test_protected_reports.py \
+            tests/test_reports_smoke.py \
+            tests/test_report_csv_exports.py \
+            tests/test_report_pdf_exports.py \
             -v

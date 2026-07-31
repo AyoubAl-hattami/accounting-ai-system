@@ -8,24 +8,18 @@ and that CSV output contains the expected column headers.
 import requests
 
 
-COMPANY_ID = 3
-# Use any valid account_id from the seeded chart of accounts
-ACCOUNT_ID = 5
-
-
-# ── Trial Balance CSV ──
-
-def test_trial_balance_csv_requires_authentication(base_url, default_company_id):
+def test_trial_balance_csv_requires_authentication(base_url):
     response = requests.get(
-        f"{base_url}/reports/trial-balance/export.csv?company_id={default_company_id}",
+        f"{base_url}/reports/trial-balance/export.csv?company_id=1",
     )
     assert response.status_code in (401, 403)
 
 
-def test_trial_balance_csv_export_works(base_url, admin_headers, default_company_id):
+def test_trial_balance_csv_export_works(base_url, deterministic_accounting_bootstrap):
+    company_id = deterministic_accounting_bootstrap.company_id
     response = requests.get(
-        f"{base_url}/reports/trial-balance/export.csv?company_id={default_company_id}",
-        headers=admin_headers,
+        f"{base_url}/reports/trial-balance/export.csv?company_id={company_id}",
+        headers=deterministic_accounting_bootstrap.auth_headers,
     )
 
     assert response.status_code == 200
@@ -41,19 +35,18 @@ def test_trial_balance_csv_export_works(base_url, admin_headers, default_company
     assert "Credit" in text
 
 
-# ── Profit & Loss CSV ──
-
-def test_profit_loss_csv_requires_authentication(base_url, default_company_id):
+def test_profit_loss_csv_requires_authentication(base_url):
     response = requests.get(
-        f"{base_url}/reports/profit-loss/export.csv?company_id={default_company_id}",
+        f"{base_url}/reports/profit-loss/export.csv?company_id=1",
     )
     assert response.status_code in (401, 403)
 
 
-def test_profit_loss_csv_export_works(base_url, admin_headers, default_company_id):
+def test_profit_loss_csv_export_works(base_url, deterministic_accounting_bootstrap):
+    company_id = deterministic_accounting_bootstrap.company_id
     response = requests.get(
-        f"{base_url}/reports/profit-loss/export.csv?company_id={default_company_id}",
-        headers=admin_headers,
+        f"{base_url}/reports/profit-loss/export.csv?company_id={company_id}",
+        headers=deterministic_accounting_bootstrap.auth_headers,
     )
 
     assert response.status_code == 200
@@ -71,19 +64,18 @@ def test_profit_loss_csv_export_works(base_url, admin_headers, default_company_i
     assert "Net Income" in text
 
 
-# ── Balance Sheet CSV ──
-
-def test_balance_sheet_csv_requires_authentication(base_url, default_company_id):
+def test_balance_sheet_csv_requires_authentication(base_url):
     response = requests.get(
-        f"{base_url}/reports/balance-sheet/export.csv?company_id={default_company_id}",
+        f"{base_url}/reports/balance-sheet/export.csv?company_id=1",
     )
     assert response.status_code in (401, 403)
 
 
-def test_balance_sheet_csv_export_works(base_url, admin_headers, default_company_id):
+def test_balance_sheet_csv_export_works(base_url, deterministic_accounting_bootstrap):
+    company_id = deterministic_accounting_bootstrap.company_id
     response = requests.get(
-        f"{base_url}/reports/balance-sheet/export.csv?company_id={default_company_id}",
-        headers=admin_headers,
+        f"{base_url}/reports/balance-sheet/export.csv?company_id={company_id}",
+        headers=deterministic_accounting_bootstrap.auth_headers,
     )
 
     assert response.status_code == 200
@@ -100,21 +92,20 @@ def test_balance_sheet_csv_export_works(base_url, admin_headers, default_company
     assert "Total Liabilities" in text
 
 
-# ── Account Ledger CSV ──
-
-def test_account_ledger_csv_requires_authentication(base_url, default_company_id):
+def test_account_ledger_csv_requires_authentication(base_url):
     response = requests.get(
-        f"{base_url}/reports/account-ledger/export.csv"
-        f"?company_id={default_company_id}&account_id={ACCOUNT_ID}",
+        f"{base_url}/reports/account-ledger/export.csv?company_id=1&account_id=1",
     )
     assert response.status_code in (401, 403)
 
 
-def test_account_ledger_csv_export_works(base_url, admin_headers, default_company_id):
+def test_account_ledger_csv_export_works(base_url, deterministic_accounting_bootstrap):
+    company_id = deterministic_accounting_bootstrap.company_id
+    account_id = deterministic_accounting_bootstrap.account_id("1110")
     response = requests.get(
         f"{base_url}/reports/account-ledger/export.csv"
-        f"?company_id={default_company_id}&account_id={ACCOUNT_ID}",
-        headers=admin_headers,
+        f"?company_id={company_id}&account_id={account_id}",
+        headers=deterministic_accounting_bootstrap.auth_headers,
     )
 
     assert response.status_code == 200
@@ -131,19 +122,18 @@ def test_account_ledger_csv_export_works(base_url, admin_headers, default_compan
     assert "Balance" in text
 
 
-# ── General Ledger CSV ──
-
-def test_general_ledger_csv_requires_authentication(base_url, default_company_id):
+def test_general_ledger_csv_requires_authentication(base_url):
     response = requests.get(
-        f"{base_url}/reports/general-ledger/export.csv?company_id={default_company_id}",
+        f"{base_url}/reports/general-ledger/export.csv?company_id=1",
     )
     assert response.status_code in (401, 403)
 
 
-def test_general_ledger_csv_export_works(base_url, admin_headers, default_company_id):
+def test_general_ledger_csv_export_works(base_url, deterministic_accounting_bootstrap):
+    company_id = deterministic_accounting_bootstrap.company_id
     response = requests.get(
-        f"{base_url}/reports/general-ledger/export.csv?company_id={default_company_id}",
-        headers=admin_headers,
+        f"{base_url}/reports/general-ledger/export.csv?company_id={company_id}",
+        headers=deterministic_accounting_bootstrap.auth_headers,
     )
 
     assert response.status_code == 200
