@@ -104,8 +104,9 @@ drifts without review. `backend/tests/factories/accounting.py` is the initial
 test-only factory foundation for replacing fixed IDs with generated users,
 companies, memberships, default accounts, fiscal periods, and optional journal
 data. `test_protected_reports.py`, `test_reports_smoke.py`,
-`test_report_csv_exports.py`, and `test_report_pdf_exports.py` are now
-factory-backed. Full-suite CI still requires migrating the remaining 25
+`test_report_csv_exports.py`, `test_report_pdf_exports.py`,
+`test_default_accounts_seed.py`, and `test_protected_fiscal.py` are now
+factory-backed. Full-suite CI still requires migrating the remaining 23
 implicit-seed consumers to deterministic factories with isolation and cleanup.
 
 ## Historical validation baseline

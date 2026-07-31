@@ -55,9 +55,9 @@ the full suite while the fixture contract is unresolved.
 The current inventory identifies:
 
 - 33 modules that make live HTTP requests to the configured API server.
-- 25 modules that consume the shared admin/company/account/fiscal seed contract.
+- 23 modules that consume the shared admin/company/account/fiscal seed contract.
 - 4 self-contained HTTP modules that create their own state or require no seed.
-- 4 factory-backed HTTP modules that create deterministic company/accounting
+- 6 factory-backed HTTP modules that create deterministic company/accounting
   state before calling the API.
 - 6 modules that directly use the application `SessionLocal` in addition to
   HTTP requests.
@@ -66,8 +66,8 @@ The current inventory identifies:
 
 Already deterministic unit, use-case, repository, architecture, and fixture-
 readiness tests can run without the historical seed snapshot. The four
-self-contained HTTP modules and four factory-backed report/export modules still
-require PostgreSQL and FastAPI, which CI now provides.
+self-contained HTTP modules and six factory-backed modules still require
+PostgreSQL and FastAPI, which CI now provides.
 
 `backend/tests/factories/accounting.py` provides the initial deterministic
 test-only factory layer. It creates unique users, companies, memberships,
@@ -78,8 +78,9 @@ the `deterministic_accounting_bootstrap` fixture rather than assuming
 
 Factory-backed HTTP modules now include `backend/tests/test_protected_reports.py`,
 `backend/tests/test_reports_smoke.py`, `backend/tests/test_report_csv_exports.py`,
-and `backend/tests/test_report_pdf_exports.py`. They use the generated
-bootstrap company, auth headers, and account IDs instead of shared fixture IDs.
+`backend/tests/test_report_pdf_exports.py`, `backend/tests/test_default_accounts_seed.py`,
+and `backend/tests/test_protected_fiscal.py`. They use the generated bootstrap
+company, auth headers, and account IDs instead of shared fixture IDs.
 
 Future fixture phases should migrate the remaining fixed row IDs to this
 factory pattern, adding posted journal history only where a test actually
@@ -111,6 +112,8 @@ python -m pytest -p no:cacheprovider `
   tests/test_reports_smoke.py `
   tests/test_report_csv_exports.py `
   tests/test_report_pdf_exports.py `
+  tests/test_default_accounts_seed.py `
+  tests/test_protected_fiscal.py `
   -v
 ```
 
