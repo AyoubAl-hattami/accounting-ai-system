@@ -83,6 +83,13 @@ Factory-backed HTTP modules now include `backend/tests/test_protected_reports.py
 They use the generated bootstrap company, auth headers, and account IDs instead
 of shared fixture IDs.
 
+`backend/tests/test_fiscal_management.py` has been partially migrated (17 of 18
+tests). The remaining test (`test_quick_setup_enables_gemini_today_journal`)
+depends on the Gemini AI assistant endpoint and fixed account IDs from the shared
+seed; it is deferred until the Gemini assistant tests are migrated as a group.
+Because one test still consumes the shared seed, the file remains in the
+implicit-seed inventory and is not yet added to the CI subset.
+
 Future fixture phases should migrate the remaining fixed row IDs to this
 factory pattern, adding posted journal history only where a test actually
 asserts transaction or reporting behavior. Tests must consume returned

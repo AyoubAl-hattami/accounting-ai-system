@@ -90,16 +90,17 @@ def _unique_future_year(company_id, base_year):
 
 
 def test_quick_setup_creates_fiscal_year_and_period(
-    base_url, admin_headers, default_company_id
+    base_url, deterministic_accounting_bootstrap
 ):
     """
     POST /fiscal/quick-setup-today should create a fiscal year and fiscal
     period covering today's date if they don't already exist.
     """
+    dab = deterministic_accounting_bootstrap
     response = requests.post(
         f"{base_url}/fiscal/quick-setup-today",
-        headers=admin_headers,
-        params={"company_id": default_company_id},
+        headers=dab.auth_headers,
+        params={"company_id": dab.company_id},
     )
     assert response.status_code == 200, (
         f"Expected 200, got {response.status_code}: {response.text[:300]}"
@@ -121,24 +122,25 @@ def test_quick_setup_creates_fiscal_year_and_period(
 
 
 def test_quick_setup_is_idempotent(
-    base_url, admin_headers, default_company_id
+    base_url, deterministic_accounting_bootstrap
 ):
     """
     Calling quick-setup-today twice must not create duplicates.
     The second call should return the same fiscal year and period.
     """
+    dab = deterministic_accounting_bootstrap
     resp1 = requests.post(
         f"{base_url}/fiscal/quick-setup-today",
-        headers=admin_headers,
-        params={"company_id": default_company_id},
+        headers=dab.auth_headers,
+        params={"company_id": dab.company_id},
     )
     assert resp1.status_code == 200
     data1 = resp1.json()
 
     resp2 = requests.post(
         f"{base_url}/fiscal/quick-setup-today",
-        headers=admin_headers,
-        params={"company_id": default_company_id},
+        headers=dab.auth_headers,
+        params={"company_id": dab.company_id},
     )
     assert resp2.status_code == 200
     data2 = resp2.json()
@@ -152,9 +154,10 @@ def test_quick_setup_is_idempotent(
     assert data2["fiscal_period_created"] is False
 
 
-def test_quick_setup_requires_admin(base_url, default_company_id):
+def test_quick_setup_requires_admin(base_url):
     """
     A non-admin user (viewer) must be rejected with HTTP 403.
+    Uses company_id=1 — this is a rejection test; no membership state needed.
     """
     email = f"viewer_{uuid.uuid4().hex[:12]}@test.com"
     password = "Password123"
@@ -175,32 +178,33 @@ def test_quick_setup_requires_admin(base_url, default_company_id):
     token = login.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Try quick setup — should be rejected
+    # Try quick setup — should be rejected (no company membership)
     response = requests.post(
         f"{base_url}/fiscal/quick-setup-today",
         headers=headers,
-        params={"company_id": default_company_id},
+        params={"company_id": 1},
     )
     assert response.status_code == 403
 
 
 def test_quick_setup_creates_audit_logs(
-    base_url, admin_headers, default_company_id
+    base_url, deterministic_accounting_bootstrap
 ):
     """
     Quick setup must create audit log entries for fiscal year/period creation.
     """
+    dab = deterministic_accounting_bootstrap
     # Call quick setup
     requests.post(
         f"{base_url}/fiscal/quick-setup-today",
-        headers=admin_headers,
-        params={"company_id": default_company_id},
+        headers=dab.auth_headers,
+        params={"company_id": dab.company_id},
     )
 
     # Check audit logs
     audit_resp = requests.get(
-        f"{base_url}/audit-logs?company_id={default_company_id}&limit=50",
-        headers=admin_headers,
+        f"{base_url}/audit-logs?company_id={dab.company_id}&limit=50",
+        headers=dab.auth_headers,
     )
     assert audit_resp.status_code == 200
 
@@ -219,14 +223,15 @@ def test_quick_setup_creates_audit_logs(
 # ── CRUD Tests ────────────────────────────────────────────────────────────────
 
 
-def test_admin_can_create_fiscal_year(base_url, admin_headers):
+def test_admin_can_create_fiscal_year(base_url, deterministic_accounting_bootstrap):
     """Admin can create a fiscal year via POST /fiscal-years."""
-    company_id = _create_company(base_url, admin_headers, "FiscalYearCreate")
+    dab = deterministic_accounting_bootstrap
+    company_id = _create_company(base_url, dab.auth_headers, "FiscalYearCreate")
     unique_name = f"FY Test {uuid.uuid4().hex[:8]}"
     year = _unique_future_year(company_id, 2200)
     response = requests.post(
         f"{base_url}/fiscal-years",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         json={
             "company_id": company_id,
             "name": unique_name,
@@ -244,14 +249,16 @@ def test_admin_can_create_fiscal_year(base_url, admin_headers):
     assert data["status"] == "open"
     assert data["id"] > 0
 
-def test_admin_can_create_fiscal_period(base_url, admin_headers):
+
+def test_admin_can_create_fiscal_period(base_url, deterministic_accounting_bootstrap):
     """Admin can create a fiscal period under a fiscal year."""
-    company_id = _create_company(base_url, admin_headers, "FiscalPeriodCreate")
+    dab = deterministic_accounting_bootstrap
+    company_id = _create_company(base_url, dab.auth_headers, "FiscalPeriodCreate")
     year = _unique_future_year(company_id, 2400)
     fy_name = f"FY Period Test {uuid.uuid4().hex[:8]}"
     fy_resp = requests.post(
         f"{base_url}/fiscal-years",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         json={
             "company_id": company_id,
             "name": fy_name,
@@ -269,7 +276,7 @@ def test_admin_can_create_fiscal_period(base_url, admin_headers):
     fp_name = f"Jan {year} {uuid.uuid4().hex[:6]}"
     fp_resp = requests.post(
         f"{base_url}/fiscal-periods",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         json={
             "company_id": company_id,
             "fiscal_year_id": fy_id,
@@ -288,8 +295,12 @@ def test_admin_can_create_fiscal_period(base_url, admin_headers):
     assert data["name"] == fp_name
     assert data["fiscal_year_id"] == fy_id
 
-def test_non_admin_cannot_create_fiscal_year(base_url, default_company_id):
-    """A non-admin user must be rejected when creating a fiscal year."""
+
+def test_non_admin_cannot_create_fiscal_year(base_url):
+    """
+    A non-admin user must be rejected when creating a fiscal year.
+    Uses company_id=1 — rejection test; no membership state needed.
+    """
     email = f"viewer_fy_{uuid.uuid4().hex[:12]}@test.com"
     password = "Password123"
 
@@ -309,7 +320,7 @@ def test_non_admin_cannot_create_fiscal_year(base_url, default_company_id):
         f"{base_url}/fiscal-years",
         headers=headers,
         json={
-            "company_id": default_company_id,
+            "company_id": 1,
             "name": "Unauthorized FY",
             "start_date": "2097-01-01",
             "end_date": "2097-12-31",
@@ -319,8 +330,11 @@ def test_non_admin_cannot_create_fiscal_year(base_url, default_company_id):
     assert response.status_code == 403
 
 
-def test_non_admin_cannot_create_fiscal_period(base_url, default_company_id):
-    """A non-admin user must be rejected when creating a fiscal period."""
+def test_non_admin_cannot_create_fiscal_period(base_url):
+    """
+    A non-admin user must be rejected when creating a fiscal period.
+    Uses company_id=1 — rejection test; no membership state needed.
+    """
     email = f"viewer_fp_{uuid.uuid4().hex[:12]}@test.com"
     password = "Password123"
 
@@ -340,7 +354,7 @@ def test_non_admin_cannot_create_fiscal_period(base_url, default_company_id):
         f"{base_url}/fiscal-periods",
         headers=headers,
         json={
-            "company_id": default_company_id,
+            "company_id": 1,
             "fiscal_year_id": 1,
             "period_no": 1,
             "name": "Unauthorized FP",
@@ -365,6 +379,11 @@ def test_quick_setup_enables_gemini_today_journal(
     """
     After quick-setup-today, Gemini confirm-action must succeed for today's date.
     This is the end-to-end integration test.
+
+    DEFERRED from factory migration: relies on fixed account IDs
+    (default_bank_account_id=5, default_owner_capital_account_id=11) from the
+    shared seed and the Gemini AI assistant endpoint.  Blocked until the Gemini
+    assistant tests are migrated as a group.
     """
     # Ensure fiscal period exists for today
     setup_resp = requests.post(
@@ -411,14 +430,15 @@ def test_quick_setup_enables_gemini_today_journal(
     assert data.get("data", {}).get("entry_no") is not None
 
 
-def test_fiscal_year_create_generates_audit_log(base_url, admin_headers):
+def test_fiscal_year_create_generates_audit_log(base_url, deterministic_accounting_bootstrap):
     """Creating a fiscal year must generate an audit log entry."""
-    company_id = _create_company(base_url, admin_headers, "FiscalYearAudit")
+    dab = deterministic_accounting_bootstrap
+    company_id = _create_company(base_url, dab.auth_headers, "FiscalYearAudit")
     unique_name = f"FY Audit {uuid.uuid4().hex[:8]}"
     year = _unique_future_year(company_id, 2600)
     fy_resp = requests.post(
         f"{base_url}/fiscal-years",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         json={
             "company_id": company_id,
             "name": unique_name,
@@ -435,7 +455,7 @@ def test_fiscal_year_create_generates_audit_log(base_url, admin_headers):
     # Check audit log
     audit_resp = requests.get(
         f"{base_url}/audit-logs?company_id={company_id}&limit=20",
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
     assert audit_resp.status_code == 200
 
@@ -447,76 +467,82 @@ def test_fiscal_year_create_generates_audit_log(base_url, admin_headers):
     assert len(logs) >= 1
     assert logs[0]["company_id"] == company_id
     assert logs[0]["entity_type"] == "fiscal_year"
-def test_fiscal_period_overlap_create_returns_409(base_url, admin_headers):
-    company_id = _create_company(base_url, admin_headers, "OverlapCreate")
+
+
+def test_fiscal_period_overlap_create_returns_409(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
+    company_id = _create_company(base_url, dab.auth_headers, "OverlapCreate")
     year = _unique_future_year(company_id, 3000)
-    fiscal_year_id = _create_fiscal_year(base_url, admin_headers, company_id, year)
+    fiscal_year_id = _create_fiscal_year(base_url, dab.auth_headers, company_id, year)
 
     first = _create_fiscal_period(
-        base_url, admin_headers, company_id, fiscal_year_id,
+        base_url, dab.auth_headers, company_id, fiscal_year_id,
         1, f"Jan {year}", f"{year}-01-01", f"{year}-01-31",
     )
     assert first.status_code == 201, first.text
 
     overlap = _create_fiscal_period(
-        base_url, admin_headers, company_id, fiscal_year_id,
+        base_url, dab.auth_headers, company_id, fiscal_year_id,
         2, f"Overlap {year}", f"{year}-01-15", f"{year}-02-15",
     )
     assert overlap.status_code == 409
     assert "overlap" in overlap.text.lower()
 
 
-def test_fiscal_period_adjacent_dates_are_allowed(base_url, admin_headers):
-    company_id = _create_company(base_url, admin_headers, "AdjacentPeriod")
+def test_fiscal_period_adjacent_dates_are_allowed(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
+    company_id = _create_company(base_url, dab.auth_headers, "AdjacentPeriod")
     year = _unique_future_year(company_id, 3500)
-    fiscal_year_id = _create_fiscal_year(base_url, admin_headers, company_id, year)
+    fiscal_year_id = _create_fiscal_year(base_url, dab.auth_headers, company_id, year)
 
     jan = _create_fiscal_period(
-        base_url, admin_headers, company_id, fiscal_year_id,
+        base_url, dab.auth_headers, company_id, fiscal_year_id,
         1, f"Jan {year}", f"{year}-01-01", f"{year}-01-31",
     )
     assert jan.status_code == 201, jan.text
 
     feb = _create_fiscal_period(
-        base_url, admin_headers, company_id, fiscal_year_id,
+        base_url, dab.auth_headers, company_id, fiscal_year_id,
         2, f"Feb {year}", f"{year}-02-01", f"{year}-02-28",
     )
     assert feb.status_code == 201, feb.text
 
 
-def test_fiscal_period_same_dates_allowed_for_different_company(base_url, admin_headers):
-    company_a_id = _create_company(base_url, admin_headers, "PeriodCompanyA")
-    company_b_id = _create_company(base_url, admin_headers, "PeriodCompanyB")
+def test_fiscal_period_same_dates_allowed_for_different_company(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
+    company_a_id = _create_company(base_url, dab.auth_headers, "PeriodCompanyA")
+    company_b_id = _create_company(base_url, dab.auth_headers, "PeriodCompanyB")
     year = _unique_future_year(company_a_id, 4000)
-    fy_a_id = _create_fiscal_year(base_url, admin_headers, company_a_id, year)
-    fy_b_id = _create_fiscal_year(base_url, admin_headers, company_b_id, year)
+    fy_a_id = _create_fiscal_year(base_url, dab.auth_headers, company_a_id, year)
+    fy_b_id = _create_fiscal_year(base_url, dab.auth_headers, company_b_id, year)
 
     period_a = _create_fiscal_period(
-        base_url, admin_headers, company_a_id, fy_a_id,
+        base_url, dab.auth_headers, company_a_id, fy_a_id,
         1, f"Jan A {year}", f"{year}-01-01", f"{year}-01-31",
     )
     assert period_a.status_code == 201, period_a.text
 
     period_b = _create_fiscal_period(
-        base_url, admin_headers, company_b_id, fy_b_id,
+        base_url, dab.auth_headers, company_b_id, fy_b_id,
         1, f"Jan B {year}", f"{year}-01-01", f"{year}-01-31",
     )
     assert period_b.status_code == 201, period_b.text
 
 
-def test_fiscal_period_update_overlap_returns_409(base_url, admin_headers):
-    company_id = _create_company(base_url, admin_headers, "OverlapUpdate")
+def test_fiscal_period_update_overlap_returns_409(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
+    company_id = _create_company(base_url, dab.auth_headers, "OverlapUpdate")
     year = _unique_future_year(company_id, 4500)
-    fiscal_year_id = _create_fiscal_year(base_url, admin_headers, company_id, year)
+    fiscal_year_id = _create_fiscal_year(base_url, dab.auth_headers, company_id, year)
 
     jan = _create_fiscal_period(
-        base_url, admin_headers, company_id, fiscal_year_id,
+        base_url, dab.auth_headers, company_id, fiscal_year_id,
         1, f"Jan {year}", f"{year}-01-01", f"{year}-01-31",
     )
     assert jan.status_code == 201, jan.text
 
     feb = _create_fiscal_period(
-        base_url, admin_headers, company_id, fiscal_year_id,
+        base_url, dab.auth_headers, company_id, fiscal_year_id,
         2, f"Feb {year}", f"{year}-02-01", f"{year}-02-28",
     )
     assert feb.status_code == 201, feb.text
@@ -524,20 +550,21 @@ def test_fiscal_period_update_overlap_returns_409(base_url, admin_headers):
 
     overlap = requests.patch(
         f"{base_url}/fiscal-periods/{feb_id}",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         json={"start_date": f"{year}-01-15"},
     )
     assert overlap.status_code == 409
     assert "overlap" in overlap.text.lower()
 
 
-def test_quick_setup_creates_current_month_for_new_company(base_url, admin_headers):
-    company_id = _create_company(base_url, admin_headers, "QuickSetupCreate")
+def test_quick_setup_creates_current_month_for_new_company(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
+    company_id = _create_company(base_url, dab.auth_headers, "QuickSetupCreate")
     today, _, _ = _current_month_bounds()
 
     response = requests.post(
         f"{base_url}/fiscal/quick-setup-today",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         params={"company_id": company_id},
     )
     assert response.status_code == 200, response.text
@@ -549,19 +576,20 @@ def test_quick_setup_creates_current_month_for_new_company(base_url, admin_heade
     assert data["fiscal_period"]["start_date"] <= today.isoformat() <= data["fiscal_period"]["end_date"]
 
 
-def test_quick_setup_is_idempotent_for_new_company(base_url, admin_headers):
-    company_id = _create_company(base_url, admin_headers, "QuickSetupIdempotent")
+def test_quick_setup_is_idempotent_for_new_company(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
+    company_id = _create_company(base_url, dab.auth_headers, "QuickSetupIdempotent")
 
     first = requests.post(
         f"{base_url}/fiscal/quick-setup-today",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         params={"company_id": company_id},
     )
     assert first.status_code == 200, first.text
 
     second = requests.post(
         f"{base_url}/fiscal/quick-setup-today",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         params={"company_id": company_id},
     )
     assert second.status_code == 200, second.text
@@ -573,12 +601,13 @@ def test_quick_setup_is_idempotent_for_new_company(base_url, admin_headers):
     assert second_data["fiscal_period_created"] is False
 
 
-def test_quick_setup_does_not_reopen_closed_fiscal_period(base_url, admin_headers):
-    company_id = _create_company(base_url, admin_headers, "QuickSetupClosedPeriod")
+def test_quick_setup_does_not_reopen_closed_fiscal_period(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
+    company_id = _create_company(base_url, dab.auth_headers, "QuickSetupClosedPeriod")
     today, month_start, month_end = _current_month_bounds()
-    fiscal_year_id = _create_fiscal_year(base_url, admin_headers, company_id, today.year, "open")
+    fiscal_year_id = _create_fiscal_year(base_url, dab.auth_headers, company_id, today.year, "open")
     period = _create_fiscal_period(
-        base_url, admin_headers, company_id, fiscal_year_id,
+        base_url, dab.auth_headers, company_id, fiscal_year_id,
         today.month, f"Closed {today.strftime('%B %Y')}",
         month_start.isoformat(), month_end.isoformat(), "closed",
     )
@@ -587,7 +616,7 @@ def test_quick_setup_does_not_reopen_closed_fiscal_period(base_url, admin_header
 
     setup = requests.post(
         f"{base_url}/fiscal/quick-setup-today",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         params={"company_id": company_id},
     )
     assert setup.status_code == 409
@@ -595,21 +624,22 @@ def test_quick_setup_does_not_reopen_closed_fiscal_period(base_url, admin_header
 
     periods = requests.get(
         f"{base_url}/fiscal-periods?company_id={company_id}&fiscal_year_id={fiscal_year_id}",
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
     assert periods.status_code == 200
     stored = next(item for item in periods.json()["items"] if item["id"] == period_id)
     assert stored["status"] == "closed"
 
 
-def test_quick_setup_does_not_reopen_locked_fiscal_year(base_url, admin_headers):
-    company_id = _create_company(base_url, admin_headers, "QuickSetupLockedYear")
+def test_quick_setup_does_not_reopen_locked_fiscal_year(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
+    company_id = _create_company(base_url, dab.auth_headers, "QuickSetupLockedYear")
     today, _, _ = _current_month_bounds()
-    fiscal_year_id = _create_fiscal_year(base_url, admin_headers, company_id, today.year, "locked")
+    fiscal_year_id = _create_fiscal_year(base_url, dab.auth_headers, company_id, today.year, "locked")
 
     setup = requests.post(
         f"{base_url}/fiscal/quick-setup-today",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         params={"company_id": company_id},
     )
     assert setup.status_code == 409
@@ -617,7 +647,7 @@ def test_quick_setup_does_not_reopen_locked_fiscal_year(base_url, admin_headers)
 
     fiscal_years = requests.get(
         f"{base_url}/fiscal-years?company_id={company_id}",
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
     assert fiscal_years.status_code == 200
     stored = next(item for item in fiscal_years.json()["items"] if item["id"] == fiscal_year_id)
