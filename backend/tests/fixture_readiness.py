@@ -70,8 +70,6 @@ EXPECTED_HTTP_INTEGRATION_FILES = frozenset(
 EXPECTED_IMPLICIT_SEED_CONSUMERS = frozenset(
     {
         "api/test_company_user_invitations.py",
-        "test_ai_status.py",
-        "test_ai_suggestions.py",
         "test_assistant_conversations.py",
         "test_balance_sheet_multi_year.py",
         "test_dashboard_net_income.py",
@@ -105,6 +103,8 @@ EXPECTED_SELF_CONTAINED_HTTP_FILES = frozenset(
 
 EXPECTED_FACTORY_BACKED_HTTP_FILES = frozenset(
     {
+        "test_ai_status.py",
+        "test_ai_suggestions.py",
         "test_default_accounts_seed.py",
         "test_protected_accounts.py",
         "test_protected_fiscal.py",

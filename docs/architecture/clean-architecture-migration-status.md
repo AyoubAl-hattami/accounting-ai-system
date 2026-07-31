@@ -105,11 +105,14 @@ test-only factory foundation for replacing fixed IDs with generated users,
 companies, memberships, default accounts, fiscal periods, and optional journal
 data. `test_protected_reports.py`, `test_reports_smoke.py`,
 `test_report_csv_exports.py`, `test_report_pdf_exports.py`,
-`test_default_accounts_seed.py`, `test_protected_fiscal.py`, and
-`test_protected_accounts.py` are now factory-backed. `test_fiscal_management.py`
+`test_default_accounts_seed.py`, `test_protected_fiscal.py`,
+`test_protected_accounts.py`, `test_ai_status.py`, and
+`test_ai_suggestions.py` are now factory-backed. `test_fiscal_management.py`
 has been partially migrated (17 of 18 tests); one Gemini AI integration test is
-deferred and the file remains in the implicit-seed inventory. Full-suite CI still
-requires migrating the remaining 22 implicit-seed consumers to deterministic
+deferred. The three remaining Gemini assistant files
+(`test_gemini_assistant.py`, `test_gemini_assistant_explain.py`,
+`test_gemini_assistant_profit.py`) are deferred to Phase 19. Full-suite CI still
+requires migrating the remaining 20 implicit-seed consumers to deterministic
 factories with isolation and cleanup.
 
 ## Historical validation baseline

@@ -55,9 +55,9 @@ the full suite while the fixture contract is unresolved.
 The current inventory identifies:
 
 - 33 modules that make live HTTP requests to the configured API server.
-- 22 modules that consume the shared admin/company/account/fiscal seed contract.
+- 20 modules that consume the shared admin/company/account/fiscal seed contract.
 - 4 self-contained HTTP modules that create their own state or require no seed.
-- 7 factory-backed HTTP modules that create deterministic company/accounting
+- 9 factory-backed HTTP modules that create deterministic company/accounting
   state before calling the API.
 - 6 modules that directly use the application `SessionLocal` in addition to
   HTTP requests.
@@ -66,7 +66,7 @@ The current inventory identifies:
 
 Already deterministic unit, use-case, repository, architecture, and fixture-
 readiness tests can run without the historical seed snapshot. The four
-self-contained HTTP modules and seven factory-backed modules still require
+self-contained HTTP modules and nine factory-backed modules still require
 PostgreSQL and FastAPI, which CI now provides.
 
 `backend/tests/factories/accounting.py` provides the initial deterministic
@@ -89,6 +89,16 @@ depends on the Gemini AI assistant endpoint and fixed account IDs from the share
 seed; it is deferred until the Gemini assistant tests are migrated as a group.
 Because one test still consumes the shared seed, the file remains in the
 implicit-seed inventory and is not yet added to the CI subset.
+
+`backend/tests/test_ai_status.py` and `backend/tests/test_ai_suggestions.py`
+are now fully factory-backed and added to the CI subset. `test_ai_status.py`
+tests the `/ai/status` configuration endpoint with generated auth headers.
+`test_ai_suggestions.py` passes a synthetic `SAMPLE_ACCOUNTS` list as
+request-body input to `/ai/journal-suggestions`; the rules engine resolves
+debit/credit from that supplied list rather than from the database, so no shared
+seed accounts are required. The remaining Gemini assistant files
+(`test_gemini_assistant.py`, `test_gemini_assistant_explain.py`,
+`test_gemini_assistant_profit.py`) are deferred to Phase 19.
 
 Future fixture phases should migrate the remaining fixed row IDs to this
 factory pattern, adding posted journal history only where a test actually
@@ -123,6 +133,8 @@ python -m pytest -p no:cacheprovider `
   tests/test_default_accounts_seed.py `
   tests/test_protected_fiscal.py `
   tests/test_protected_accounts.py `
+  tests/test_ai_status.py `
+  tests/test_ai_suggestions.py `
   -v
 ```
 

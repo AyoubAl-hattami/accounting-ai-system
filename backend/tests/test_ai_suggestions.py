@@ -6,9 +6,10 @@ VALID_SOURCES = {
     "openai", "openai_fallback_rules", "llm_placeholder_fallback",
 }
 
-COMPANY_ID = 3
-
-# Sample accounts matching the default seeded chart of accounts
+# Sample accounts supplied as request-body input to the AI endpoint.
+# These IDs are local references within the supplied list only — the rules
+# engine selects debit/credit by matching account_type and name from this
+# list, not from the database.  No DB account state is required.
 SAMPLE_ACCOUNTS = [
     {
         "id": 1,
@@ -103,7 +104,7 @@ SAMPLE_ACCOUNTS = [
     },
 ]
 
-# Quick lookup: account_id → account_type string
+# Quick lookup: account_id → account_type string (within the supplied list above)
 _ACCOUNT_TYPE_MAP: dict[int, str] = {
     a["id"]: a["account_type"] for a in SAMPLE_ACCOUNTS
 }
@@ -115,10 +116,13 @@ def _account_type(account_id: int) -> str | None:
 
 
 def test_ai_suggestions_requires_authentication(base_url):
+    # company_id=1 is acceptable here: this is a pure auth-rejection test.
+    # No company membership or DB state is needed — the endpoint rejects
+    # unauthenticated requests before any company lookup.
     response = requests.post(
         f"{base_url}/ai/journal-suggestions",
         json={
-            "company_id": COMPANY_ID,
+            "company_id": 1,
             "description": "Paid rent from bank for 1000",
             "accounts": SAMPLE_ACCOUNTS,
             "language": "en",
@@ -128,16 +132,17 @@ def test_ai_suggestions_requires_authentication(base_url):
     assert response.status_code in (401, 403)
 
 
-def test_ai_suggestions_rent_intent(base_url, admin_headers):
+def test_ai_suggestions_rent_intent(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
     response = requests.post(
         f"{base_url}/ai/journal-suggestions",
         json={
-            "company_id": COMPANY_ID,
+            "company_id": dab.company_id,
             "description": "Paid rent from bank for 1000",
             "accounts": SAMPLE_ACCOUNTS,
             "language": "en",
         },
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 200
@@ -149,9 +154,9 @@ def test_ai_suggestions_rent_intent(base_url, admin_headers):
     assert data["amount"] == 1000.0
     assert data["source"] in VALID_SOURCES
 
-    # Debit should be Rent Expense (id=11)
+    # Debit should be Rent Expense (id=11 in SAMPLE_ACCOUNTS)
     assert data["debit_account_id"] == 11
-    # Credit should be Main Bank (id=2)
+    # Credit should be Main Bank (id=2 in SAMPLE_ACCOUNTS)
     assert data["credit_account_id"] == 2
 
     assert isinstance(data["explanation"], str)
@@ -159,16 +164,17 @@ def test_ai_suggestions_rent_intent(base_url, admin_headers):
     assert isinstance(data["warnings"], list)
 
 
-def test_ai_suggestions_sales_intent(base_url, admin_headers):
+def test_ai_suggestions_sales_intent(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
     response = requests.post(
         f"{base_url}/ai/journal-suggestions",
         json={
-            "company_id": COMPANY_ID,
+            "company_id": dab.company_id,
             "description": "Received sales income 2500 into bank",
             "accounts": SAMPLE_ACCOUNTS,
             "language": "en",
         },
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 200
@@ -179,22 +185,23 @@ def test_ai_suggestions_sales_intent(base_url, admin_headers):
     assert data["confidence"] == "high"
     assert data["amount"] == 2500.0
 
-    # Debit should be Main Bank (id=2)
+    # Debit should be Main Bank (id=2 in SAMPLE_ACCOUNTS)
     assert data["debit_account_id"] == 2
-    # Credit should be Sales Revenue (id=9)
+    # Credit should be Sales Revenue (id=9 in SAMPLE_ACCOUNTS)
     assert data["credit_account_id"] == 9
 
 
-def test_ai_suggestions_owner_investment_intent(base_url, admin_headers):
+def test_ai_suggestions_owner_investment_intent(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
     response = requests.post(
         f"{base_url}/ai/journal-suggestions",
         json={
-            "company_id": COMPANY_ID,
+            "company_id": dab.company_id,
             "description": "Owner invested 5000 into bank",
             "accounts": SAMPLE_ACCOUNTS,
             "language": "en",
         },
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 200
@@ -205,22 +212,23 @@ def test_ai_suggestions_owner_investment_intent(base_url, admin_headers):
     assert data["confidence"] == "high"
     assert data["amount"] == 5000.0
 
-    # Debit should be Main Bank (id=2)
+    # Debit should be Main Bank (id=2 in SAMPLE_ACCOUNTS)
     assert data["debit_account_id"] == 2
-    # Credit should be Owner Capital (id=7)
+    # Credit should be Owner Capital (id=7 in SAMPLE_ACCOUNTS)
     assert data["credit_account_id"] == 7
 
 
-def test_ai_suggestions_unknown_intent(base_url, admin_headers):
+def test_ai_suggestions_unknown_intent(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
     response = requests.post(
         f"{base_url}/ai/journal-suggestions",
         json={
-            "company_id": COMPANY_ID,
+            "company_id": dab.company_id,
             "description": "random text with no accounting keywords",
             "accounts": SAMPLE_ACCOUNTS,
             "language": "en",
         },
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 200
@@ -233,16 +241,17 @@ def test_ai_suggestions_unknown_intent(base_url, admin_headers):
     assert data["credit_account_id"] is None
 
 
-def test_ai_suggestions_no_amount_medium_confidence(base_url, admin_headers):
+def test_ai_suggestions_no_amount_medium_confidence(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
     response = requests.post(
         f"{base_url}/ai/journal-suggestions",
         json={
-            "company_id": COMPANY_ID,
+            "company_id": dab.company_id,
             "description": "Paid rent from bank",
             "accounts": SAMPLE_ACCOUNTS,
             "language": "en",
         },
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 200
@@ -259,16 +268,17 @@ def test_ai_suggestions_no_amount_medium_confidence(base_url, admin_headers):
     assert data["source"] in VALID_SOURCES
 
 
-def test_ai_suggestions_arabic_rent(base_url, admin_headers):
+def test_ai_suggestions_arabic_rent(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
     response = requests.post(
         f"{base_url}/ai/journal-suggestions",
         json={
-            "company_id": COMPANY_ID,
+            "company_id": dab.company_id,
             "description": "تم دفع الإيجار من البنك بمبلغ 1000",
             "accounts": SAMPLE_ACCOUNTS,
             "language": "ar",
         },
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 200
@@ -281,31 +291,33 @@ def test_ai_suggestions_arabic_rent(base_url, admin_headers):
     assert data["source"] in VALID_SOURCES
 
 
-def test_ai_suggestions_validates_empty_description(base_url, admin_headers):
+def test_ai_suggestions_validates_empty_description(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
     response = requests.post(
         f"{base_url}/ai/journal-suggestions",
         json={
-            "company_id": COMPANY_ID,
+            "company_id": dab.company_id,
             "description": "",
             "accounts": SAMPLE_ACCOUNTS,
             "language": "en",
         },
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 422
 
 
-def test_ai_suggestions_salary_intent(base_url, admin_headers):
+def test_ai_suggestions_salary_intent(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
     response = requests.post(
         f"{base_url}/ai/journal-suggestions",
         json={
-            "company_id": COMPANY_ID,
+            "company_id": dab.company_id,
             "description": "Paid salaries from bank for 3000",
             "accounts": SAMPLE_ACCOUNTS,
             "language": "en",
         },
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 200
@@ -318,23 +330,24 @@ def test_ai_suggestions_salary_intent(base_url, admin_headers):
 
     # Debit should be an expense account
     assert data["debit_account_id"] is not None
-    # Credit should be Main Bank (id=2)
+    # Credit should be Main Bank (id=2 in SAMPLE_ACCOUNTS)
     assert data["credit_account_id"] == 2
 
     assert isinstance(data["explanation"], str)
     assert len(data["explanation"]) > 0
 
 
-def test_ai_suggestions_equipment_purchase_intent(base_url, admin_headers):
+def test_ai_suggestions_equipment_purchase_intent(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
     response = requests.post(
         f"{base_url}/ai/journal-suggestions",
         json={
-            "company_id": COMPANY_ID,
+            "company_id": dab.company_id,
             "description": "Bought equipment from bank for 1200",
             "accounts": SAMPLE_ACCOUNTS,
             "language": "en",
         },
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 200
@@ -374,16 +387,17 @@ def test_ai_suggestions_equipment_purchase_intent(base_url, admin_headers):
         )
 
 
-def test_ai_suggestions_loan_received_intent(base_url, admin_headers):
+def test_ai_suggestions_loan_received_intent(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
     response = requests.post(
         f"{base_url}/ai/journal-suggestions",
         json={
-            "company_id": COMPANY_ID,
+            "company_id": dab.company_id,
             "description": "Received loan 10000 into bank",
             "accounts": SAMPLE_ACCOUNTS,
             "language": "en",
         },
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 200
@@ -394,22 +408,23 @@ def test_ai_suggestions_loan_received_intent(base_url, admin_headers):
     assert data["confidence"] in ("high", "medium")
     assert data["amount"] == 10000.0
 
-    # Debit should be Main Bank (id=2, asset increases)
+    # Debit should be Main Bank (id=2 in SAMPLE_ACCOUNTS, asset increases)
     assert data["debit_account_id"] == 2
     # Credit should be a liability account
     assert data["credit_account_id"] is not None
 
 
-def test_ai_suggestions_loan_payment_intent(base_url, admin_headers):
+def test_ai_suggestions_loan_payment_intent(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
     response = requests.post(
         f"{base_url}/ai/journal-suggestions",
         json={
-            "company_id": COMPANY_ID,
+            "company_id": dab.company_id,
             "description": "Paid loan from bank for 500",
             "accounts": SAMPLE_ACCOUNTS,
             "language": "en",
         },
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 200
@@ -440,16 +455,17 @@ def test_ai_suggestions_loan_payment_intent(base_url, admin_headers):
         )
 
 
-def test_ai_suggestions_arabic_sales_revenue(base_url, admin_headers):
+def test_ai_suggestions_arabic_sales_revenue(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
     response = requests.post(
         f"{base_url}/ai/journal-suggestions",
         json={
-            "company_id": COMPANY_ID,
+            "company_id": dab.company_id,
             "description": "تم استلام إيراد مبيعات 2500 في البنك",
             "accounts": SAMPLE_ACCOUNTS,
             "language": "ar",
         },
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 200
@@ -461,7 +477,7 @@ def test_ai_suggestions_arabic_sales_revenue(base_url, admin_headers):
     assert data["amount"] == 2500.0
     assert data["source"] in VALID_SOURCES
 
-    # Debit should be Main Bank (id=2)
+    # Debit should be Main Bank (id=2 in SAMPLE_ACCOUNTS)
     assert data["debit_account_id"] == 2
-    # Credit should be Sales Revenue (id=9)
+    # Credit should be Sales Revenue (id=9 in SAMPLE_ACCOUNTS)
     assert data["credit_account_id"] == 9

@@ -176,4 +176,6 @@ jobs:
             tests/test_default_accounts_seed.py \
             tests/test_protected_fiscal.py \
             tests/test_protected_accounts.py \
+            tests/test_ai_status.py \
+            tests/test_ai_suggestions.py \
             -v
