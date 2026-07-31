@@ -32,7 +32,8 @@ The backend workflow uses Ubuntu and Python 3.13. It:
 - Applies all Alembic migrations and verifies the current revision and a single
   migration head.
 - Starts FastAPI on `127.0.0.1:8010`, waits for `/health/db`, and runs the
-  self-contained health, authentication, rate-limit, and password-policy tests.
+  self-contained health, authentication, rate-limit, password-policy, and
+  deterministic protected-reports tests.
 
 The workflow uses only non-secret, job-local database credentials and sets the
 backend configuration explicitly. AI providers remain in deterministic rules
@@ -54,7 +55,7 @@ the full suite while the fixture contract is unresolved.
 The current inventory identifies:
 
 - 33 modules that make live HTTP requests to the configured API server.
-- 29 modules that consume the shared admin/company/account/fiscal seed contract.
+- 28 modules that consume the shared admin/company/account/fiscal seed contract.
 - 4 self-contained HTTP modules that create their own state or require no seed.
 - 6 modules that directly use the application `SessionLocal` in addition to
   HTTP requests.
@@ -63,15 +64,26 @@ The current inventory identifies:
 
 Already deterministic unit, use-case, repository, architecture, and fixture-
 readiness tests can run without the historical seed snapshot. The four
-self-contained HTTP modules still require PostgreSQL and FastAPI, which CI now
-provides.
+self-contained HTTP modules and migrated protected-reports module still require
+PostgreSQL and FastAPI, which CI now provides.
 
-The next fixture phase should replace fixed row IDs with session-scoped factory
-fixtures that create a unique administrator, company membership, chart of
-accounts, open fiscal year/period, and any required posted journal history.
-Tests must consume returned identifiers, isolate mutations per run, and clean
-up without depending on file order. Only after the inventory reaches zero
-should CI replace the health subset with `pytest tests -v`.
+`backend/tests/factories/accounting.py` provides the initial deterministic
+test-only factory layer. It creates unique users, companies, memberships,
+default chart-of-accounts rows, open fiscal years and periods, and optional
+balanced journal entries. Tests should consume returned objects or IDs from
+the `deterministic_accounting_bootstrap` fixture rather than assuming
+`admin@example.com`, company ID 3, account IDs 5 and 11, or fiscal year ID 2.
+
+`backend/tests/test_protected_reports.py` is the first migrated HTTP module.
+It now uses the factory-backed bootstrap for the authenticated trial-balance
+case and no longer depends on the shared company fixture.
+
+Future fixture phases should migrate the remaining fixed row IDs to this
+factory pattern, adding posted journal history only where a test actually
+asserts transaction or reporting behavior. Tests must consume returned
+identifiers, isolate mutations per run, and clean up without depending on file
+order. Only after the implicit-seed inventory reaches zero should CI replace
+the subset with `pytest tests -v`.
 
 ### CI-equivalent database readiness locally
 
@@ -92,6 +104,7 @@ python -m pytest -p no:cacheprovider `
   tests/test_auth.py `
   tests/test_auth_rate_limit.py `
   tests/test_password_policy.py `
+  tests/test_protected_reports.py `
   -v
 ```
 
@@ -203,7 +216,6 @@ current change.
 
 If full-suite CI is added later, it should extend the current PostgreSQL job and
 retain the same backend working directory, `PYTHONPATH`, dependency lock input,
-and full pytest command documented above. A deterministic fixture bootstrap,
-per-run isolation, and cleanup must replace assumptions about pre-existing row
-IDs. The readiness guard must be updated as each consumer is migrated; adding
-the bootstrap remains a separate behavior-preservation task.
+and full pytest command documented above. The deterministic factory bootstrap
+must be applied to the remaining shared-seed consumers with per-run isolation
+and cleanup. The readiness guard must be updated as each consumer is migrated.

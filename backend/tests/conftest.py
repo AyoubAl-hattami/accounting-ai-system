@@ -7,6 +7,7 @@ from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.modules.accounting.models.user import User
 from app.modules.accounting.services.auth_service import create_user_token
+from factories.accounting import AccountingTestFactory
 
 
 BASE_URL = os.getenv("ACCOUNTING_TEST_BASE_URL", "http://127.0.0.1:8010")
@@ -76,3 +77,18 @@ def superuser_headers():
     return {
         "Authorization": f"Bearer {token}",
     }
+
+
+@pytest.fixture
+def accounting_factory():
+    with SessionLocal() as db:
+        factory = AccountingTestFactory(db)
+        yield factory
+        db.rollback()
+
+
+@pytest.fixture
+def deterministic_accounting_bootstrap(accounting_factory):
+    bootstrap = accounting_factory.create_accounting_bootstrap()
+    accounting_factory.db.commit()
+    return bootstrap
