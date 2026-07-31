@@ -167,4 +167,6 @@ jobs:
             tests/test_reports_smoke.py \
             tests/test_report_csv_exports.py \
             tests/test_report_pdf_exports.py \
+            tests/test_default_accounts_seed.py \
+            tests/test_protected_fiscal.py \
             -v

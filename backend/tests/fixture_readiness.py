@@ -75,7 +75,6 @@ EXPECTED_IMPLICIT_SEED_CONSUMERS = frozenset(
         "test_assistant_conversations.py",
         "test_balance_sheet_multi_year.py",
         "test_dashboard_net_income.py",
-        "test_default_accounts_seed.py",
         "test_fiscal_management.py",
         "test_fiscal_year_date_protection.py",
         "test_gemini_assistant.py",
@@ -89,7 +88,6 @@ EXPECTED_IMPLICIT_SEED_CONSUMERS = frozenset(
         "test_protected_audit_logs.py",
         "test_protected_companies.py",
         "test_protected_company_users.py",
-        "test_protected_fiscal.py",
         "test_protected_journal_entries.py",
         "test_rbac_permission_matrix.py",
         "test_reset_script.py",
@@ -108,6 +106,8 @@ EXPECTED_SELF_CONTAINED_HTTP_FILES = frozenset(
 
 EXPECTED_FACTORY_BACKED_HTTP_FILES = frozenset(
     {
+        "test_default_accounts_seed.py",
+        "test_protected_fiscal.py",
         "test_protected_reports.py",
         "test_report_csv_exports.py",
         "test_report_pdf_exports.py",
