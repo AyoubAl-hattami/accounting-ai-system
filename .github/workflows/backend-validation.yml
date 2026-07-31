@@ -169,4 +169,5 @@ jobs:
             tests/test_report_pdf_exports.py \
             tests/test_default_accounts_seed.py \
             tests/test_protected_fiscal.py \
+            tests/test_protected_accounts.py \
             -v

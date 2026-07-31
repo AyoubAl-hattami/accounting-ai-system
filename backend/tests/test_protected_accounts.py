@@ -62,9 +62,9 @@ def _account_payload(company_id, code, **overrides):
     return payload
 
 
-def test_accounts_requires_authentication(base_url, default_company_id):
+def test_accounts_requires_authentication(base_url):
     response = requests.get(
-        f"{base_url}/accounts?company_id={default_company_id}",
+        f"{base_url}/accounts?company_id=1",
     )
 
     assert response.status_code in (401, 403)
@@ -72,12 +72,12 @@ def test_accounts_requires_authentication(base_url, default_company_id):
 
 def test_accounts_work_with_token(
     base_url,
-    admin_headers,
-    default_company_id,
+    deterministic_accounting_bootstrap,
 ):
+    dab = deterministic_accounting_bootstrap
     response = requests.get(
-        f"{base_url}/accounts?company_id={default_company_id}",
-        headers=admin_headers,
+        f"{base_url}/accounts?company_id={dab.company_id}",
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 200
@@ -100,12 +100,12 @@ def test_accounts_work_with_token(
 
 def test_accounts_pagination_metadata(
     base_url,
-    admin_headers,
-    default_company_id,
+    deterministic_accounting_bootstrap,
 ):
+    dab = deterministic_accounting_bootstrap
     response = requests.get(
-        f"{base_url}/accounts?company_id={default_company_id}&skip=0&limit=5",
-        headers=admin_headers,
+        f"{base_url}/accounts?company_id={dab.company_id}&skip=0&limit=5",
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 200
@@ -120,19 +120,19 @@ def test_accounts_pagination_metadata(
 
 def test_authorized_user_can_get_account_by_id(
     base_url,
-    admin_headers,
-    default_company_id,
+    deterministic_accounting_bootstrap,
 ):
+    dab = deterministic_accounting_bootstrap
     list_response = requests.get(
-        f"{base_url}/accounts?company_id={default_company_id}&limit=1",
-        headers=admin_headers,
+        f"{base_url}/accounts?company_id={dab.company_id}&limit=1",
+        headers=dab.auth_headers,
     )
     assert list_response.status_code == 200
     account = list_response.json()["items"][0]
 
     response = requests.get(
         f"{base_url}/accounts/{account['id']}",
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 200
@@ -141,11 +141,12 @@ def test_authorized_user_can_get_account_by_id(
 
 def test_get_account_by_id_returns_existing_not_found_error(
     base_url,
-    admin_headers,
+    deterministic_accounting_bootstrap,
 ):
+    dab = deterministic_accounting_bootstrap
     response = requests.get(
         f"{base_url}/accounts/2147483647",
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
 
     assert response.status_code == 404
@@ -154,8 +155,9 @@ def test_get_account_by_id_returns_existing_not_found_error(
 
 def test_get_account_by_id_authorizes_after_global_lookup(
     base_url,
-    admin_headers,
+    deterministic_accounting_bootstrap,
 ):
+    dab = deterministic_accounting_bootstrap
     company_id: int | None = None
     account_id: int | None = None
 
@@ -183,7 +185,7 @@ def test_get_account_by_id_authorizes_after_global_lookup(
     try:
         response = requests.get(
             f"{base_url}/accounts/{account_id}",
-            headers=admin_headers,
+            headers=dab.auth_headers,
         )
 
         assert response.status_code == 403
@@ -200,9 +202,10 @@ def test_get_account_by_id_authorizes_after_global_lookup(
 
 def test_create_account_contract_normalization_and_read_pilots(
     base_url,
-    admin_headers,
+    deterministic_accounting_bootstrap,
 ):
-    company_id = _create_company(base_url, admin_headers, "Account create")
+    dab = deterministic_accounting_bootstrap
+    company_id = _create_company(base_url, dab.auth_headers, "Account create")
     code = f"  {uuid.uuid4().hex[:12]}  "
     payload = _account_payload(
         company_id,
@@ -214,7 +217,7 @@ def test_create_account_contract_normalization_and_read_pilots(
 
     response = requests.post(
         f"{base_url}/accounts",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         json=payload,
     )
 
@@ -242,7 +245,7 @@ def test_create_account_contract_normalization_and_read_pilots(
 
     list_response = requests.get(
         f"{base_url}/accounts?company_id={company_id}",
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
     assert list_response.status_code == 200
     assert account["id"] in {
@@ -251,7 +254,7 @@ def test_create_account_contract_normalization_and_read_pilots(
 
     get_response = requests.get(
         f"{base_url}/accounts/{account['id']}",
-        headers=admin_headers,
+        headers=dab.auth_headers,
     )
     assert get_response.status_code == 200
     assert get_response.json() == account
@@ -259,31 +262,32 @@ def test_create_account_contract_normalization_and_read_pilots(
 
 def test_create_account_preserves_validation_errors(
     base_url,
-    admin_headers,
+    deterministic_accounting_bootstrap,
     superuser_headers,
 ):
+    dab = deterministic_accounting_bootstrap
     first_company_id = _create_company(
         base_url,
-        admin_headers,
+        dab.auth_headers,
         "Account validation first",
     )
     second_company_id = _create_company(
         base_url,
-        admin_headers,
+        dab.auth_headers,
         "Account validation second",
     )
     code = uuid.uuid4().hex[:12]
 
     created = requests.post(
         f"{base_url}/accounts",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         json=_account_payload(first_company_id, code),
     )
     assert created.status_code == 201
 
     duplicate = requests.post(
         f"{base_url}/accounts",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         json=_account_payload(first_company_id, f" {code} "),
     )
     assert duplicate.status_code == 409
@@ -293,14 +297,14 @@ def test_create_account_preserves_validation_errors(
 
     same_code_other_company = requests.post(
         f"{base_url}/accounts",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         json=_account_payload(second_company_id, code),
     )
     assert same_code_other_company.status_code == 201
 
     system_account = requests.post(
         f"{base_url}/accounts",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         json=_account_payload(
             first_company_id,
             uuid.uuid4().hex[:12],
@@ -316,7 +320,7 @@ def test_create_account_preserves_validation_errors(
 
     missing_parent = requests.post(
         f"{base_url}/accounts",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         json=_account_payload(
             first_company_id,
             uuid.uuid4().hex[:12],
@@ -328,7 +332,7 @@ def test_create_account_preserves_validation_errors(
 
     cross_company_parent = requests.post(
         f"{base_url}/accounts",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         json=_account_payload(
             first_company_id,
             uuid.uuid4().hex[:12],
@@ -351,9 +355,10 @@ def test_create_account_preserves_validation_errors(
 
 def test_create_account_role_and_inactive_user_compatibility(
     base_url,
-    admin_headers,
+    deterministic_accounting_bootstrap,
 ):
-    company_id = _create_company(base_url, admin_headers, "Account roles")
+    dab = deterministic_accounting_bootstrap
+    company_id = _create_company(base_url, dab.auth_headers, "Account roles")
 
     accountant_response = requests.post(
         f"{base_url}/accounts",
@@ -385,18 +390,19 @@ def test_create_account_role_and_inactive_user_compatibility(
     assert inactive_response.json() == {"detail": "Inactive user"}
 
 
-def test_update_account_contract_partial_normalization_and_explicit_parent_clear(base_url, admin_headers):
-    company_id = _create_company(base_url, admin_headers, "Account update")
-    parent = requests.post(f"{base_url}/accounts", headers=admin_headers, json=_account_payload(company_id, uuid.uuid4().hex[:12], name="Parent"))
+def test_update_account_contract_partial_normalization_and_explicit_parent_clear(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
+    company_id = _create_company(base_url, dab.auth_headers, "Account update")
+    parent = requests.post(f"{base_url}/accounts", headers=dab.auth_headers, json=_account_payload(company_id, uuid.uuid4().hex[:12], name="Parent"))
     assert parent.status_code == 201
-    created = requests.post(f"{base_url}/accounts", headers=admin_headers, json=_account_payload(company_id, uuid.uuid4().hex[:12], name="Before", parent_id=parent.json()["id"], description="before description"))
+    created = requests.post(f"{base_url}/accounts", headers=dab.auth_headers, json=_account_payload(company_id, uuid.uuid4().hex[:12], name="Before", parent_id=parent.json()["id"], description="before description"))
     assert created.status_code == 201
     before = created.json()
     proposed_code = uuid.uuid4().hex[:12]
 
     response = requests.patch(
         f"{base_url}/accounts/{before['id']}",
-        headers=admin_headers,
+        headers=dab.auth_headers,
         json={"code": f"  {proposed_code}  ", "name": "  After  ", "description": "  unchanged spacing  ", "parent_id": None},
     )
 
@@ -411,34 +417,36 @@ def test_update_account_contract_partial_normalization_and_explicit_parent_clear
         assert updated[field] == before[field]
 
 
-def test_update_account_preserves_validation_errors_and_same_code_reuse(base_url, admin_headers):
-    first_company = _create_company(base_url, admin_headers, "Update validation first")
-    second_company = _create_company(base_url, admin_headers, "Update validation second")
-    first = requests.post(f"{base_url}/accounts", headers=admin_headers, json=_account_payload(first_company, uuid.uuid4().hex[:12]))
-    duplicate = requests.post(f"{base_url}/accounts", headers=admin_headers, json=_account_payload(first_company, uuid.uuid4().hex[:12]))
-    other = requests.post(f"{base_url}/accounts", headers=admin_headers, json=_account_payload(second_company, uuid.uuid4().hex[:12]))
+def test_update_account_preserves_validation_errors_and_same_code_reuse(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
+    first_company = _create_company(base_url, dab.auth_headers, "Update validation first")
+    second_company = _create_company(base_url, dab.auth_headers, "Update validation second")
+    first = requests.post(f"{base_url}/accounts", headers=dab.auth_headers, json=_account_payload(first_company, uuid.uuid4().hex[:12]))
+    duplicate = requests.post(f"{base_url}/accounts", headers=dab.auth_headers, json=_account_payload(first_company, uuid.uuid4().hex[:12]))
+    other = requests.post(f"{base_url}/accounts", headers=dab.auth_headers, json=_account_payload(second_company, uuid.uuid4().hex[:12]))
     assert first.status_code == duplicate.status_code == other.status_code == 201
     account = first.json()
 
-    same = requests.patch(f"{base_url}/accounts/{account['id']}", headers=admin_headers, json={"code": f" {account['code']} "})
+    same = requests.patch(f"{base_url}/accounts/{account['id']}", headers=dab.auth_headers, json={"code": f" {account['code']} "})
     assert same.status_code == 200
-    conflict = requests.patch(f"{base_url}/accounts/{account['id']}", headers=admin_headers, json={"code": duplicate.json()["code"]})
+    conflict = requests.patch(f"{base_url}/accounts/{account['id']}", headers=dab.auth_headers, json={"code": duplicate.json()["code"]})
     assert conflict.status_code == 409
     assert conflict.json() == {"detail": "Account code already exists for this company"}
-    self_parent = requests.patch(f"{base_url}/accounts/{account['id']}", headers=admin_headers, json={"parent_id": account["id"]})
+    self_parent = requests.patch(f"{base_url}/accounts/{account['id']}", headers=dab.auth_headers, json={"parent_id": account["id"]})
     assert self_parent.status_code == 400
     assert self_parent.json() == {"detail": "Account cannot be its own parent"}
-    missing_parent = requests.patch(f"{base_url}/accounts/{account['id']}", headers=admin_headers, json={"parent_id": 2147483647})
+    missing_parent = requests.patch(f"{base_url}/accounts/{account['id']}", headers=dab.auth_headers, json={"parent_id": 2147483647})
     assert missing_parent.status_code == 404
     assert missing_parent.json() == {"detail": "Parent account not found"}
-    cross_parent = requests.patch(f"{base_url}/accounts/{account['id']}", headers=admin_headers, json={"parent_id": other.json()["id"]})
+    cross_parent = requests.patch(f"{base_url}/accounts/{account['id']}", headers=dab.auth_headers, json={"parent_id": other.json()["id"]})
     assert cross_parent.status_code == 400
     assert cross_parent.json() == {"detail": "Parent account must belong to the same company"}
 
 
-def test_update_account_role_inactive_missing_and_company_access_compatibility(base_url, admin_headers):
-    company_id = _create_company(base_url, admin_headers, "Update roles")
-    created = requests.post(f"{base_url}/accounts", headers=admin_headers, json=_account_payload(company_id, uuid.uuid4().hex[:12]))
+def test_update_account_role_inactive_missing_and_company_access_compatibility(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
+    company_id = _create_company(base_url, dab.auth_headers, "Update roles")
+    created = requests.post(f"{base_url}/accounts", headers=dab.auth_headers, json=_account_payload(company_id, uuid.uuid4().hex[:12]))
     assert created.status_code == 201
     account_id = created.json()["id"]
     accountant = requests.patch(f"{base_url}/accounts/{account_id}", headers=_headers_for_company_role(company_id, "accountant"), json={"name": "Accountant update"})
@@ -449,13 +457,14 @@ def test_update_account_role_inactive_missing_and_company_access_compatibility(b
     inactive = requests.patch(f"{base_url}/accounts/{account_id}", headers=_headers_for_company_role(company_id, "accountant", is_active=False), json={"name": "Denied"})
     assert inactive.status_code == 403
     assert inactive.json() == {"detail": "Inactive user"}
-    missing = requests.patch(f"{base_url}/accounts/2147483647", headers=admin_headers, json={"name": "Missing"})
+    missing = requests.patch(f"{base_url}/accounts/2147483647", headers=dab.auth_headers, json={"name": "Missing"})
     assert missing.status_code == 404
     assert missing.json() == {"detail": "Account not found"}
 
 
-def test_update_system_account_protected_presence_and_allowed_fields(base_url, admin_headers):
-    company_id = _create_company(base_url, admin_headers, "Update system")
+def test_update_system_account_protected_presence_and_allowed_fields(base_url, deterministic_accounting_bootstrap):
+    dab = deterministic_accounting_bootstrap
+    company_id = _create_company(base_url, dab.auth_headers, "Update system")
     with SessionLocal() as db:
         account = Account(company_id=company_id, code=uuid.uuid4().hex[:12], name="System before", account_type="asset", description="before", is_active=True, is_system=True)
         db.add(account)
@@ -464,13 +473,13 @@ def test_update_system_account_protected_presence_and_allowed_fields(base_url, a
         account_id = account.id
         code = account.code
 
-    protected = requests.patch(f"{base_url}/accounts/{account_id}", headers=admin_headers, json={"code": code, "parent_id": None, "is_active": True})
+    protected = requests.patch(f"{base_url}/accounts/{account_id}", headers=dab.auth_headers, json={"code": code, "parent_id": None, "is_active": True})
     assert protected.status_code == 400
     assert protected.json() == {"detail": "System accounts cannot update protected fields: code, is_active, parent_id"}
-    unchanged = requests.patch(f"{base_url}/accounts/{account_id}", headers=admin_headers, json={"is_system": True})
+    unchanged = requests.patch(f"{base_url}/accounts/{account_id}", headers=dab.auth_headers, json={"is_system": True})
     assert unchanged.status_code == 400
     assert unchanged.json() == {"detail": "System accounts cannot update protected fields: is_system"}
-    allowed = requests.patch(f"{base_url}/accounts/{account_id}", headers=admin_headers, json={"name": "System after", "description": "allowed"})
+    allowed = requests.patch(f"{base_url}/accounts/{account_id}", headers=dab.auth_headers, json={"name": "System after", "description": "allowed"})
     assert allowed.status_code == 200
     assert allowed.json()["name"] == "System after"
     assert allowed.json()["description"] == "allowed"
