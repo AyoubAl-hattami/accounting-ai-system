@@ -1,23 +1,26 @@
 """
-Abstract base class for AI journal suggestion providers.
+Base class for AI journal suggestion providers.
 
-All providers must implement the suggest_journal_entry method
-and return a result dict matching JournalSuggestionResponse fields.
+.. deprecated::
+    Use the ``JournalSuggestionProvider`` Protocol from
+    ``app.application.ai.ports`` for new provider implementations.
+    New providers should be placed in ``app/infrastructure/ai/providers/``.
+    This ABC shim is retained for the existing provider subclasses.
 """
 
 from abc import ABC, abstractmethod
 
-from app.modules.accounting.schemas.ai_suggestion_schemas import AccountInfo
+from app.application.ai.dto import AccountInfoDTO
 
 
 class BaseJournalSuggestionProvider(ABC):
-    """Base class for all journal suggestion providers."""
+    """Base class for all journal suggestion providers (legacy ABC shim)."""
 
     @abstractmethod
     def suggest_journal_entry(
         self,
         description: str,
-        accounts: list[AccountInfo],
+        accounts: list[AccountInfoDTO],
         language: str = "en",
     ) -> dict:
         """

@@ -1,18 +1,21 @@
 # Transaction Boundaries
 
-## Ownership rule
+## Ratified ownership rule (Phase 29)
 
-An application mutation use case owns one unit-of-work boundary.
+**Routes own the final transaction commit.**  No unit-of-work port will be
+introduced.
 
 ```text
 FastAPI route
-  -> application use case
-       -> repositories stage business changes
-       -> audit repository stages required audit event
-       -> unit of work commits once
+  -> assembles repositories and use cases
+  -> invokes application use case (coordinates business logic, no commit)
+       -> repositories stage changes (flush for identifiers; no commit)
+       -> audit helper stages required audit event
+  -> route commits (or rolls back) once
 ```
 
-Routes, domain code, and repositories do not commit.
+Application use cases orchestrate business logic and coordinate repositories.
+They do not own or call `commit()`.  The route is the single commit point.
 
 ## Layer responsibilities
 
@@ -20,13 +23,16 @@ Routes, domain code, and repositories do not commit.
 
 Routes:
 
-- Obtain authentication, company, and request context.
-- Convert a Pydantic payload to an application command.
-- Invoke a use case.
-- Translate errors and serialize results.
+- Authenticate requests and extract actor context.
+- Enforce company access and RBAC.
+- Convert Pydantic payloads to application commands.
+- Invoke the primary application use case.
+- Write required audit records via `audit_service`.
+- Call `db.commit()` once after all business and audit work is staged.
+- Translate domain/application errors into stable HTTP responses and serialize
+  results.
 
-Routes must not call `commit()` or decide whether a business mutation and its
-audit record should share a transaction.
+Routes are the composition root and the transaction owner.
 
 ### Domain
 
@@ -53,13 +59,16 @@ Repositories:
 
 Application use cases:
 
-- Define the mutation boundary.
-- Coordinate authorization, repositories, domain policy, and audit events.
-- Commit through a unit-of-work port after all required work is staged.
-- Roll back the complete transaction on any failure.
+- Define the mutation boundary in business terms.
+- Coordinate authorization inputs, repositories, domain policy, and audit
+  events.
+- Return a stable result DTO or raise a domain/application error.
+- Must not import FastAPI, SQLAlchemy sessions, Pydantic API schemas, or
+  external AI SDKs.
+- Must not call `commit()`, `flush()`, `add()`, or `delete()` on a database
+  session.
 
-The concrete unit of work owns the SQLAlchemy session lifecycle and implements
-commit and rollback behavior.
+Committing is the route's responsibility, not the use case's.
 
 ## Required audit atomicity
 
@@ -69,8 +78,10 @@ For business operations requiring an audit record:
 business mutation + required audit record = one transaction
 ```
 
-If the audit record cannot be persisted, the business mutation must not commit.
-If the business mutation fails, no success audit record may remain.
+Because the route owns `commit()`, it is responsible for ensuring both the
+business mutation and the required audit record are staged before committing.
+If the audit record cannot be persisted, the route must not commit.  If the
+business mutation fails, no success audit record may remain.
 
 This applies especially to:
 
@@ -92,32 +103,32 @@ A repository may flush to:
 - Surface a unique or foreign-key violation before creating dependent records.
 - Synchronize a relationship required later in the same transaction.
 
-A flush is not a successful business transaction. API success must only be
-returned after the unit of work commits.
+A flush is not a successful business transaction.  API success must only be
+returned after the route commits.
 
-When a flush fails, the unit of work must roll back before the session is reused.
+When a flush fails, the route must roll back before the session is reused.
 Infrastructure exceptions should be translated to stable application errors at
 the repository or use-case boundary.
 
 ## Read-only operations
 
-Queries do not require an explicit business commit. Report and listing use cases
-should use read-oriented repository or report-reader ports. They must still
-respect company scope, authorization, and a consistent view appropriate to the
-request.
+Queries do not require an explicit business commit.  Report and listing use
+cases should use read-oriented repository or report-reader ports.  They must
+still respect company scope, authorization, and a consistent view appropriate
+to the request.
 
-## Migration from the current design
+## Migration guidance
 
-Current code includes commits, flushes, and rollbacks across service and audit
-helpers, with routes participating in transaction completion. Migration must be
-caller-driven:
+Existing service and audit helpers may contain internal commits.  The migration
+strategy is:
 
 1. Inventory every service mutation and every caller.
 2. Record whether it currently commits, flushes, refreshes, or rolls back.
 3. Add focused atomicity tests for success and failure.
-4. Introduce a unit-of-work wrapper over the existing SQLAlchemy session.
-5. Migrate one endpoint/use case at a time.
-6. Remove the old commit only when every caller uses the new boundary.
+4. Migrate one endpoint/use case at a time.
+5. Move the commit point to the route.
+6. Remove internal commits from helpers only when the route fully controls the
+   transaction.
 7. Keep business mutation and required audit persistence in the same migration
    slice.
 

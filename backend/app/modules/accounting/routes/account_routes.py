@@ -33,7 +33,7 @@ from app.modules.accounting.services.accounting_lookup_facade import (
     get_account_by_code,
     get_company_or_none,
 )
-from app.modules.accounting.services.audit_service import create_atomic_audit_log
+from app.modules.accounting.services.audit_service import prepare_audit_log
 
 
 router = APIRouter(
@@ -113,7 +113,7 @@ def create_account_endpoint(
     repository = SqlAlchemyAccountRepository(db)
     account = CreateAccount(repository).execute(command)
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=account.company_id,
         actor=current_user.email,
@@ -125,6 +125,7 @@ def create_account_endpoint(
         entity_id=account.id,
         description=f"Created account {account.code} - {account.name}",
     )
+    db.commit()
 
     return account
 
@@ -184,7 +185,7 @@ def seed_default_accounts_endpoint(
     repository = SqlAlchemyAccountRepository(db)
     result = SeedDefaultAccounts(repository).execute(command)
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=company_id,
         actor=current_user.email,
@@ -199,6 +200,7 @@ def seed_default_accounts_endpoint(
             f"{result.created_count} created, {result.skipped_count} skipped"
         ),
     )
+    db.commit()
 
     return result
 
@@ -332,7 +334,7 @@ def update_account_endpoint(
     repository = SqlAlchemyAccountRepository(db)
     updated = UpdateAccount(repository).execute(command)
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=updated.company_id,
         actor=current_user.email,
@@ -350,5 +352,6 @@ def update_account_endpoint(
             "is_active": updated.is_active,
         },
     )
+    db.commit()
 
     return updated

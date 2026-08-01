@@ -1,10 +1,26 @@
 # Backend Target Architecture
 
+## Ratified architectural decisions (Phase 29)
+
+1. **Routes own the final transaction commit.**  No unit-of-work port will be
+   introduced.  Routes own auth, RBAC, HTTP translation, audit write, and the
+   final `db.commit()` / `db.rollback()`.
+2. **No directory relocations.**  `routes/`, `models/`, and `schemas/` stay
+   under `app/modules/accounting/`.  Boundaries are enforced by import rules
+   and guards, not file movement.
+3. **Application layer is framework-neutral.**  No FastAPI, SQLAlchemy ORM,
+   Pydantic API schemas, infrastructure adapters, or external AI SDKs may be
+   imported by application code.
+4. **Repositories never commit.**  Repositories may `flush()` when a generated
+   identifier or constraint result is required; they do not `commit()`.
+5. **Routes are the composition root.**  Routes assemble repositories and use
+   cases; inner layers do not locate their own adapters.
+
 ## Target structure
 
 ```text
 backend/app/
-  domain/
+  domain/                    ← reserved; currently contains only READMEs
     accounting/
     fiscal/
     identity/
@@ -26,10 +42,9 @@ backend/app/
   infrastructure/
     database/
       sqlalchemy/
-        models/
+        models/              ← shared with modules/accounting/models (no move)
         repositories/
         mappers/
-        unit_of_work.py
     ai/
       rules/
       gemini/
@@ -38,12 +53,11 @@ backend/app/
     audit/
     exports/
 
-  interfaces/
-    api/
-      routes/
-      schemas/
-      dependencies/
-      error_handlers.py
+  modules/accounting/        ← stays here; no directory relocation planned
+    routes/
+    models/
+    schemas/
+    services/                ← migrated incrementally; deleted when empty
 
   core/
     config.py
@@ -51,14 +65,20 @@ backend/app/
     logging.py
 ```
 
-This structure should emerge incrementally. Existing
-`modules/accounting/{models,routes,schemas,services}` files remain in place until
-their callers have migrated and behavioral parity is demonstrated.
+`modules/accounting/{routes,models,schemas}` remain in place throughout the
+migration.  Only `services/` is scheduled for eventual deletion once all
+remaining service consumers are migrated to use cases and infrastructure
+adapters.
+
+The `domain/` subtree is reserved for future policy extraction and currently
+contains only README placeholder files — no `.py` files.
 
 ## Domain
 
-The domain represents accounting and business policy without FastAPI,
-SQLAlchemy, Pydantic API schemas, or AI SDKs.
+The domain layer is reserved for accounting and business policy without
+FastAPI, SQLAlchemy, Pydantic API schemas, or AI SDKs.  It has not been
+populated with Python modules; migration toward it is incremental and optional
+for simple slices.
 
 Project-specific domain responsibilities include:
 
@@ -68,13 +88,7 @@ Project-specific domain responsibilities include:
 - Fiscal-year and open-period eligibility.
 - Opening-balance policy.
 - Account eligibility and accounting classification.
-- Company membership and invitation lifecycle policies where they are not merely
-  persistence constraints.
-- Normalized identity values such as email.
 - Framework-neutral domain errors and audit-event descriptions.
-
-Domain services should be used only for rules spanning multiple entities or
-value objects. They must not become a replacement miscellaneous service layer.
 
 ## Application
 
@@ -96,14 +110,18 @@ Examples:
 
 A mutation use case should:
 
-1. Receive authenticated actor and company context from the interface.
+1. Receive authenticated actor and company context from the route.
 2. Apply application authorization policy.
 3. Load data through repository ports.
 4. Invoke domain policies.
-5. Persist through repositories.
-6. Register the required audit record.
-7. Commit once through the unit of work.
-8. Return a stable result DTO or raise a domain/application error.
+5. Stage changes through repositories (repositories flush; do not commit).
+6. Stage the required audit record.
+7. Return a stable result DTO or raise a domain/application error.
+
+The route receives the result and calls `db.commit()` once.
+
+Application code must not import FastAPI, SQLAlchemy sessions, Pydantic API
+schemas, external AI SDKs, or concrete infrastructure adapters.
 
 ## Infrastructure
 
@@ -111,10 +129,9 @@ Infrastructure contains replaceable technical implementations:
 
 - Existing SQLAlchemy models and relationship mappings.
 - PostgreSQL repository adapters and row-locking behavior.
-- The concrete SQLAlchemy unit of work.
 - Gemini and OpenAI SDK clients.
 - Deterministic rules-provider adapter.
-- Password hashing, token implementations, and external security mechanisms.
+- Password hashing and token implementations.
 - Audit-log persistence.
 - CSV and PDF report exporters.
 - Concrete clocks or external services when required.
@@ -122,7 +139,7 @@ Infrastructure contains replaceable technical implementations:
 Infrastructure implements application ports; application code must not import
 the concrete classes.
 
-## Interfaces/API
+## Interfaces/API (routes)
 
 The API layer owns:
 
@@ -131,12 +148,16 @@ The API layer owns:
 - Pydantic request/response schemas.
 - Query/path/header parsing.
 - Application command construction.
+- Company access and RBAC enforcement.
+- Audit record writes.
+- `db.commit()` / `db.rollback()` — the final transaction boundary.
 - Domain/application error to HTTP response mapping.
 - Stable API serialization.
 
-Routes should be thin. A route should not independently implement journal
-balance checks, legal transitions, report formulas, provider fallback, or
-transaction commits.
+Routes are deliberately not thin in this design: they own the transaction
+boundary by ratified decision.  They should not, however, independently
+implement journal balance rules, legal transitions, report formulas, or
+provider fallback logic.
 
 ## Core
 
@@ -158,10 +179,8 @@ Do not replace the current ORM model set in one migration.
 3. Introduce repository ports around existing queries.
 4. Allow transitional adapters to return ORM instances internally if necessary.
 5. Extract pure policies from ORM-dependent services.
-6. Introduce separate domain entities only where rich behavior justifies their
-   mapping cost, especially journal aggregates and fiscal policy.
 
-Alembic must continue to import infrastructure persistence metadata. Moving a
+Alembic must continue to import infrastructure persistence metadata.  Moving a
 Python model is not permission to rewrite migration history.
 
 ## Pydantic schema strategy
@@ -172,21 +191,20 @@ Pydantic models remain API contracts:
   schemas.
 - API schemas are translated to application command/query DTOs.
 - Business eligibility and lifecycle decisions move to domain/application code.
-- Identity normalization should use a shared value object or policy rather than
-  being reimplemented by every route or schema.
 - Response schemas must preserve existing field names and formats throughout the
   migration.
 
 ## Transaction strategy
 
-Application use cases own transaction boundaries through a unit of work.
-Routes, domain objects, and repositories do not commit. Repositories may flush
-when an identifier or database constraint result is required.
+**Routes own the final transaction commit** by ratified architectural decision.
+No unit-of-work port will be introduced.
 
-The transition must start by mapping every current commit/flush caller.
-Changing transaction ownership without changing all callers atomically is a
-high-risk operation, particularly for journal, invitation, user administration,
-and audit flows.
+Application use cases coordinate business logic and stage changes through
+repositories.  They do not call `commit()`.  The route commits once after the
+use case returns and any required audit record is staged.
+
+Repositories may `flush()` when a generated identifier or database constraint
+result is required.  They must not `commit()`.
 
 See [Transaction Boundaries](transaction-boundaries.md).
 
@@ -194,21 +212,18 @@ See [Transaction Boundaries](transaction-boundaries.md).
 
 Required audit events are part of a business mutation:
 
-- The use case describes the audit event.
-- The audit repository stages it in the same unit of work.
-- Business data and audit data commit together.
+- The route or use case describes the audit event.
+- The audit helper (`audit_service.create_audit_log`) stages it before the
+  route commits.
+- Business data and audit data commit together in the route's transaction.
 - Failure to persist a required audit record rolls back the mutation.
 
 Operational telemetry and application logs are separate and need not share the
 business transaction.
 
-Existing atomicity must be preserved while responsibility moves away from route
-helpers.
-
 ## Report calculation strategy
 
-The former report service combined SQL and accounting semantics. The migrated
-report slice now uses:
+The report slice uses:
 
 - Application report queries for authorization and requested scope.
 - Report-reader ports returning defined projections.
@@ -216,26 +231,22 @@ report slice now uses:
 - Pure calculators/classifiers for testable accounting rules where practical.
 - Separate API, CSV, and PDF presenters.
 
-SQL aggregation is not an architectural failure. It becomes a problem only when
-database mechanics, business meaning, permissions, and presentation cannot be
-tested or changed independently.
+SQL aggregation is not an architectural failure.  It becomes a problem only
+when database mechanics, business meaning, permissions, and presentation cannot
+be tested or changed independently.
 
 ## AI provider strategy
 
-Application ports should describe capabilities, not vendors:
+Application ports describe capabilities, not vendors:
 
 - `JournalSuggestionProvider`
 - `IntentClassifier`
 - `AccountingAnswerGenerator`
 
-Gemini, OpenAI, and rules implementations belong in infrastructure. Prompt
+Gemini, OpenAI, and rules implementations belong in infrastructure.  Prompt
 construction, SDK calls, provider parsing, and provider-specific validation
-remain with adapters. Grounding, permission checks, company scoping, and
+remain with adapters.  Grounding, permission checks, company scoping, and
 confirmed mutations remain in application.
-
-The current provider base and deterministic fallback are foundations to retain,
-but the large Gemini assistant service should be decomposed behind its current
-API facade rather than rewritten wholesale.
 
 ## High-risk areas retained after migration
 
@@ -245,7 +256,7 @@ API facade rather than rewritten wholesale.
 - `ai_routes.py`
 - `audit_service.py`
 - Any route that currently owns a final commit or rollback.
-- Alembic metadata imports
+- Alembic metadata imports.
 
 These areas require focused compatibility and atomicity verification before
 future changes.

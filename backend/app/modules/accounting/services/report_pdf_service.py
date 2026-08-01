@@ -1,12 +1,12 @@
 """
 PDF formatting utilities for accounting reports.
 
-Uses ReportLab to generate professional PDF documents from report data
-structures produced by the reports application seam. All accounting logic is
-delegated to report use cases; this module only handles layout and
-rendering.
+.. deprecated::
+    Superseded by ``infrastructure.exports.pdf_renderer`` (Phase 32).
+    Routes now import from the infrastructure renderer directly.
+    This file will be deleted at Phase 45 once no callers remain.
 
-Key design decisions:
+Key design decisions (preserved in pdf_renderer.py):
 - All text cells use Paragraph objects for proper word-wrapping.
 - General Ledger groups rows by account (account header + detail rows)
   instead of repeating Account Code/Name on every row.

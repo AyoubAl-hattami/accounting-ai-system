@@ -34,7 +34,7 @@ from app.infrastructure.database.sqlalchemy.repositories.report_repository impor
     SqlAlchemyReportRepository,
 )
 from app.modules.accounting.models.user import User
-from app.modules.accounting.services.report_csv_service import (
+from app.infrastructure.exports.csv_renderer import (
     trial_balance_to_csv,
     profit_and_loss_to_csv,
     balance_sheet_to_csv,

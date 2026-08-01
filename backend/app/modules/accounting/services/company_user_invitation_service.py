@@ -1,11 +1,43 @@
+"""Company-user invitation service.
+
+.. deprecated::
+    Direct imports of this service from routes are being phased out.
+    Callers should use the application use-cases in
+    ``app.application.invitations`` instead (Phase 39 migration target).
+    This module no longer imports FastAPI — all domain errors are raised
+    as exceptions from ``app.application.invitations.errors``.
+"""
+
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.application.invitations.dto import (
+    AcceptInvitationCommand,
+    CreateInvitationCommand,
+    InvitationDTO,
+    InvitationResultDTO,
+    InvitationValidationDTO,
+)
+from app.application.invitations.errors import (
+    ActiveInvitationExists,
+    CompanyNotFound,
+    EmailMismatch,
+    InactiveCompany,
+    InactiveMembershipExists,
+    InvitationAlreadyAccepted,
+    InvitationCancelled,
+    InvitationConflict,
+    InvitationExpired,
+    InvitationInvalidToken,
+    InvitationNotFound,
+    MissingNewUserDetails,
+    UserAlreadyMember,
+    UserExistsLoginRequired,
+)
 from app.core.database import flush_or_rollback
 from app.core.identity import normalize_email
 from app.core.security import hash_password, verify_password
@@ -13,13 +45,7 @@ from app.modules.accounting.models.company import Company
 from app.modules.accounting.models.company_user import CompanyUser
 from app.modules.accounting.models.company_user_invitation import CompanyUserInvitation
 from app.modules.accounting.models.user import User
-from app.modules.accounting.schemas.company_user_invitation import (
-    CompanyUserInvitationAccept,
-    CompanyUserInvitationCreate,
-    CompanyUserInvitationResponse,
-    CompanyUserInvitationValidateResponse,
-)
-from app.modules.accounting.services.audit_service import create_atomic_audit_log
+from app.modules.accounting.services.audit_service import prepare_audit_log
 
 
 def _parse_token(token: str) -> tuple[int, str]:
@@ -27,10 +53,7 @@ def _parse_token(token: str) -> tuple[int, str]:
         invite_id_raw, raw_token = token.split(":", 1)
         return int(invite_id_raw), raw_token
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid token format.",
-        )
+        raise InvitationInvalidToken("Invalid token format.")
 
 
 def _is_expired(invite: CompanyUserInvitation) -> bool:
@@ -57,29 +80,17 @@ def _get_invitation_by_token(
         )
     invite = db.scalar(statement)
     if not invite or not verify_password(raw_token, invite.token_hash):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid invitation token.",
-        )
+        raise InvitationInvalidToken("Invalid invitation token.")
     return invite
 
 
 def _ensure_pending(invite: CompanyUserInvitation) -> None:
     if invite.accepted_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Invitation has already been accepted.",
-        )
+        raise InvitationAlreadyAccepted("Invitation has already been accepted.")
     if invite.cancelled_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Invitation has been cancelled.",
-        )
+        raise InvitationCancelled("Invitation has been cancelled.")
     if _is_expired(invite):
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Invitation has expired.",
-        )
+        raise InvitationExpired("Invitation has expired.")
 
 
 def _normalized_user_statement(normalized_email: str):
@@ -88,20 +99,34 @@ def _normalized_user_statement(normalized_email: str):
     )
 
 
+def _to_invitation_dto(invite: CompanyUserInvitation) -> InvitationDTO:
+    return InvitationDTO(
+        id=invite.id,
+        company_id=invite.company_id,
+        email=invite.email,
+        role=invite.role,
+        invited_by_user_id=invite.invited_by_user_id,
+        expires_at=invite.expires_at,
+        created_at=invite.created_at,
+        status=invite.status,
+        accepted_at=invite.accepted_at,
+        accepted_by_user_id=invite.accepted_by_user_id,
+        cancelled_at=invite.cancelled_at,
+        cancelled_by_user_id=invite.cancelled_by_user_id,
+    )
+
+
 def create_invitation(
     db: Session,
-    invitation_in: CompanyUserInvitationCreate,
+    invitation_in,
     current_user: User,
-) -> CompanyUserInvitationResponse:
+) -> InvitationResultDTO:
     normalized_email = normalize_email(str(invitation_in.email))
     company = db.scalar(
         select(Company).where(Company.id == invitation_in.company_id)
     )
     if not company:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Company not found",
-        )
+        raise CompanyNotFound("Company not found")
 
     existing_user = db.scalar(_normalized_user_statement(normalized_email))
     if existing_user:
@@ -113,17 +138,11 @@ def create_invitation(
         )
         if existing_membership:
             if not existing_membership.is_active:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=(
-                        "User already has an inactive membership in this company. "
-                        "Restore company access instead."
-                    ),
+                raise InactiveMembershipExists(
+                    "User already has an inactive membership in this company. "
+                    "Restore company access instead."
                 )
-            return CompanyUserInvitationResponse(
-                status="error",
-                message="User is already a member of this company",
-            )
+            raise UserAlreadyMember("User is already a member of this company")
 
         membership = CompanyUser(
             company_id=invitation_in.company_id,
@@ -135,12 +154,9 @@ def create_invitation(
         try:
             flush_or_rollback(db)
         except IntegrityError:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="User is already assigned to this company.",
-            )
+            raise InvitationConflict("User is already assigned to this company.")
 
-        create_atomic_audit_log(
+        prepare_audit_log(
             db=db,
             actor=current_user.email,
             actor_user_id=current_user.id,
@@ -156,7 +172,7 @@ def create_invitation(
                 "email": normalized_email,
             },
         )
-        return CompanyUserInvitationResponse(
+        return InvitationResultDTO(
             status="added_existing",
             message="User already had an account and was added directly.",
         )
@@ -175,9 +191,8 @@ def create_invitation(
     superseded_ids: list[int] = []
     for existing_invite in live_invitations:
         if not _is_expired(existing_invite):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="An active invitation already exists for this email and company.",
+            raise ActiveInvitationExists(
+                "An active invitation already exists for this email and company."
             )
         existing_invite.cancelled_at = now
         existing_invite.cancelled_by_user_id = current_user.id
@@ -198,13 +213,12 @@ def create_invitation(
     try:
         flush_or_rollback(db)
     except IntegrityError:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An active invitation already exists for this email and company.",
+        raise ActiveInvitationExists(
+            "An active invitation already exists for this email and company."
         )
 
     full_token = f"{invite.id}:{raw_token}"
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         actor=current_user.email,
         actor_user_id=current_user.id,
@@ -223,7 +237,7 @@ def create_invitation(
             "superseded_expired_invitation_ids": superseded_ids,
         },
     )
-    return CompanyUserInvitationResponse(
+    return InvitationResultDTO(
         status="invited",
         message="Invitation created successfully.",
         token=full_token,
@@ -234,14 +248,14 @@ def create_invitation(
 def validate_invitation(
     db: Session,
     token: str,
-) -> CompanyUserInvitationValidateResponse:
+) -> InvitationValidationDTO:
     invite = _get_invitation_by_token(db, token, lock=False)
     _ensure_pending(invite)
     company = db.scalar(select(Company).where(Company.id == invite.company_id))
     existing_user = db.scalar(
         _normalized_user_statement(invite.normalized_email)
     )
-    return CompanyUserInvitationValidateResponse(
+    return InvitationValidationDTO(
         valid=True,
         email=invite.email,
         role=invite.role,
@@ -252,7 +266,7 @@ def validate_invitation(
 
 def accept_invitation(
     db: Session,
-    payload: CompanyUserInvitationAccept,
+    payload,
     current_user: User | None = None,
 ) -> dict:
     invite = _get_invitation_by_token(db, payload.token, lock=True)
@@ -261,31 +275,25 @@ def accept_invitation(
         select(Company).where(Company.id == invite.company_id).with_for_update()
     )
     if not company or not company.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Invitation company is not active.",
-        )
+        raise InactiveCompany("Invitation company is not active.")
 
     existing_user = db.scalar(
         _normalized_user_statement(invite.normalized_email).with_for_update()
     )
     if existing_user:
         if not current_user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User exists. Please log in to accept this invitation.",
+            raise UserExistsLoginRequired(
+                "User exists. Please log in to accept this invitation."
             )
         if normalize_email(current_user.email) != invite.normalized_email:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Logged in user email does not match invitation email.",
+            raise EmailMismatch(
+                "Logged in user email does not match invitation email."
             )
         user_to_add = existing_user
     else:
         if not payload.password or not payload.full_name:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Password and full name are required for new users.",
+            raise MissingNewUserDetails(
+                "Password and full name are required for new users."
             )
         user_to_add = User(
             email=invite.normalized_email,
@@ -298,12 +306,9 @@ def accept_invitation(
         try:
             flush_or_rollback(db)
         except IntegrityError:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "An account for this email was created concurrently. "
-                    "Log in to accept the invitation."
-                ),
+            raise InvitationConflict(
+                "An account for this email was created concurrently. "
+                "Log in to accept the invitation."
             )
 
     membership = db.scalar(
@@ -314,12 +319,9 @@ def accept_invitation(
     )
     membership_existed = membership is not None
     if membership and not membership.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "An inactive company membership already exists. "
-                "A company administrator must restore access."
-            ),
+        raise InactiveMembershipExists(
+            "An inactive company membership already exists. "
+            "A company administrator must restore access."
         )
     if membership is None:
         membership = CompanyUser(
@@ -337,12 +339,9 @@ def accept_invitation(
     try:
         flush_or_rollback(db)
     except IntegrityError:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Invitation acceptance conflicted with another request.",
-        )
+        raise InvitationConflict("Invitation acceptance conflicted with another request.")
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         actor=user_to_add.email,
         actor_user_id=user_to_add.id,
@@ -379,7 +378,7 @@ def cancel_invitation(
     db: Session,
     invitation_id: int,
     current_user: User,
-) -> CompanyUserInvitation:
+) -> InvitationDTO:
     invite = db.scalar(
         select(CompanyUserInvitation).where(
             CompanyUserInvitation.id == invitation_id
@@ -388,17 +387,14 @@ def cancel_invitation(
         )
     )
     if not invite:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invitation not found",
-        )
+        raise InvitationNotFound("Invitation not found")
     _ensure_pending(invite)
     cancelled_at = datetime.now(timezone.utc)
     invite.cancelled_at = cancelled_at
     invite.cancelled_by_user_id = current_user.id
     db.add(invite)
     flush_or_rollback(db)
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=invite.company_id,
         actor=current_user.email,
@@ -421,14 +417,14 @@ def cancel_invitation(
             "cancelled_by_user_id": current_user.id,
         },
     )
-    return invite
+    return _to_invitation_dto(invite)
 
 
 def list_pending_invitations(
     db: Session,
     company_id: int,
-) -> list[CompanyUserInvitation]:
-    return list(
+) -> list[InvitationDTO]:
+    invites = list(
         db.scalars(
             select(CompanyUserInvitation).where(
                 CompanyUserInvitation.company_id == company_id,
@@ -438,3 +434,4 @@ def list_pending_invitations(
             )
         ).all()
     )
+    return [_to_invitation_dto(inv) for inv in invites]
