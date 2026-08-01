@@ -4,6 +4,55 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Semantic token definitions ─────────────────────────────────────────────
+   These variables reproduce the current dark-mode appearance unchanged.
+   Light-mode overrides can be added inside `html.light { }` when needed.
+   Components should use semantic utilities (bg-page, text-content, etc.)
+   rather than raw palette utilities (bg-surface-900, text-gray-100, etc.).
+   ──────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Surfaces */
+  --color-page:             #0a0a0f; /* surface-900 */
+  --color-surface:          #0f0f17; /* surface-800 */
+  --color-surface-subtle:   #14141f; /* surface-700 */
+  --color-surface-elevated: #1a1a28; /* surface-600 */
+  --color-surface-overlay:  #22222f; /* surface-500 */
+
+  /* Content */
+  --color-content:           #f3f4f6; /* gray-100 */
+  --color-content-secondary: #9ca3af; /* gray-400 */
+  --color-content-muted:     #6b7280; /* gray-500 */
+  --color-content-inverse:   #0a0a0f; /* dark surface — for text on accent */
+
+  /* Borders */
+  --color-border:        rgba(255, 255, 255, 0.08);
+  --color-border-subtle: rgba(255, 255, 255, 0.04);
+  --color-focus:         #6366f1; /* brand-500 */
+
+  /* Accent (brand violet) */
+  --color-accent:       #4f46e5; /* brand-600 */
+  --color-accent-hover: #4338ca; /* brand-700 */
+  --color-accent-subtle: rgba(99, 102, 241, 0.12); /* brand-500 @ low opacity */
+  --color-on-accent:    #ffffff;
+
+  /* Status */
+  --color-success: #22c55e; /* green-500 */
+  --color-warning: #f59e0b; /* amber-500 */
+  --color-danger:  #ef4444; /* red-500 */
+  --color-info:    #3b82f6; /* blue-500 */
+
+  /* Accounting */
+  --color-debit:   #60a5fa; /* blue-400 */
+  --color-credit:  #34d399; /* emerald-400 */
+  --color-balance: #a78bfa; /* violet-400 */
+
+  /* Radius */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+}
+
 @layer base {
   * {
     margin: 0;
@@ -12,7 +61,7 @@
   }
 
   body {
-    @apply bg-surface-900 text-gray-100 font-sans antialiased;
+    @apply bg-page text-content font-sans antialiased;
     min-height: 100vh;
   }
 
@@ -21,15 +70,15 @@
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-surface-800;
+    @apply bg-surface;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-surface-500 rounded-full;
+    @apply bg-surface-overlay rounded-full;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-brand-600;
+    @apply bg-accent;
   }
 }
 
