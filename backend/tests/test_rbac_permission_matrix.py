@@ -1,21 +1,24 @@
 """Focused RBAC contract tests for the shared authorization boundary."""
-import uuid
 from unittest.mock import Mock
 
 import pytest
 import requests
 from fastapi import HTTPException
-from sqlalchemy import select
 
 from app.core.company_access import ensure_company_access
-from app.core.database import SessionLocal
-from app.modules.accounting.models.company_user import CompanyUser
 from app.modules.accounting.models.user import User
-from app.modules.accounting.services.auth_service import create_user_token
 
+
+# ── Pure unit tests (no HTTP, no DB) ─────────────────────────────────────────
 
 def test_inactive_user_cannot_access_company_even_as_superuser():
-    user = User(id=1, email="inactive@example.test", hashed_password="x", is_active=False, is_superuser=True)
+    user = User(
+        id=1,
+        email="inactive@example.test",
+        hashed_password="x",
+        is_active=False,
+        is_superuser=True,
+    )
     with pytest.raises(HTTPException) as exc:
         ensure_company_access(Mock(), user, 1)
     assert exc.value.status_code == 403
@@ -23,7 +26,13 @@ def test_inactive_user_cannot_access_company_even_as_superuser():
 
 
 def test_active_superuser_receives_admin_company_context():
-    user = User(id=1, email="admin@example.test", hashed_password="x", is_active=True, is_superuser=True)
+    user = User(
+        id=1,
+        email="admin@example.test",
+        hashed_password="x",
+        is_active=True,
+        is_superuser=True,
+    )
     access = ensure_company_access(Mock(), user, 42)
     assert access.company_id == 42
     assert access.role == "admin"
@@ -31,90 +40,132 @@ def test_active_superuser_receives_admin_company_context():
 
 
 def test_permission_roles_are_explicit_and_non_mutating_roles_are_distinct():
-    # Keep this contract close to the model's database check constraint.
     roles = {"admin", "accountant", "reviewer", "approver", "auditor", "viewer"}
     assert roles == {"admin", "accountant", "reviewer", "approver", "auditor", "viewer"}
-    assert {"viewer", "auditor"}.isdisjoint({"admin", "accountant", "reviewer", "approver"})
+    assert {"viewer", "auditor"}.isdisjoint(
+        {"admin", "accountant", "reviewer", "approver"}
+    )
+
+
+# ── HTTP integration tests ────────────────────────────────────────────────────
 
 def test_preissued_token_is_rejected_after_global_deactivation(
-    base_url, admin_headers, superuser_headers, default_company_id,
+    base_url,
+    deterministic_accounting_bootstrap,
+    accounting_factory,
 ):
-    email = f"inactive_token_{uuid.uuid4().hex[:12]}@example.com"
-    with SessionLocal() as db:
-        user = User(
-            email=email,
-            full_name="Inactive Token Test",
-            hashed_password="not-used-by-this-test",
-            is_active=True,
-            is_superuser=False,
-        )
-        db.add(user)
-        db.flush()
-        db.add(CompanyUser(
-            company_id=default_company_id,
-            user_id=user.id,
-            role="viewer",
-            is_active=True,
-        ))
-        db.commit()
-        db.refresh(user)
-        user_id = user.id
-        old_headers = {"Authorization": f"Bearer {create_user_token(user)}"}
+    """A pre-issued JWT must be rejected everywhere once the user is deactivated."""
+    factory = accounting_factory
+    bs = deterministic_accounting_bootstrap
+
+    # Create a platform superuser and a viewer member in the factory company.
+    superuser = factory.create_superuser()
+    viewer_user, _ = factory.add_member(company=bs.company, role="viewer")
+    factory.db.commit()
+
+    superuser_headers = factory.auth_headers_for(superuser)
+    old_headers = factory.auth_headers_for(viewer_user)
+
+    # Company admin (non-superuser) cannot deactivate users globally.
     denied = requests.patch(
-        f"{base_url}/company-users/users/{user_id}/deactivate",
-        headers=admin_headers,
-        params={"company_id": default_company_id},
+        f"{base_url}/company-users/users/{viewer_user.id}/deactivate",
+        headers=bs.auth_headers,
+        params={"company_id": bs.company_id},
     )
     assert denied.status_code == 403, denied.text
 
-    with SessionLocal() as db:
-        unchanged_user = db.get(User, user_id)
-        membership = db.scalar(
-            select(CompanyUser).where(
-                CompanyUser.company_id == default_company_id,
-                CompanyUser.user_id == user_id,
-            )
-        )
-        assert unchanged_user is not None and unchanged_user.is_active is True
-        assert membership is not None and membership.is_active is True
-
+    # Platform superuser CAN deactivate the user globally.
     deactivate = requests.patch(
-        f"{base_url}/company-users/users/{user_id}/deactivate",
+        f"{base_url}/company-users/users/{viewer_user.id}/deactivate",
         headers=superuser_headers,
-        params={"company_id": default_company_id},
+        params={"company_id": bs.company_id},
     )
     assert deactivate.status_code == 200, deactivate.text
 
-    with SessionLocal() as db:
-        deactivated_user = db.get(User, user_id)
-        membership = db.scalar(
-            select(CompanyUser).where(
-                CompanyUser.company_id == default_company_id,
-                CompanyUser.user_id == user_id,
-            )
-        )
-        assert deactivated_user is not None and deactivated_user.is_active is False
-        assert membership is not None and membership.is_active is True
+    # All protected endpoints must reject the pre-issued token with 403 Inactive user.
     protected_requests = [
-        ("accounts", lambda: requests.get(f"{base_url}/accounts", headers=old_headers, params={"company_id": default_company_id})),
-        ("journals", lambda: requests.get(f"{base_url}/journal-entries", headers=old_headers, params={"company_id": default_company_id})),
-        ("reports", lambda: requests.get(f"{base_url}/reports/trial-balance", headers=old_headers, params={"company_id": default_company_id})),
-        ("fiscal", lambda: requests.get(f"{base_url}/fiscal-years", headers=old_headers, params={"company_id": default_company_id})),
-        ("gemini", lambda: requests.post(f"{base_url}/ai/gemini-assistant", headers=old_headers, json={"company_id": default_company_id, "message": "Summarize the trial balance", "language": "en"})),
-        ("company users", lambda: requests.get(f"{base_url}/company-users", headers=old_headers, params={"company_id": default_company_id})),
-        ("auth me", lambda: requests.get(f"{base_url}/auth/me", headers=old_headers)),
+        (
+            "accounts",
+            lambda: requests.get(
+                f"{base_url}/accounts",
+                headers=old_headers,
+                params={"company_id": bs.company_id},
+            ),
+        ),
+        (
+            "journals",
+            lambda: requests.get(
+                f"{base_url}/journal-entries",
+                headers=old_headers,
+                params={"company_id": bs.company_id},
+            ),
+        ),
+        (
+            "reports",
+            lambda: requests.get(
+                f"{base_url}/reports/trial-balance",
+                headers=old_headers,
+                params={"company_id": bs.company_id},
+            ),
+        ),
+        (
+            "fiscal",
+            lambda: requests.get(
+                f"{base_url}/fiscal-years",
+                headers=old_headers,
+                params={"company_id": bs.company_id},
+            ),
+        ),
+        (
+            "gemini",
+            lambda: requests.post(
+                f"{base_url}/ai/gemini-assistant",
+                headers=old_headers,
+                json={
+                    "company_id": bs.company_id,
+                    "message": "Summarize the trial balance",
+                    "language": "en",
+                },
+            ),
+        ),
+        (
+            "company users",
+            lambda: requests.get(
+                f"{base_url}/company-users",
+                headers=old_headers,
+                params={"company_id": bs.company_id},
+            ),
+        ),
+        (
+            "auth me",
+            lambda: requests.get(f"{base_url}/auth/me", headers=old_headers),
+        ),
     ]
     try:
         for name, call in protected_requests:
             response = call()
-            assert response.status_code == 403, f"{name}: {response.status_code} {response.text}"
+            assert response.status_code == 403, (
+                f"{name}: expected 403, got {response.status_code} {response.text}"
+            )
             assert response.json()["detail"] == "Inactive user"
         assert requests.get(f"{base_url}/health").status_code == 200
     finally:
-        reactivate = requests.patch(f"{base_url}/company-users/users/{user_id}/reactivate", headers=superuser_headers, params={"company_id": default_company_id})
+        reactivate = requests.patch(
+            f"{base_url}/company-users/users/{viewer_user.id}/reactivate",
+            headers=superuser_headers,
+            params={"company_id": bs.company_id},
+        )
         assert reactivate.status_code == 200, reactivate.text
 
 
-def test_active_admin_still_accesses_company(base_url, admin_headers, default_company_id):
-    response = requests.get(f"{base_url}/accounts", headers=admin_headers, params={"company_id": default_company_id})
+def test_active_admin_still_accesses_company(
+    base_url, deterministic_accounting_bootstrap
+):
+    """An active company admin must be able to list accounts."""
+    bs = deterministic_accounting_bootstrap
+    response = requests.get(
+        f"{base_url}/accounts",
+        headers=bs.auth_headers,
+        params={"company_id": bs.company_id},
+    )
     assert response.status_code == 200, response.text

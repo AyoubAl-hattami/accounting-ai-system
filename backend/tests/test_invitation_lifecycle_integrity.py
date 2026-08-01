@@ -51,11 +51,6 @@ def _create_company(base_url, headers):
     return response.json()['id']
 
 
-def _admin_user():
-    with SessionLocal() as db:
-        return db.scalar(select(User).where(User.email == 'admin@example.com'))
-
-
 def test_legacy_mixed_case_padded_user_email_lookup():
     canonical_email = _email('legacy_lookup')
     legacy_email = f'  {canonical_email.upper()}  '
@@ -85,23 +80,19 @@ def test_legacy_mixed_case_padded_user_email_lookup():
 
 
 def test_normalized_email_blocks_duplicate_live_invitation(
-    base_url, admin_headers, default_company_id,
+    base_url, deterministic_accounting_bootstrap,
 ):
+    bs = deterministic_accounting_bootstrap
     email = _email('normalized')
-    first = _create_invite(base_url, admin_headers, default_company_id, email)
-    second = _create_invite(
-        base_url,
-        admin_headers,
-        default_company_id,
-        f'  {email.upper()}  ',
-    )
+    first = _create_invite(base_url, bs.auth_headers, bs.company_id, email)
+    second = _create_invite(base_url, bs.auth_headers, bs.company_id, f'  {email.upper()}  ')
 
     assert first.status_code == 200, first.text
     assert second.status_code == 409, second.text
     with SessionLocal() as db:
         live_count = db.scalar(
             select(func.count()).select_from(CompanyUserInvitation).where(
-                CompanyUserInvitation.company_id == default_company_id,
+                CompanyUserInvitation.company_id == bs.company_id,
                 CompanyUserInvitation.normalized_email == email,
                 CompanyUserInvitation.accepted_at.is_(None),
                 CompanyUserInvitation.cancelled_at.is_(None),
@@ -111,23 +102,25 @@ def test_normalized_email_blocks_duplicate_live_invitation(
 
 
 def test_different_companies_may_invite_same_normalized_email(
-    base_url, admin_headers, default_company_id,
+    base_url, deterministic_accounting_bootstrap,
 ):
+    bs = deterministic_accounting_bootstrap
     email = _email('multi_company')
-    other_company_id = _create_company(base_url, admin_headers)
+    other_company_id = _create_company(base_url, bs.auth_headers)
 
-    first = _create_invite(base_url, admin_headers, default_company_id, email)
-    second = _create_invite(base_url, admin_headers, other_company_id, email.upper())
+    first = _create_invite(base_url, bs.auth_headers, bs.company_id, email)
+    second = _create_invite(base_url, bs.auth_headers, other_company_id, email.upper())
 
     assert first.status_code == 200, first.text
     assert second.status_code == 200, second.text
 
 
 def test_expired_invitation_reissue_preserves_and_supersedes_old_row(
-    base_url, admin_headers, default_company_id,
+    base_url, deterministic_accounting_bootstrap,
 ):
+    bs = deterministic_accounting_bootstrap
     email = _email('expired_reissue')
-    first = _create_invite(base_url, admin_headers, default_company_id, email)
+    first = _create_invite(base_url, bs.auth_headers, bs.company_id, email)
     assert first.status_code == 200, first.text
     old_id = int(first.json()['token'].split(':', 1)[0])
     with SessionLocal() as db:
@@ -135,9 +128,7 @@ def test_expired_invitation_reissue_preserves_and_supersedes_old_row(
         old_invite.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
         db.commit()
 
-    replacement = _create_invite(
-        base_url, admin_headers, default_company_id, email.upper(),
-    )
+    replacement = _create_invite(base_url, bs.auth_headers, bs.company_id, email.upper())
     assert replacement.status_code == 200, replacement.text
     new_id = int(replacement.json()['token'].split(':', 1)[0])
     assert new_id != old_id
@@ -152,11 +143,10 @@ def test_expired_invitation_reissue_preserves_and_supersedes_old_row(
 
 
 def test_expired_invitation_validation_and_acceptance_are_rejected(
-    base_url, admin_headers, default_company_id,
+    base_url, deterministic_accounting_bootstrap,
 ):
-    created = _create_invite(
-        base_url, admin_headers, default_company_id, _email('expired_reject'),
-    )
+    bs = deterministic_accounting_bootstrap
+    created = _create_invite(base_url, bs.auth_headers, bs.company_id, _email('expired_reject'))
     token = created.json()['token']
     invitation_id = int(token.split(':', 1)[0])
     with SessionLocal() as db:
@@ -176,14 +166,15 @@ def test_expired_invitation_validation_and_acceptance_are_rejected(
 
 
 def test_database_partial_unique_index_rejects_duplicate_live_rows(
-    default_company_id,
+    deterministic_accounting_bootstrap,
 ):
-    admin = _admin_user()
+    bs = deterministic_accounting_bootstrap
+    admin = bs.user
     email = _email('database_unique')
     now = datetime.now(timezone.utc)
     with SessionLocal() as db:
         first = CompanyUserInvitation(
-            company_id=default_company_id,
+            company_id=bs.company_id,
             email=email,
             normalized_email=email,
             role='viewer',
@@ -196,7 +187,7 @@ def test_database_partial_unique_index_rejects_duplicate_live_rows(
 
     with SessionLocal() as db:
         duplicate = CompanyUserInvitation(
-            company_id=default_company_id,
+            company_id=bs.company_id,
             email=email.upper(),
             normalized_email=email,
             role='viewer',
@@ -211,16 +202,17 @@ def test_database_partial_unique_index_rejects_duplicate_live_rows(
 
 
 def test_cancellation_preserves_row_and_rejects_validation_acceptance_and_repeat(
-    base_url, admin_headers, default_company_id,
+    base_url, deterministic_accounting_bootstrap,
 ):
+    bs = deterministic_accounting_bootstrap
     email = _email('cancelled')
-    created = _create_invite(base_url, admin_headers, default_company_id, email)
+    created = _create_invite(base_url, bs.auth_headers, bs.company_id, email)
     token = created.json()['token']
     invitation_id = int(token.split(':', 1)[0])
 
     cancelled = requests.delete(
         f'{base_url}/company-users/invitations/{invitation_id}',
-        headers=admin_headers,
+        headers=bs.auth_headers,
     )
     assert cancelled.status_code == 200, cancelled.text
     assert requests.get(
@@ -232,7 +224,7 @@ def test_cancellation_preserves_row_and_rejects_validation_acceptance_and_repeat
     ).status_code == 410
     repeated = requests.delete(
         f'{base_url}/company-users/invitations/{invitation_id}',
-        headers=admin_headers,
+        headers=bs.auth_headers,
     )
     assert repeated.status_code == 410
 
@@ -249,23 +241,20 @@ def test_cancellation_preserves_row_and_rejects_validation_acceptance_and_repeat
 
 
 def test_accept_once_without_duplicate_user_membership_or_audit_and_cannot_cancel(
-    base_url, admin_headers, default_company_id,
+    base_url, deterministic_accounting_bootstrap,
 ):
+    bs = deterministic_accounting_bootstrap
     email = _email('accept_once')
-    created = _create_invite(base_url, admin_headers, default_company_id, email)
+    created = _create_invite(base_url, bs.auth_headers, bs.company_id, email)
     token = created.json()['token']
     invitation_id = int(token.split(':', 1)[0])
     payload = {'token': token, 'full_name': 'Accepted User', 'password': 'Password123'}
 
-    first = requests.post(
-        f'{base_url}/company-users/invitations/accept', json=payload,
-    )
-    second = requests.post(
-        f'{base_url}/company-users/invitations/accept', json=payload,
-    )
+    first = requests.post(f'{base_url}/company-users/invitations/accept', json=payload)
+    second = requests.post(f'{base_url}/company-users/invitations/accept', json=payload)
     cancel = requests.delete(
         f'{base_url}/company-users/invitations/{invitation_id}',
-        headers=admin_headers,
+        headers=bs.auth_headers,
     )
     assert first.status_code == 200, first.text
     assert second.status_code == 409
@@ -274,12 +263,10 @@ def test_accept_once_without_duplicate_user_membership_or_audit_and_cannot_cance
 
     with SessionLocal() as db:
         user = db.scalar(select(User).where(User.email == email))
-        user_count = db.scalar(
-            select(func.count()).select_from(User).where(User.email == email)
-        )
+        user_count = db.scalar(select(func.count()).select_from(User).where(User.email == email))
         membership_count = db.scalar(
             select(func.count()).select_from(CompanyUser).where(
-                CompanyUser.company_id == default_company_id,
+                CompanyUser.company_id == bs.company_id,
                 CompanyUser.user_id == user.id,
             )
         )
@@ -295,8 +282,9 @@ def test_accept_once_without_duplicate_user_membership_or_audit_and_cannot_cance
 
 
 def test_inactive_existing_membership_requires_restore(
-    base_url, admin_headers, default_company_id,
+    base_url, deterministic_accounting_bootstrap,
 ):
+    bs = deterministic_accounting_bootstrap
     email = _email('inactive_member')
     registration = requests.post(
         f'{base_url}/auth/register',
@@ -305,88 +293,67 @@ def test_inactive_existing_membership_requires_restore(
     user_id = registration.json()['id']
     added = requests.post(
         f'{base_url}/company-users',
-        headers=admin_headers,
-        json={'company_id': default_company_id, 'user_id': user_id, 'role': 'viewer'},
+        headers=bs.auth_headers,
+        json={'company_id': bs.company_id, 'user_id': user_id, 'role': 'viewer'},
     )
     membership_id = added.json()['id']
     removed = requests.patch(
         f'{base_url}/company-users/{membership_id}/remove-access',
-        headers=admin_headers,
+        headers=bs.auth_headers,
     )
     assert removed.status_code == 200
 
-    invitation = _create_invite(
-        base_url, admin_headers, default_company_id, email.upper(),
-    )
+    invitation = _create_invite(base_url, bs.auth_headers, bs.company_id, email.upper())
     assert invitation.status_code == 409
     assert 'restore company access' in invitation.text.lower()
 
 
 @pytest.mark.parametrize('password', ['alllowercase1', 'ALLUPPERCASE1', 'NoDigitsHere'])
 def test_invitation_acceptance_uses_registration_password_policy(
-    base_url, admin_headers, default_company_id, password,
+    base_url, deterministic_accounting_bootstrap, password,
 ):
-    created = _create_invite(
-        base_url, admin_headers, default_company_id, _email('weak_password'),
-    )
+    bs = deterministic_accounting_bootstrap
+    created = _create_invite(base_url, bs.auth_headers, bs.company_id, _email('weak_password'))
     response = requests.post(
         f'{base_url}/company-users/invitations/accept',
-        json={
-            'token': created.json()['token'],
-            'full_name': 'Weak Password',
-            'password': password,
-        },
+        json={'token': created.json()['token'], 'full_name': 'Weak Password', 'password': password},
     )
     assert response.status_code == 422
 
 
 def test_invitation_audits_never_contain_raw_token_or_token_hash(
-    base_url, admin_headers, default_company_id,
+    base_url, deterministic_accounting_bootstrap,
 ):
-    created = _create_invite(
-        base_url, admin_headers, default_company_id, _email('audit_token'),
-    )
+    bs = deterministic_accounting_bootstrap
+    created = _create_invite(base_url, bs.auth_headers, bs.company_id, _email('audit_token'))
     raw_token = created.json()['token']
     invitation_id = int(raw_token.split(':', 1)[0])
     with SessionLocal() as db:
         invite = db.get(CompanyUserInvitation, invitation_id)
-        logs = list(
-            db.scalars(
-                select(AuditLog).where(AuditLog.entity_id == invitation_id)
-            ).all()
-        )
+        logs = list(db.scalars(select(AuditLog).where(AuditLog.entity_id == invitation_id)).all())
         serialized = repr([(log.old_values, log.new_values) for log in logs])
         assert raw_token not in serialized
         assert invite.token_hash not in serialized
 
 
 def test_audit_failure_rolls_back_creation_acceptance_and_cancellation(
-    monkeypatch,
-    default_company_id,
+    monkeypatch, deterministic_accounting_bootstrap,
 ):
-    admin = _admin_user()
-    assert admin is not None
+    bs = deterministic_accounting_bootstrap
+    admin = bs.user
 
     accept_email = _email('rollback_accept')
     cancel_email = _email('rollback_cancel')
     with SessionLocal() as db:
         accept_response = create_invitation(
             db,
-            CompanyUserInvitationCreate(
-                company_id=default_company_id,
-                email=accept_email,
-                role='viewer',
-            ),
+            CompanyUserInvitationCreate(company_id=bs.company_id, email=accept_email, role='viewer'),
             db.merge(admin),
         )
     with SessionLocal() as db:
         cancel_response = create_invitation(
             db,
-            CompanyUserInvitationCreate(
-                company_id=default_company_id,
-                email=cancel_email,
-                role='viewer',
-            ),
+            CompanyUserInvitationCreate(company_id=bs.company_id, email=cancel_email, role='viewer'),
             db.merge(admin),
         )
     cancel_id = int(cancel_response.token.split(':', 1)[0])
@@ -401,18 +368,12 @@ def test_audit_failure_rolls_back_creation_acceptance_and_cancellation(
         with pytest.raises(RuntimeError, match='audit insert failed'):
             create_invitation(
                 db,
-                CompanyUserInvitationCreate(
-                    company_id=default_company_id,
-                    email=create_email,
-                    role='viewer',
-                ),
+                CompanyUserInvitationCreate(company_id=bs.company_id, email=create_email, role='viewer'),
                 db.merge(admin),
             )
     with SessionLocal() as db:
         assert db.scalar(
-            select(CompanyUserInvitation).where(
-                CompanyUserInvitation.normalized_email == create_email
-            )
+            select(CompanyUserInvitation).where(CompanyUserInvitation.normalized_email == create_email)
         ) is None
 
     with SessionLocal() as db:
@@ -420,16 +381,11 @@ def test_audit_failure_rolls_back_creation_acceptance_and_cancellation(
             accept_invitation(
                 db,
                 CompanyUserInvitationAccept(
-                    token=accept_response.token,
-                    full_name='Rollback Accept',
-                    password='Password123',
+                    token=accept_response.token, full_name='Rollback Accept', password='Password123',
                 ),
             )
     with SessionLocal() as db:
-        accept_invite = db.get(
-            CompanyUserInvitation,
-            int(accept_response.token.split(':', 1)[0]),
-        )
+        accept_invite = db.get(CompanyUserInvitation, int(accept_response.token.split(':', 1)[0]))
         assert accept_invite.accepted_at is None
         assert db.scalar(select(User).where(User.email == accept_email)) is None
 
@@ -487,14 +443,13 @@ def test_migration_backfill_and_duplicate_cleanup_are_non_destructive(monkeypatc
     reason='PostgreSQL concurrency coverage',
 )
 def test_postgresql_concurrent_duplicate_creation_has_one_winner(
-    base_url, admin_headers, default_company_id,
+    base_url, deterministic_accounting_bootstrap,
 ):
+    bs = deterministic_accounting_bootstrap
     email = _email('concurrent_create')
 
     def create():
-        return _create_invite(
-            base_url, admin_headers, default_company_id, email,
-        ).status_code
+        return _create_invite(base_url, bs.auth_headers, bs.company_id, email).status_code
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         statuses = list(executor.map(lambda _value: create(), range(2)))
@@ -507,22 +462,17 @@ def test_postgresql_concurrent_duplicate_creation_has_one_winner(
     reason='PostgreSQL concurrency coverage',
 )
 def test_postgresql_concurrent_double_accept_has_one_success(
-    base_url, admin_headers, default_company_id,
+    base_url, deterministic_accounting_bootstrap,
 ):
+    bs = deterministic_accounting_bootstrap
     email = _email('concurrent_accept')
-    created = _create_invite(base_url, admin_headers, default_company_id, email)
+    created = _create_invite(base_url, bs.auth_headers, bs.company_id, email)
     token = created.json()['token']
     invitation_id = int(token.split(':', 1)[0])
-    payload = {
-        'token': token,
-        'full_name': 'Concurrent Accept',
-        'password': 'Password123',
-    }
+    payload = {'token': token, 'full_name': 'Concurrent Accept', 'password': 'Password123'}
 
     def accept():
-        return requests.post(
-            f'{base_url}/company-users/invitations/accept', json=payload,
-        ).status_code
+        return requests.post(f'{base_url}/company-users/invitations/accept', json=payload).status_code
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         statuses = list(executor.map(lambda _value: accept(), range(2)))
@@ -533,7 +483,7 @@ def test_postgresql_concurrent_double_accept_has_one_success(
         assert user is not None
         assert db.scalar(
             select(func.count()).select_from(CompanyUser).where(
-                CompanyUser.company_id == default_company_id,
+                CompanyUser.company_id == bs.company_id,
                 CompanyUser.user_id == user.id,
             )
         ) == 1
@@ -550,28 +500,23 @@ def test_postgresql_concurrent_double_accept_has_one_success(
     reason='PostgreSQL concurrency coverage',
 )
 def test_postgresql_concurrent_accept_and_cancel_has_one_terminal_state(
-    base_url, admin_headers, default_company_id,
+    base_url, deterministic_accounting_bootstrap,
 ):
-    created = _create_invite(
-        base_url, admin_headers, default_company_id, _email('accept_cancel'),
-    )
+    bs = deterministic_accounting_bootstrap
+    created = _create_invite(base_url, bs.auth_headers, bs.company_id, _email('accept_cancel'))
     token = created.json()['token']
     invitation_id = int(token.split(':', 1)[0])
 
     def accept():
         return requests.post(
             f'{base_url}/company-users/invitations/accept',
-            json={
-                'token': token,
-                'full_name': 'Accept Cancel Race',
-                'password': 'Password123',
-            },
+            json={'token': token, 'full_name': 'Accept Cancel Race', 'password': 'Password123'},
         )
 
     def cancel():
         return requests.delete(
             f'{base_url}/company-users/invitations/{invitation_id}',
-            headers=admin_headers,
+            headers=bs.auth_headers,
         )
 
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -582,9 +527,7 @@ def test_postgresql_concurrent_accept_and_cancel_has_one_terminal_state(
     assert statuses.count(200) == 1
     assert 500 not in statuses
     assert sorted(statuses)[1] in {409, 410}
-    losing_response = next(
-        response for response in responses if response.status_code != 200
-    )
+    losing_response = next(response for response in responses if response.status_code != 200)
     assert losing_response.json()['detail'] in {
         'Invitation has already been accepted.',
         'Invitation has been cancelled.',
@@ -597,7 +540,7 @@ def test_postgresql_concurrent_accept_and_cancel_has_one_terminal_state(
         if user is not None:
             membership_count = db.scalar(
                 select(func.count()).select_from(CompanyUser).where(
-                    CompanyUser.company_id == default_company_id,
+                    CompanyUser.company_id == bs.company_id,
                     CompanyUser.user_id == user.id,
                 )
             )

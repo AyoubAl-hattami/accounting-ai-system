@@ -1,69 +1,75 @@
-import requests
-import pytest
-from fastapi.testclient import TestClient
-from app.main import app
-
-client = TestClient(app)
-
+"""Invitation create / validate / accept contract tests."""
 import uuid
 
-def test_create_invitation_success(admin_headers, default_company_id):
+import pytest
+import requests
+
+
+def test_create_invitation_success(base_url, deterministic_accounting_bootstrap):
+    bs = deterministic_accounting_bootstrap
     unique_id = uuid.uuid4().hex[:6]
     data = {
-        "company_id": default_company_id,
-        "email": f"new_invitee_{unique_id}@example.com",
-        "role": "viewer"
+        "company_id": bs.company_id,
+        "email": f"new_invitee_{unique_id}@accounting-ai-test.dev",
+        "role": "viewer",
     }
-    response = client.post(
-        "/company-users/invitations",
+    response = requests.post(
+        f"{base_url}/company-users/invitations",
         json=data,
-        headers=admin_headers
+        headers=bs.auth_headers,
     )
-    if response.status_code != 200:
-        print(response.json())
-    assert response.status_code == 200
+    assert response.status_code == 200, response.json()
     content = response.json()
     assert content["status"] == "invited"
     assert "token" in content
     assert "invite_url" in content
 
 
-def test_create_invitation_already_member(base_url, admin_headers, default_company_id):
-    # Try to invite the admin themselves, who is already a member
+def test_create_invitation_already_member(
+    base_url, deterministic_accounting_bootstrap
+):
+    """Inviting a user who is already a company member returns status=error."""
+    bs = deterministic_accounting_bootstrap
+    # The factory admin user is already a member of bs.company.
     data = {
-        "company_id": default_company_id,
-        "email": "admin@example.com",
-        "role": "accountant"
+        "company_id": bs.company_id,
+        "email": bs.user.email,
+        "role": "accountant",
     }
     response = requests.post(
         f"{base_url}/company-users/invitations",
         json=data,
-        headers=admin_headers
+        headers=bs.auth_headers,
     )
-    assert response.status_code == 200
+    assert response.status_code == 200, response.json()
     content = response.json()
     assert content["status"] == "error"
     assert content["message"] == "User is already a member of this company"
 
 
-def test_validate_and_accept_invitation_new_user(base_url, admin_headers, default_company_id):
+def test_validate_and_accept_invitation_new_user(
+    base_url, deterministic_accounting_bootstrap
+):
+    bs = deterministic_accounting_bootstrap
     unique_id = uuid.uuid4().hex[:6]
-    email = f"accept_test_{unique_id}@example.com"
+    email = f"accept_test_{unique_id}@accounting-ai-test.dev"
     data = {
-        "company_id": default_company_id,
+        "company_id": bs.company_id,
         "email": email,
-        "role": "viewer"
+        "role": "viewer",
     }
     res_create = requests.post(
         f"{base_url}/company-users/invitations",
         json=data,
-        headers=admin_headers
+        headers=bs.auth_headers,
     )
-    assert res_create.status_code == 200
+    assert res_create.status_code == 200, res_create.json()
     token = res_create.json().get("token")
 
     # Validate
-    res_val = requests.get(f"{base_url}/company-users/invitations/validate?token={token}")
+    res_val = requests.get(
+        f"{base_url}/company-users/invitations/validate?token={token}"
+    )
     assert res_val.status_code == 200
     assert res_val.json()["email"] == email
     assert res_val.json()["user_exists"] is False
@@ -74,12 +80,14 @@ def test_validate_and_accept_invitation_new_user(base_url, admin_headers, defaul
         json={
             "token": token,
             "full_name": "New Invitee",
-            "password": "SecurePassword123!"
-        }
+            "password": "SecurePassword123!",
+        },
     )
     assert res_accept.status_code == 200
     assert res_accept.json()["status"] == "success"
 
-    # Validate again - accepted invitations have a deterministic conflict state
-    res_val2 = requests.get(f"{base_url}/company-users/invitations/validate?token={token}")
+    # Validate again — accepted invitations are in a terminal state
+    res_val2 = requests.get(
+        f"{base_url}/company-users/invitations/validate?token={token}"
+    )
     assert res_val2.status_code == 409
