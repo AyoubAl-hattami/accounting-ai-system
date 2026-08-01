@@ -25,6 +25,7 @@ from app.modules.accounting.services.auth_service import create_user_token
 
 @dataclass
 class ConversationActors:
+    company_id: int
     owner_id: int
     other_id: int
     second_company_id: int
@@ -34,18 +35,13 @@ class ConversationActors:
 
 
 @pytest.fixture
-def conversation_actors(default_company_id):
+def conversation_actors(deterministic_accounting_bootstrap, accounting_factory):
+    bs = deterministic_accounting_bootstrap
     marker = uuid.uuid4().hex[:12]
+
     with SessionLocal() as db:
-        owner = User(
-            email=f"conversation-owner-{marker}@example.test",
-            full_name="Conversation Owner",
-            hashed_password="not-used-by-this-test",
-            is_active=True,
-            is_superuser=False,
-        )
         other = User(
-            email=f"conversation-other-{marker}@example.test",
+            email=f"conversation-other-{marker}@accounting-ai-test.dev",
             full_name="Conversation Other",
             hashed_password="not-used-by-this-test",
             is_active=True,
@@ -55,59 +51,33 @@ def conversation_actors(default_company_id):
             name=f"Conversation Company {marker}",
             base_currency="USD",
         )
-        db.add_all([owner, other, second_company])
+        db.add_all([other, second_company])
         db.flush()
-        cash_account = db.scalar(
-            select(Account).where(
-                Account.company_id == default_company_id,
-                Account.name == "Cash",
-                Account.is_active.is_(True),
-            )
-        )
-        created_cash_account_id = None
-        if cash_account is None:
-            cash_account = Account(
-                company_id=default_company_id,
-                code=f"TEST-CASH-{marker}",
-                name="Cash",
-                account_type="asset",
-                is_active=True,
-                is_system=False,
-            )
-            db.add(cash_account)
-            db.flush()
-            created_cash_account_id = cash_account.id
         db.add_all(
             [
                 CompanyUser(
-                    company_id=default_company_id,
-                    user_id=owner.id,
-                    role="admin",
+                    company_id=bs.company_id,
+                    user_id=other.id,
+                    role="viewer",
                     is_active=True,
                 ),
                 CompanyUser(
                     company_id=second_company.id,
-                    user_id=owner.id,
+                    user_id=bs.user.id,
                     role="admin",
-                    is_active=True,
-                ),
-                CompanyUser(
-                    company_id=default_company_id,
-                    user_id=other.id,
-                    role="viewer",
                     is_active=True,
                 ),
             ]
         )
         db.commit()
-        db.refresh(owner)
         db.refresh(other)
         actors = ConversationActors(
-            owner_id=owner.id,
+            company_id=bs.company_id,
+            owner_id=bs.user.id,
             other_id=other.id,
             second_company_id=second_company.id,
-            created_cash_account_id=created_cash_account_id,
-            owner_headers={"Authorization": f"Bearer {create_user_token(owner)}"},
+            created_cash_account_id=None,
+            owner_headers=bs.auth_headers,
             other_headers={"Authorization": f"Bearer {create_user_token(other)}"},
         )
 
@@ -125,25 +95,29 @@ def conversation_actors(default_company_id):
             for conversation in conversations:
                 db.delete(conversation)
             db.flush()
-            if actors.created_cash_account_id is not None:
-                cash_account = db.get(Account, actors.created_cash_account_id)
-                if cash_account:
-                    db.delete(cash_account)
-                db.flush()
             memberships = list(
                 db.scalars(
                     select(CompanyUser).where(
-                        CompanyUser.user_id.in_([actors.owner_id, actors.other_id])
+                        CompanyUser.user_id == actors.other_id
                     )
                 )
             )
             for membership in memberships:
                 db.delete(membership)
             db.flush()
-            for user_id in [actors.owner_id, actors.other_id]:
-                user = db.get(User, user_id)
-                if user:
-                    db.delete(user)
+            other_user = db.get(User, actors.other_id)
+            if other_user:
+                db.delete(other_user)
+            db.flush()
+            owner_second_membership = db.scalar(
+                select(CompanyUser).where(
+                    CompanyUser.company_id == actors.second_company_id,
+                    CompanyUser.user_id == actors.owner_id,
+                )
+            )
+            if owner_second_membership:
+                db.delete(owner_second_membership)
+            db.flush()
             company = db.get(Company, actors.second_company_id)
             if company:
                 db.delete(company)
@@ -188,18 +162,19 @@ def _send_message(
 
 
 def test_create_save_reload_and_list_newest_first(
-    base_url, default_company_id, conversation_actors,
+    base_url, conversation_actors,
 ):
+    company_id = conversation_actors.company_id
     first = _create_conversation(
-        base_url, conversation_actors.owner_headers, default_company_id
+        base_url, conversation_actors.owner_headers, company_id
     )
     second = _create_conversation(
-        base_url, conversation_actors.owner_headers, default_company_id
+        base_url, conversation_actors.owner_headers, company_id
     )
     response, _ = _send_message(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         first["id"],
         "سلام عليكم",
     )
@@ -214,7 +189,7 @@ def test_create_save_reload_and_list_newest_first(
     reloaded = requests.get(
         f"{base_url}/ai/conversations/{first['id']}",
         headers=conversation_actors.owner_headers,
-        params={"company_id": default_company_id},
+        params={"company_id": company_id},
     )
     assert reloaded.status_code == 200, reloaded.text
     detail = reloaded.json()
@@ -226,7 +201,7 @@ def test_create_save_reload_and_list_newest_first(
     accounting, _ = _send_message(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         first["id"],
         "كم صافي الربح؟",
         language="en",
@@ -241,7 +216,7 @@ def test_create_save_reload_and_list_newest_first(
     reloaded_after_accounting = requests.get(
         f"{base_url}/ai/conversations/{first['id']}",
         headers=conversation_actors.owner_headers,
-        params={"company_id": default_company_id},
+        params={"company_id": company_id},
     )
     assert reloaded_after_accounting.status_code == 200
     assert reloaded_after_accounting.json()["messages_total"] == 4
@@ -249,7 +224,7 @@ def test_create_save_reload_and_list_newest_first(
     journal, _ = _send_message(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         first["id"],
         "دفعت كهرباء 500 ريال",
         language="en",
@@ -265,7 +240,7 @@ def test_create_save_reload_and_list_newest_first(
     listed = requests.get(
         f"{base_url}/ai/conversations",
         headers=conversation_actors.owner_headers,
-        params={"company_id": default_company_id},
+        params={"company_id": company_id},
     )
     assert listed.status_code == 200, listed.text
     ids = [item["id"] for item in listed.json()["items"]]
@@ -274,23 +249,24 @@ def test_create_save_reload_and_list_newest_first(
 
 
 def test_conversations_are_private_to_owner_and_company(
-    base_url, admin_headers, default_company_id, conversation_actors,
+    base_url, deterministic_superuser_headers, conversation_actors,
 ):
+    company_id = conversation_actors.company_id
     conversation = _create_conversation(
-        base_url, conversation_actors.owner_headers, default_company_id
+        base_url, conversation_actors.owner_headers, company_id
     )
     foreign_user = requests.get(
         f"{base_url}/ai/conversations/{conversation['id']}",
         headers=conversation_actors.other_headers,
-        params={"company_id": default_company_id},
+        params={"company_id": company_id},
     )
     assert foreign_user.status_code == 404
     assert foreign_user.json() == {"detail": "Conversation not found"}
 
     superuser = requests.get(
         f"{base_url}/ai/conversations/{conversation['id']}",
-        headers=admin_headers,
-        params={"company_id": default_company_id},
+        headers=deterministic_superuser_headers,
+        params={"company_id": company_id},
     )
     assert superuser.status_code == 404
 
@@ -312,8 +288,9 @@ def test_conversations_are_private_to_owner_and_company(
 
 
 def test_inactive_user_old_token_is_denied(
-    base_url, default_company_id, conversation_actors,
+    base_url, conversation_actors,
 ):
+    company_id = conversation_actors.company_id
     with SessionLocal() as db:
         user = db.get(User, conversation_actors.owner_id)
         user.is_active = False
@@ -322,7 +299,7 @@ def test_inactive_user_old_token_is_denied(
         response = requests.get(
             f"{base_url}/ai/conversations",
             headers=conversation_actors.owner_headers,
-            params={"company_id": default_company_id},
+            params={"company_id": company_id},
         )
         assert response.status_code == 403
         assert response.json()["detail"] == "Inactive user"
@@ -334,12 +311,13 @@ def test_inactive_user_old_token_is_denied(
 
 
 def test_inactive_company_membership_is_denied(
-    base_url, default_company_id, conversation_actors,
+    base_url, conversation_actors,
 ):
+    company_id = conversation_actors.company_id
     with SessionLocal() as db:
         membership = db.scalar(
             select(CompanyUser).where(
-                CompanyUser.company_id == default_company_id,
+                CompanyUser.company_id == company_id,
                 CompanyUser.user_id == conversation_actors.owner_id,
             )
         )
@@ -349,43 +327,45 @@ def test_inactive_company_membership_is_denied(
         response = requests.get(
             f"{base_url}/ai/conversations",
             headers=conversation_actors.owner_headers,
-            params={"company_id": default_company_id},
+            params={"company_id": company_id},
         )
         assert response.status_code == 403
     finally:
         with SessionLocal() as db:
             membership = db.scalar(
                 select(CompanyUser).where(
-                    CompanyUser.company_id == default_company_id,
+                    CompanyUser.company_id == company_id,
                     CompanyUser.user_id == conversation_actors.owner_id,
                 )
             )
             membership.is_active = True
             db.commit()
 
+
 def test_missing_archive_and_delete_contract(
-    base_url, default_company_id, conversation_actors,
+    base_url, conversation_actors,
 ):
+    company_id = conversation_actors.company_id
     missing = requests.get(
         f"{base_url}/ai/conversations/999999999",
         headers=conversation_actors.owner_headers,
-        params={"company_id": default_company_id},
+        params={"company_id": company_id},
     )
     assert missing.status_code == 404
 
     conversation = _create_conversation(
-        base_url, conversation_actors.owner_headers, default_company_id
+        base_url, conversation_actors.owner_headers, company_id
     )
     archived = requests.patch(
         f"{base_url}/ai/conversations/{conversation['id']}",
         headers=conversation_actors.owner_headers,
-        json={"company_id": default_company_id, "status": "archived"},
+        json={"company_id": company_id, "status": "archived"},
     )
     assert archived.status_code == 200, archived.text
     rejected, _ = _send_message(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         conversation["id"],
         "Hello after archive",
     )
@@ -394,28 +374,29 @@ def test_missing_archive_and_delete_contract(
     deleted = requests.delete(
         f"{base_url}/ai/conversations/{conversation['id']}",
         headers=conversation_actors.owner_headers,
-        params={"company_id": default_company_id},
+        params={"company_id": company_id},
     )
     assert deleted.status_code == 204, deleted.text
     after_delete = requests.get(
         f"{base_url}/ai/conversations/{conversation['id']}",
         headers=conversation_actors.owner_headers,
-        params={"company_id": default_company_id},
+        params={"company_id": company_id},
     )
     assert after_delete.status_code == 404
 
 
 def test_duplicate_client_message_id_is_idempotent(
-    base_url, default_company_id, conversation_actors,
+    base_url, conversation_actors,
 ):
+    company_id = conversation_actors.company_id
     conversation = _create_conversation(
-        base_url, conversation_actors.owner_headers, default_company_id
+        base_url, conversation_actors.owner_headers, company_id
     )
     client_message_id = f"duplicate-{uuid.uuid4().hex}"
     first, payload = _send_message(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         conversation["id"],
         "Who are you?",
         client_message_id=client_message_id,
@@ -434,24 +415,25 @@ def test_duplicate_client_message_id_is_idempotent(
     detail = requests.get(
         f"{base_url}/ai/conversations/{conversation['id']}",
         headers=conversation_actors.owner_headers,
-        params={"company_id": default_company_id},
+        params={"company_id": company_id},
     ).json()
     assert detail["messages_total"] == 2
 
 
 def test_automatic_titles_and_manual_rename_are_stable(
-    base_url, default_company_id, conversation_actors,
+    base_url, conversation_actors,
 ):
+    company_id = conversation_actors.company_id
     greeting = _create_conversation(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         language="ar",
     )
     greeted, _ = _send_message(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         greeting["id"],
         "السلام عليكم",
         language="en",
@@ -463,7 +445,7 @@ def test_automatic_titles_and_manual_rename_are_stable(
     meaningful, _ = _send_message(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         greeting["id"],
         "كم صافي الربح؟",
         language="en",
@@ -473,12 +455,12 @@ def test_automatic_titles_and_manual_rename_are_stable(
     assert meaningful.json()["conversation"]["title_source"] == "auto"
 
     electricity = _create_conversation(
-        base_url, conversation_actors.owner_headers, default_company_id
+        base_url, conversation_actors.owner_headers, company_id
     )
     expense, _ = _send_message(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         electricity["id"],
         "دفعت كهرباء 500 ريال",
         language="en",
@@ -487,12 +469,12 @@ def test_automatic_titles_and_manual_rename_are_stable(
     assert expense.json()["conversation"]["title"] == "مصروف كهرباء"
 
     english = _create_conversation(
-        base_url, conversation_actors.owner_headers, default_company_id
+        base_url, conversation_actors.owner_headers, company_id
     )
     english_reply, _ = _send_message(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         english["id"],
         "What is my net profit?",
     )
@@ -502,7 +484,7 @@ def test_automatic_titles_and_manual_rename_are_stable(
     renamed = requests.patch(
         f"{base_url}/ai/conversations/{greeting['id']}",
         headers=conversation_actors.owner_headers,
-        json={"company_id": default_company_id, "title": "  تحليلي الخاص  "},
+        json={"company_id": company_id, "title": "  تحليلي الخاص  "},
     )
     assert renamed.status_code == 200, renamed.text
     assert renamed.json()["title"] == "تحليلي الخاص"
@@ -511,7 +493,7 @@ def test_automatic_titles_and_manual_rename_are_stable(
     later, _ = _send_message(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         greeting["id"],
         "اعرض قيود البنك",
         language="ar",
@@ -523,31 +505,32 @@ def test_automatic_titles_and_manual_rename_are_stable(
     empty = requests.patch(
         f"{base_url}/ai/conversations/{greeting['id']}",
         headers=conversation_actors.owner_headers,
-        json={"company_id": default_company_id, "title": "   "},
+        json={"company_id": company_id, "title": "   "},
     )
     assert empty.status_code == 422
     too_long = requests.patch(
         f"{base_url}/ai/conversations/{greeting['id']}",
         headers=conversation_actors.owner_headers,
-        json={"company_id": default_company_id, "title": "x" * 61},
+        json={"company_id": company_id, "title": "x" * 61},
     )
     assert too_long.status_code == 422
 
 
 def test_search_is_scoped_and_filters_active_archived_without_metadata(
-    base_url, default_company_id, conversation_actors,
+    base_url, conversation_actors,
 ):
+    company_id = conversation_actors.company_id
     marker = uuid.uuid4().hex[:8]
     owner = _create_conversation(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         title=f"Owner electricity {marker}",
     )
     other = _create_conversation(
         base_url,
         conversation_actors.other_headers,
-        default_company_id,
+        company_id,
         title=f"Other electricity {marker}",
     )
     second_company = _create_conversation(
@@ -560,7 +543,7 @@ def test_search_is_scoped_and_filters_active_archived_without_metadata(
     found = requests.get(
         f"{base_url}/ai/conversations",
         headers=conversation_actors.owner_headers,
-        params={"company_id": default_company_id, "search": marker},
+        params={"company_id": company_id, "search": marker},
     )
     assert found.status_code == 200, found.text
     assert [item["id"] for item in found.json()["items"]] == [owner["id"]]
@@ -570,13 +553,13 @@ def test_search_is_scoped_and_filters_active_archived_without_metadata(
     preview = _create_conversation(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         title="Preview lookup",
     )
     preview_reply, _ = _send_message(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         preview["id"],
         "Who are you?",
     )
@@ -584,14 +567,14 @@ def test_search_is_scoped_and_filters_active_archived_without_metadata(
     by_preview = requests.get(
         f"{base_url}/ai/conversations",
         headers=conversation_actors.owner_headers,
-        params={"company_id": default_company_id, "search": "permissions"},
+        params={"company_id": company_id, "search": "permissions"},
     )
     assert preview["id"] in {item["id"] for item in by_preview.json()["items"]}
 
     hidden = requests.get(
         f"{base_url}/ai/conversations",
         headers=conversation_actors.owner_headers,
-        params={"company_id": default_company_id, "search": "pending_context_token"},
+        params={"company_id": company_id, "search": "pending_context_token"},
     )
     assert hidden.status_code == 200
     assert hidden.json()["items"] == []
@@ -599,39 +582,40 @@ def test_search_is_scoped_and_filters_active_archived_without_metadata(
     archived = requests.patch(
         f"{base_url}/ai/conversations/{owner['id']}",
         headers=conversation_actors.owner_headers,
-        json={"company_id": default_company_id, "status": "archived"},
+        json={"company_id": company_id, "status": "archived"},
     )
     assert archived.status_code == 200
     active_search = requests.get(
         f"{base_url}/ai/conversations",
         headers=conversation_actors.owner_headers,
-        params={"company_id": default_company_id, "search": marker, "status": "active"},
+        params={"company_id": company_id, "search": marker, "status": "active"},
     )
     assert active_search.json()["items"] == []
     archived_search = requests.get(
         f"{base_url}/ai/conversations",
         headers=conversation_actors.owner_headers,
-        params={"company_id": default_company_id, "search": marker, "status": "archived"},
+        params={"company_id": company_id, "search": marker, "status": "archived"},
     )
     assert [item["id"] for item in archived_search.json()["items"]] == [owner["id"]]
 
 
 def test_archive_unarchive_and_delete_contract(
-    base_url, default_company_id, conversation_actors,
+    base_url, conversation_actors,
 ):
+    company_id = conversation_actors.company_id
     conversation = _create_conversation(
-        base_url, conversation_actors.owner_headers, default_company_id
+        base_url, conversation_actors.owner_headers, company_id
     )
     archived = requests.patch(
         f"{base_url}/ai/conversations/{conversation['id']}",
         headers=conversation_actors.owner_headers,
-        json={"company_id": default_company_id, "status": "archived"},
+        json={"company_id": company_id, "status": "archived"},
     )
     assert archived.status_code == 200
     rejected, _ = _send_message(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         conversation["id"],
         "This must not be saved",
     )
@@ -640,13 +624,13 @@ def test_archive_unarchive_and_delete_contract(
     unarchived = requests.patch(
         f"{base_url}/ai/conversations/{conversation['id']}",
         headers=conversation_actors.owner_headers,
-        json={"company_id": default_company_id, "status": "active"},
+        json={"company_id": company_id, "status": "active"},
     )
     assert unarchived.status_code == 200
     accepted, _ = _send_message(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         conversation["id"],
         "Hello after unarchive",
     )
@@ -655,27 +639,28 @@ def test_archive_unarchive_and_delete_contract(
     deleted = requests.delete(
         f"{base_url}/ai/conversations/{conversation['id']}",
         headers=conversation_actors.owner_headers,
-        params={"company_id": default_company_id},
+        params={"company_id": company_id},
     )
     assert deleted.status_code == 204
     inaccessible = requests.get(
         f"{base_url}/ai/conversations/{conversation['id']}",
         headers=conversation_actors.owner_headers,
-        params={"company_id": default_company_id},
+        params={"company_id": company_id},
     )
     assert inaccessible.status_code == 404
 
 
 def test_conversation_pagination_is_newest_first(
-    base_url, default_company_id, conversation_actors,
+    base_url, conversation_actors,
 ):
+    company_id = conversation_actors.company_id
     marker = uuid.uuid4().hex[:8]
     created_ids = []
     for index in range(23):
         conversation = _create_conversation(
             base_url,
             conversation_actors.owner_headers,
-            default_company_id,
+            company_id,
             title=f"Page {marker} {index:02d}",
         )
         created_ids.append(conversation["id"])
@@ -683,32 +668,17 @@ def test_conversation_pagination_is_newest_first(
     first_page = requests.get(
         f"{base_url}/ai/conversations",
         headers=conversation_actors.owner_headers,
-        params={
-            "company_id": default_company_id,
-            "search": marker,
-            "page": 1,
-            "page_size": 10,
-        },
+        params={"company_id": company_id, "search": marker, "page": 1, "page_size": 10},
     )
     second_page = requests.get(
         f"{base_url}/ai/conversations",
         headers=conversation_actors.owner_headers,
-        params={
-            "company_id": default_company_id,
-            "search": marker,
-            "page": 2,
-            "page_size": 10,
-        },
+        params={"company_id": company_id, "search": marker, "page": 2, "page_size": 10},
     )
     third_page = requests.get(
         f"{base_url}/ai/conversations",
         headers=conversation_actors.owner_headers,
-        params={
-            "company_id": default_company_id,
-            "search": marker,
-            "page": 3,
-            "page_size": 10,
-        },
+        params={"company_id": company_id, "search": marker, "page": 3, "page_size": 10},
     )
     assert first_page.status_code == second_page.status_code == third_page.status_code == 200
     assert first_page.json()["total"] == 23
@@ -723,13 +693,15 @@ def test_conversation_pagination_is_newest_first(
     assert combined == list(reversed(created_ids))
     assert len(set(combined)) == 23
 
+
 def test_provider_failure_preserves_user_and_safe_error(
-    monkeypatch, default_company_id, conversation_actors,
+    monkeypatch, conversation_actors,
 ):
+    company_id = conversation_actors.company_id
     with SessionLocal() as db:
         conversation = create_conversation(
             db,
-            company_id=default_company_id,
+            company_id=company_id,
             user_id=conversation_actors.owner_id,
             title=None,
             language="en",
@@ -766,18 +738,19 @@ def test_provider_failure_preserves_user_and_safe_error(
 
 
 def test_arabic_messages_and_pending_clarification_survive_reload(
-    base_url, default_company_id, conversation_actors,
+    base_url, conversation_actors,
 ):
+    company_id = conversation_actors.company_id
     conversation = _create_conversation(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         language="en",
     )
     greeting, _ = _send_message(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         conversation["id"],
         "السلام عليكم",
         language="en",
@@ -791,9 +764,9 @@ def test_arabic_messages_and_pending_clarification_survive_reload(
     pending, _ = _send_message(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         conversation["id"],
-        "دفعت كهرباء 500 ريال",
+        "دفعت إيجار 500 ريال",
         language="en",
     )
     assert pending.status_code == 201, pending.text
@@ -804,7 +777,7 @@ def test_arabic_messages_and_pending_clarification_survive_reload(
     reloaded = requests.get(
         f"{base_url}/ai/conversations/{conversation['id']}",
         headers=conversation_actors.owner_headers,
-        params={"company_id": default_company_id},
+        params={"company_id": company_id},
     )
     assert reloaded.status_code == 200
     assert reloaded.json()["messages"][-1]["metadata"]["pending_transaction"]
@@ -812,9 +785,9 @@ def test_arabic_messages_and_pending_clarification_survive_reload(
     resolved, _ = _send_message(
         base_url,
         conversation_actors.owner_headers,
-        default_company_id,
+        company_id,
         conversation["id"],
-        "من الصندوق",
+        "من البنك",
         language="en",
     )
     assert resolved.status_code == 201, resolved.text
@@ -823,15 +796,16 @@ def test_arabic_messages_and_pending_clarification_survive_reload(
 
 
 def test_viewer_can_chat_but_cannot_confirm_journal(
-    base_url, default_company_id, conversation_actors,
+    base_url, conversation_actors,
 ):
+    company_id = conversation_actors.company_id
     conversation = _create_conversation(
-        base_url, conversation_actors.other_headers, default_company_id
+        base_url, conversation_actors.other_headers, company_id
     )
     chat, _ = _send_message(
         base_url,
         conversation_actors.other_headers,
-        default_company_id,
+        company_id,
         conversation["id"],
         "Hello",
     )
@@ -841,10 +815,10 @@ def test_viewer_can_chat_but_cannot_confirm_journal(
         f"{base_url}/ai/gemini-assistant/confirm-action",
         headers=conversation_actors.other_headers,
         json={
-            "company_id": default_company_id,
+            "company_id": company_id,
             "action_type": "create_journal_entry_draft",
             "payload": {
-                "company_id": default_company_id,
+                "company_id": company_id,
                 "entry_date": "2026-01-01",
                 "description": "viewer must not create",
                 "lines": [

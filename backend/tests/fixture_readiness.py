@@ -67,30 +67,7 @@ EXPECTED_HTTP_INTEGRATION_FILES = frozenset(
     }
 )
 
-EXPECTED_IMPLICIT_SEED_CONSUMERS = frozenset(
-    {
-        "api/test_company_user_invitations.py",
-        "test_assistant_conversations.py",
-        "test_balance_sheet_multi_year.py",
-        "test_dashboard_net_income.py",
-        "test_fiscal_management.py",
-        "test_fiscal_year_date_protection.py",
-        "test_gemini_assistant.py",
-        "test_gemini_assistant_explain.py",
-        "test_gemini_assistant_profit.py",
-        "test_invitation_lifecycle_integrity.py",
-        "test_journal_lifecycle_policy.py",
-        "test_non_journal_audit_logs.py",
-        "test_opening_balance_workflow.py",
-        "test_protected_audit_logs.py",
-        "test_protected_companies.py",
-        "test_protected_company_users.py",
-        "test_protected_journal_entries.py",
-        "test_rbac_permission_matrix.py",
-        "test_reset_script.py",
-        "test_semantic_transaction.py",
-    }
-)
+EXPECTED_IMPLICIT_SEED_CONSUMERS = frozenset()
 
 EXPECTED_SELF_CONTAINED_HTTP_FILES = frozenset(
     {
@@ -103,15 +80,35 @@ EXPECTED_SELF_CONTAINED_HTTP_FILES = frozenset(
 
 EXPECTED_FACTORY_BACKED_HTTP_FILES = frozenset(
     {
+        "api/test_company_user_invitations.py",
         "test_ai_status.py",
         "test_ai_suggestions.py",
         "test_default_accounts_seed.py",
+        "test_fiscal_management.py",
+        "test_fiscal_year_date_protection.py",
+        "test_journal_lifecycle_policy.py",
+        "test_non_journal_audit_logs.py",
+        "test_opening_balance_workflow.py",
         "test_protected_accounts.py",
+        "test_protected_audit_logs.py",
+        "test_protected_companies.py",
         "test_protected_fiscal.py",
         "test_protected_reports.py",
+        "test_rbac_permission_matrix.py",
         "test_report_csv_exports.py",
         "test_report_pdf_exports.py",
         "test_reports_smoke.py",
+        "test_dashboard_net_income.py",
+        "test_protected_company_users.py",
+        "test_protected_journal_entries.py",
+        "test_reset_script.py",
+        "test_balance_sheet_multi_year.py",
+        "test_invitation_lifecycle_integrity.py",
+        "test_gemini_assistant_explain.py",
+        "test_gemini_assistant_profit.py",
+        "test_semantic_transaction.py",
+        "test_gemini_assistant.py",
+        "test_assistant_conversations.py",
     }
 )
 
@@ -122,7 +119,6 @@ EXPECTED_DIRECT_SESSION_FILES = frozenset(
         "test_protected_accounts.py",
         "test_protected_company_users.py",
         "test_protected_journal_entries.py",
-        "test_rbac_permission_matrix.py",
     }
 )
 

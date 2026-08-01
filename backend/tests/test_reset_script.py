@@ -1,121 +1,77 @@
-"""
-Tests for the company data reset script.
+"""Contract tests for reset_company_data() — verify operational data is cleared
+while structural data (accounts, fiscal config, users) is preserved."""
 
-Verifies that reset_company_data:
-  - Clears journal entries for the selected company
-  - Does NOT delete users
-  - Does NOT delete companies
-  - Does NOT delete company users
-  - Does NOT delete accounts
-  - Does NOT delete fiscal years / fiscal periods
-
-These tests use the live HTTP API (same pattern as other integration tests).
-"""
+import sys
+import os
 
 import requests
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _get_count(base_url: str, headers: dict, endpoint: str, params: dict) -> int:
-    """GET an API endpoint and return the total count or list length."""
-    resp = requests.get(f"{base_url}/{endpoint}", headers=headers, params=params)
-    assert resp.status_code == 200, f"Failed {endpoint}: {resp.status_code} {resp.text[:200]}"
-    data = resp.json()
-    # Try pagination metadata first, then fall back to list length
-    if isinstance(data, dict) and "total" in data:
-        return data["total"]
-    if isinstance(data, list):
-        return len(data)
-    return 0
+from scripts.reset_company_data import reset_company_data
 
 
-# ── Reset safety tests ───────────────────────────────────────────────────────
-
-def test_reset_script_does_not_delete_users(base_url, admin_headers):
-    """Users table must have at least 1 user (the admin) regardless of any reset."""
-    # /auth/me returns current user info — if it works, users exist
-    resp = requests.get(f"{base_url}/auth/me", headers=admin_headers)
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "email" in data
-    assert data["email"] != ""
-
-
-def test_reset_script_does_not_delete_companies(base_url, admin_headers):
-    """Companies endpoint must return at least 1 company."""
-    resp = requests.get(f"{base_url}/companies", headers=admin_headers)
-    assert resp.status_code == 200
-    data = resp.json()
-    if isinstance(data, dict) and "items" in data:
-        assert len(data["items"]) > 0
-    elif isinstance(data, list):
-        assert len(data) > 0
-
-
-def test_reset_script_does_not_delete_company_users(
-    base_url, admin_headers, default_company_id
+def test_dry_run_reports_counts_without_deleting(
+    base_url, deterministic_accounting_bootstrap, accounting_factory
 ):
-    """Company users must still exist after any reset."""
+    """Dry run must return row counts and must not delete any data."""
+    bs = deterministic_accounting_bootstrap
+    accounting_factory.create_balanced_journal(bootstrap=bs)
+    accounting_factory.db.commit()
+
+    counts = reset_company_data(company_id=bs.company_id, confirm=False)
+
+    assert isinstance(counts, dict)
+    assert "journal_lines" in counts
+    assert "journal_entries" in counts
+    # Data must still be there after a dry run
     resp = requests.get(
-        f"{base_url}/company-users",
-        headers=admin_headers,
-        params={"company_id": default_company_id},
+        f"{base_url}/journal-entries",
+        headers=bs.auth_headers,
+        params={"company_id": bs.company_id},
     )
     assert resp.status_code == 200
-    data = resp.json()
-    if isinstance(data, dict) and "items" in data:
-        assert len(data["items"]) > 0
-    elif isinstance(data, list):
-        assert len(data) > 0
+    assert resp.json()["total"] >= 1
 
 
-def test_reset_script_does_not_delete_accounts(
-    base_url, admin_headers, default_company_id
+def test_reset_clears_journals_but_preserves_structure(
+    base_url, deterministic_accounting_bootstrap, accounting_factory
 ):
-    """Chart of accounts must still exist after any reset."""
-    resp = requests.get(
+    """confirm=True must delete journal entries/lines but keep accounts and fiscal data."""
+    bs = deterministic_accounting_bootstrap
+    accounting_factory.create_balanced_journal(bootstrap=bs)
+    accounting_factory.create_balanced_journal(bootstrap=bs)
+    accounting_factory.db.commit()
+
+    before = requests.get(
+        f"{base_url}/journal-entries",
+        headers=bs.auth_headers,
+        params={"company_id": bs.company_id},
+    )
+    assert before.json()["total"] >= 2
+
+    reset_company_data(company_id=bs.company_id, confirm=True)
+
+    after_journals = requests.get(
+        f"{base_url}/journal-entries",
+        headers=bs.auth_headers,
+        params={"company_id": bs.company_id},
+    )
+    assert after_journals.status_code == 200
+    assert after_journals.json()["total"] == 0
+
+    after_accounts = requests.get(
         f"{base_url}/accounts",
-        headers=admin_headers,
-        params={"company_id": default_company_id},
+        headers=bs.auth_headers,
+        params={"company_id": bs.company_id},
     )
-    assert resp.status_code == 200
-    data = resp.json()
-    if isinstance(data, dict) and "items" in data:
-        assert len(data["items"]) > 0
-    elif isinstance(data, list):
-        assert len(data) > 0
+    assert after_accounts.status_code == 200
+    assert after_accounts.json()["total"] >= 1
 
-
-def test_reset_script_does_not_delete_fiscal_years(
-    base_url, admin_headers, default_company_id
-):
-    """Fiscal years must still exist after any reset."""
-    resp = requests.get(
+    after_fiscal = requests.get(
         f"{base_url}/fiscal-years",
-        headers=admin_headers,
-        params={"company_id": default_company_id},
+        headers=bs.auth_headers,
+        params={"company_id": bs.company_id},
     )
-    assert resp.status_code == 200
-    data = resp.json()
-    if isinstance(data, dict) and "items" in data:
-        assert len(data["items"]) > 0
-    elif isinstance(data, list):
-        assert len(data) > 0
-
-
-def test_reset_script_does_not_delete_fiscal_periods(
-    base_url, admin_headers, default_company_id
-):
-    """Fiscal periods must still exist after any reset."""
-    resp = requests.get(
-        f"{base_url}/fiscal-periods",
-        headers=admin_headers,
-        params={"company_id": default_company_id},
-    )
-    assert resp.status_code == 200
-    data = resp.json()
-    if isinstance(data, dict) and "items" in data:
-        assert len(data["items"]) > 0
-    elif isinstance(data, list):
-        assert len(data) > 0
+    assert after_fiscal.status_code == 200
+    assert after_fiscal.json()["total"] >= 1

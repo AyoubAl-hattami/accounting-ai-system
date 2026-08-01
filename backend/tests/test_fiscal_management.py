@@ -371,25 +371,21 @@ def test_non_admin_cannot_create_fiscal_period(base_url):
 
 def test_quick_setup_enables_gemini_today_journal(
     base_url,
-    admin_headers,
-    default_company_id,
-    default_bank_account_id,
-    default_owner_capital_account_id,
+    deterministic_accounting_bootstrap,
 ):
     """
     After quick-setup-today, Gemini confirm-action must succeed for today's date.
     This is the end-to-end integration test.
-
-    DEFERRED from factory migration: relies on fixed account IDs
-    (default_bank_account_id=5, default_owner_capital_account_id=11) from the
-    shared seed and the Gemini AI assistant endpoint.  Blocked until the Gemini
-    assistant tests are migrated as a group.
     """
+    bs = deterministic_accounting_bootstrap
+    bank_id = bs.account_id("1110")
+    owner_capital_id = bs.account_id("3100")
+
     # Ensure fiscal period exists for today
     setup_resp = requests.post(
         f"{base_url}/fiscal/quick-setup-today",
-        headers=admin_headers,
-        params={"company_id": default_company_id},
+        headers=bs.auth_headers,
+        params={"company_id": bs.company_id},
     )
     assert setup_resp.status_code == 200
 
@@ -398,22 +394,22 @@ def test_quick_setup_enables_gemini_today_journal(
     # Now confirm a journal entry via Gemini
     confirm_resp = requests.post(
         f"{base_url}/ai/gemini-assistant/confirm-action",
-        headers=admin_headers,
+        headers=bs.auth_headers,
         json={
-            "company_id": default_company_id,
+            "company_id": bs.company_id,
             "action_type": "create_journal_entry_draft",
             "payload": {
-                "company_id": default_company_id,
+                "company_id": bs.company_id,
                 "entry_date": today,
                 "description": "Quick setup integration test",
                 "lines": [
                     {
-                        "account_id": default_bank_account_id,
+                        "account_id": bank_id,
                         "debit": "100.00",
                         "credit": "0.00",
                     },
                     {
-                        "account_id": default_owner_capital_account_id,
+                        "account_id": owner_capital_id,
                         "debit": "0.00",
                         "credit": "100.00",
                     },

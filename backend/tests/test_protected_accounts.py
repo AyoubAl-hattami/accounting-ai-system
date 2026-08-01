@@ -263,7 +263,7 @@ def test_create_account_contract_normalization_and_read_pilots(
 def test_create_account_preserves_validation_errors(
     base_url,
     deterministic_accounting_bootstrap,
-    superuser_headers,
+    deterministic_superuser_headers,
 ):
     dab = deterministic_accounting_bootstrap
     first_company_id = _create_company(
@@ -346,7 +346,7 @@ def test_create_account_preserves_validation_errors(
 
     missing_company = requests.post(
         f"{base_url}/accounts",
-        headers=superuser_headers,
+        headers=deterministic_superuser_headers,
         json=_account_payload(2147483647, uuid.uuid4().hex[:12]),
     )
     assert missing_company.status_code == 404
