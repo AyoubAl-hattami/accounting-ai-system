@@ -109,128 +109,85 @@ export default function AuditDetailsPanel({
   const hasOld = !!oldValues;
   const hasNew = !!newValues;
 
-  if (!hasOld && !hasNew) {
-    return (
-      <div className="text-xs text-gray-500 italic py-1">
-        {t.auditLogs.noDetails}
-      </div>
-    );
-  }
-
-  const keys = mergeKeys(oldValues, newValues);
+  const keys = hasOld || hasNew ? mergeKeys(oldValues, newValues) : [];
 
   if (keys.length === 0) {
-    return (
-      <div className="text-xs text-gray-500 italic py-1">
-        {t.auditLogs.noDetails}
-      </div>
-    );
+    return <p className="py-1 text-xs italic text-subtle-foreground">{t.auditLogs.noDetails}</p>;
   }
 
   return (
-    <div className="mt-2 rounded-xl overflow-hidden border border-white/[0.06] bg-black/[0.18]">
-      <table className="w-full text-xs border-collapse">
-        <thead>
-          <tr className="border-b border-white/[0.06] bg-white/[0.02]">
-            <th className="py-2 px-3 text-left font-semibold text-gray-500 uppercase tracking-wider w-1/3">
-              {t.auditLogs.field}
-            </th>
-            {hasBoth ? (
-              <>
-                <th className="py-2 px-3 text-left font-semibold text-gray-500 uppercase tracking-wider w-1/3">
-                  {t.auditLogs.before}
-                </th>
-                <th className="py-2 px-3 text-left font-semibold text-gray-500 uppercase tracking-wider w-1/3">
-                  {t.auditLogs.after}
-                </th>
-              </>
-            ) : hasOld ? (
-              <th className="py-2 px-3 text-left font-semibold text-gray-500 uppercase tracking-wider">
-                {t.auditLogs.previousValue}
+    <div className="overflow-hidden rounded-lg border border-border-subtle bg-surface">
+      <div className="table-wrap">
+        <table className="w-full border-collapse text-xs">
+          <caption className="sr-only">{t.auditLogs.auditDetails}</caption>
+          <thead>
+            <tr className="border-b border-border bg-surface-muted">
+              <th scope="col" className="overline w-1/3 px-3 py-2 text-start">
+                {t.auditLogs.field}
               </th>
-            ) : (
-              <th className="py-2 px-3 text-left font-semibold text-gray-500 uppercase tracking-wider">
-                {t.auditLogs.value}
-              </th>
-            )}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-white/[0.03]">
-          {keys.map((key) => {
-            const changed = hasBoth && hasChanged(key, oldValues, newValues);
-            const oldStr = renderValue(oldValues?.[key]);
-            const newStr = renderValue(newValues?.[key]);
+              {hasBoth ? (
+                <>
+                  <th scope="col" className="overline w-1/3 px-3 py-2 text-start">
+                    {t.auditLogs.before}
+                  </th>
+                  <th scope="col" className="overline w-1/3 px-3 py-2 text-start">
+                    {t.auditLogs.after}
+                  </th>
+                </>
+              ) : (
+                <th scope="col" className="overline px-3 py-2 text-start">
+                  {hasOld ? t.auditLogs.previousValue : t.auditLogs.value}
+                </th>
+              )}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border-subtle">
+            {keys.map((key) => {
+              const changed = hasBoth && hasChanged(key, oldValues, newValues);
+              const oldStr = renderValue(oldValues?.[key]);
+              const newStr = renderValue(newValues?.[key]);
 
-            return (
-              <tr
-                key={key}
-                className={
-                  changed
-                    ? 'bg-indigo-500/[0.05] border-l-2 border-l-indigo-500/40'
-                    : 'hover:bg-white/[0.01]'
-                }
-              >
-                {/* Field name */}
-                <td className="py-2 px-3 font-mono text-gray-400 align-top">
-                  {humanizeKey(key)}
-                  {changed && (
-                    <span className="ml-1.5 inline-block rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 text-[9px] font-semibold px-1.5 py-0.5 uppercase leading-none align-middle">
-                      {t.auditLogs.changed}
-                    </span>
+              return (
+                <tr key={key} className={changed ? 'bg-primary-soft' : undefined}>
+                  <th scope="row" className="px-3 py-2 text-start align-top font-medium text-muted-foreground">
+                    {humanizeKey(key)}
+                    {changed && <span className="badge badge-uppercase tone-primary ms-1.5">{t.auditLogs.changed}</span>}
+                  </th>
+
+                  {hasBoth ? (
+                    <>
+                      <td className="max-w-[12rem] break-all px-3 py-2 align-top">
+                        <ValueBadge value={oldStr} changed={changed} side="old" />
+                      </td>
+                      <td className="max-w-[12rem] break-all px-3 py-2 align-top">
+                        <ValueBadge value={newStr} changed={changed} side="new" />
+                      </td>
+                    </>
+                  ) : (
+                    <td className="break-all px-3 py-2 align-top text-muted-foreground">
+                      {hasOld ? oldStr : newStr}
+                    </td>
                   )}
-                </td>
-
-                {hasBoth ? (
-                  <>
-                    {/* Before */}
-                    <td className="py-2 px-3 text-gray-400 align-top max-w-[12rem] break-all">
-                      <ValueBadge value={oldStr} changed={changed} side="old" />
-                    </td>
-                    {/* After */}
-                    <td className="py-2 px-3 text-gray-200 align-top max-w-[12rem] break-all">
-                      <ValueBadge value={newStr} changed={changed} side="new" />
-                    </td>
-                  </>
-                ) : hasOld ? (
-                  <td className="py-2 px-3 text-gray-300 align-top break-all">
-                    {oldStr}
-                  </td>
-                ) : (
-                  <td className="py-2 px-3 text-gray-200 align-top break-all">
-                    {newStr}
-                  </td>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-// ── Tiny badge to style old vs new values when changed ───────────────────────
-function ValueBadge({
-  value,
-  changed,
-  side,
-}: {
-  value: string;
-  changed: boolean;
-  side: 'old' | 'new';
-}) {
+/**
+ * A changed pair is shown as before/after chips so the difference survives
+ * greyscale printing and does not rely on colour alone.
+ */
+function ValueBadge({ value, changed, side }: { value: string; changed: boolean; side: 'old' | 'new' }) {
   if (!changed) {
-    return <span className="text-gray-400">{value}</span>;
-  }
-  if (side === 'old') {
-    return (
-      <span className="inline-block rounded bg-red-500/10 border border-red-500/20 text-red-400 px-1.5 py-0.5 break-all">
-        {value}
-      </span>
-    );
+    return <span className="text-muted-foreground">{value}</span>;
   }
   return (
-    <span className="inline-block rounded bg-green-500/10 border border-green-500/20 text-green-400 px-1.5 py-0.5 break-all">
+    <span className={`badge ${side === 'old' ? 'tone-danger line-through' : 'tone-success'} break-all`}>
       {value}
     </span>
   );

@@ -1,15 +1,26 @@
 import { motion } from 'framer-motion';
 import { type LucideIcon } from 'lucide-react';
 
+export type MetricTone =
+  | 'neutral'
+  | 'primary'
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'info'
+  | 'violet'
+  | 'rose'
+  | 'teal';
+
 interface DashboardMetricCardProps {
   label: string;
   value: string;
   icon: LucideIcon;
   index?: number;
-  trend?: 'up' | 'down' | 'neutral';
+  /** Drives the icon tile and the chip so a card only ever needs one colour decision. */
+  tone?: MetricTone;
   chip?: string;
-  chipColor?: string;
-  iconColor?: string;
+  chipTone?: MetricTone;
 }
 
 export default function DashboardMetricCard({
@@ -17,39 +28,28 @@ export default function DashboardMetricCard({
   value,
   icon: Icon,
   index = 0,
-  trend = 'neutral',
+  tone = 'primary',
   chip,
-  chipColor = 'bg-gray-500/10 text-gray-400',
-  iconColor = 'text-brand-400',
+  chipTone,
 }: DashboardMetricCardProps) {
-  const trendGlow = trend === 'up'
-    ? 'from-emerald-500/10 to-transparent'
-    : trend === 'down'
-      ? 'from-red-500/10 to-transparent'
-      : 'from-brand-500/5 to-transparent';
-
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, delay: index * 0.07, ease: 'easeOut' }}
-      className="glass-panel relative overflow-hidden group hover:border-white/[0.1] transition-all duration-300"
+      transition={{ duration: 0.35, delay: index * 0.05, ease: 'easeOut' }}
+      className="card p-5 transition-colors hover:border-border-strong"
     >
-      <div className={`absolute inset-0 bg-gradient-to-br ${trendGlow} opacity-60`} />
-      <div className="relative p-5">
-        <div className="flex items-center justify-between mb-3">
-          <div className="p-2.5 rounded-xl bg-white/[0.05] border border-white/[0.06]">
-            <Icon className={`w-4 h-4 ${iconColor}`} />
-          </div>
-          {chip && (
-            <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${chipColor}`}>
-              {chip}
-            </span>
-          )}
-        </div>
-        <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wider mb-1">{label}</p>
-        <p className="text-xl font-bold text-white tracking-tight">{value}</p>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <span
+          className={`badge tone-${tone} h-9 w-9 justify-center rounded-lg p-0`}
+          aria-hidden
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+        {chip && <span className={`badge badge-uppercase tone-${chipTone ?? tone}`}>{chip}</span>}
       </div>
+      <p className="overline mb-1.5">{label}</p>
+      <p className="numeric text-2xl font-semibold tracking-tight text-foreground">{value}</p>
     </motion.div>
   );
 }

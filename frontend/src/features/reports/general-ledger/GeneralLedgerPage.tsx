@@ -1,35 +1,35 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useId } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import PageLayout from '../../../components/layout/PageLayout';
-import LoadingState from '../../../components/feedback/LoadingState';
-import ErrorState from '../../../components/feedback/ErrorState';
-import EmptyState from '../../../components/feedback/EmptyState';
-import { AccountTypeBadge } from '../../../entities/account';
-import { useGeneralLedger } from './useGeneralLedger';
-import { useI18n } from '../../../i18n';
-import { formatCurrency } from '../../../lib/format';
-import type { AccountLedgerRead } from '../../../api/types';
-import type { AccountLedgerLine } from '../../../api/types';
 import {
   Library,
   Search,
-  Calendar,
-  X,
   ChevronDown,
   ChevronRight,
   Hash,
   ArrowDownRight,
   ArrowUpRight,
-  Filter,
-  Check,
-  Download,
-  FileDown,
+  ListTree,
 } from 'lucide-react';
+import PageLayout from '../../../components/layout/PageLayout';
+import LoadingState from '../../../components/feedback/LoadingState';
+import ErrorState from '../../../components/feedback/ErrorState';
+import EmptyState from '../../../components/feedback/EmptyState';
+import { AccountTypeBadge } from '../../../entities/account';
+import ReportHeader from '../components/ReportHeader';
+import ReportSummaryTile from '../components/ReportSummaryTile';
+import ReportExportButtons from '../components/ReportExportButtons';
+import ReportDateField from '../components/ReportDateField';
+import ReportSearchField from '../components/ReportSearchField';
+import { useGeneralLedger } from './useGeneralLedger';
+import { useI18n } from '../../../i18n';
+import { formatCurrency, formatSignedCurrency } from '../../../lib/format';
+import type { AccountLedgerRead, AccountLedgerLine } from '../../../api/types';
 
 function parseAmount(v: string): number {
   return parseFloat(v) || 0;
 }
 
+/** Zero movements render as an em dash so real postings stand out when scanning. */
 function fmtAmt(v: string): string {
   const n = parseAmount(v);
   return n === 0 ? '—' : formatCurrency(Math.abs(n));
@@ -62,15 +62,14 @@ interface GeneralLedgerContentProps {
 
 function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLedgerContentProps) {
   const { t } = useI18n();
+  const typeFilterId = useId();
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [expandedAccounts, setExpandedAccounts] = useState<Set<number>>(new Set());
-  const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const {
     data,
@@ -87,22 +86,8 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
     setSearchQuery('');
     setTypeFilter('all');
     setExpandedAccounts(new Set());
-    setTypeDropdownOpen(false);
   }, [selectedCompanyId]);
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setTypeDropdownOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  // ── Toggle expand ──
   const toggleAccount = (accountId: number) => {
     setExpandedAccounts((prev) => {
       const next = new Set(prev);
@@ -117,12 +102,10 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
     if (!data) return [];
     let accounts = data.accounts;
 
-    // Type filter
     if (typeFilter !== 'all') {
       accounts = accounts.filter((a) => a.account_type === typeFilter);
     }
 
-    // Search filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       accounts = accounts.filter((a) => {
@@ -150,11 +133,6 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
   const aggregateClosing = data?.accounts.reduce((s, a) => s + parseAmount(a.closing_balance), 0) ?? 0;
 
   const isLoading = companiesLoading || reportLoading;
-
-  const clearDates = () => {
-    setStartDate(null);
-    setEndDate(null);
-  };
 
   const expandAll = () => {
     setExpandedAccounts(new Set(filteredAccounts.map((a) => a.account_id)));
@@ -198,276 +176,167 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
     }
   };
 
+  if (isLoading) return <LoadingState />;
+  if (error) return <ErrorState message={error} onRetry={fetchReport} />;
+  if (!data) return null;
+
+  const periodLabel =
+    data.start_date && data.end_date
+      ? `${new Date(data.start_date).toLocaleDateString()} — ${new Date(data.end_date).toLocaleDateString()}`
+      : data.start_date
+        ? `${t.common.from} ${new Date(data.start_date).toLocaleDateString()}`
+        : data.end_date
+          ? `${t.common.through} ${new Date(data.end_date).toLocaleDateString()}`
+          : t.common.allTime;
+
   return (
-    <>
-      {isLoading && <LoadingState />}
+    <div className="space-y-5">
+      <ReportHeader
+        icon={Library}
+        title={t.reports.generalLedger.pageTitle}
+        periodLabel={periodLabel}
+        actions={
+          <ReportExportButtons
+            onExportCsv={handleExportCsv}
+            onExportPdf={handleExportPdf}
+            exportingCsv={exporting}
+            exportingPdf={exportingPdf}
+          />
+        }
+      >
+        <ReportSummaryTile
+          label={t.reports.generalLedger.accounts}
+          value={String(totalAccounts)}
+          tone="teal"
+          icon={Hash}
+          hint={`${accountsWithActivity} ${t.common.withActivity}`}
+        />
+        <ReportSummaryTile
+          label={`Σ ${t.common.opening}`}
+          value={formatSignedCurrency(aggregateOpening)}
+          tone={aggregateOpening < 0 ? 'danger' : 'neutral'}
+          icon={ArrowDownRight}
+        />
+        <ReportSummaryTile
+          label={`Σ ${t.common.closing}`}
+          value={formatSignedCurrency(aggregateClosing)}
+          tone={aggregateClosing < 0 ? 'danger' : 'neutral'}
+          icon={ArrowUpRight}
+        />
+        <ReportSummaryTile
+          label={t.reports.generalLedger.totalLines}
+          value={String(totalLines)}
+          icon={ListTree}
+        />
+      </ReportHeader>
 
-      {!isLoading && error && <ErrorState message={error} onRetry={fetchReport} />}
+      {/* Toolbar */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.05 }}
+        className="filter-bar"
+      >
+        <ReportDateField
+          label={t.common.startDate}
+          value={startDate}
+          onChange={setStartDate}
+          max={endDate ?? undefined}
+        />
+        <ReportDateField
+          label={t.common.endDate}
+          value={endDate}
+          onChange={setEndDate}
+          min={startDate ?? undefined}
+        />
 
-      {!isLoading && !error && data && (
-        <>
-          {/* Hero panel */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="glass-panel relative overflow-hidden mb-6"
+        <div className="min-w-[10rem]">
+          <label htmlFor={typeFilterId} className="field-label">
+            {t.common.type}
+          </label>
+          <select
+            id={typeFilterId}
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="select"
           >
-            <div className="absolute top-0 right-0 w-72 h-72 bg-brand-500/[0.04] rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
-            <div className="relative p-6 lg:p-8">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-cyan-700 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-                    <Library className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h1 className="text-2xl font-bold text-white">{t.reports.generalLedger.pageTitle}</h1>
-                    <p className="text-sm text-gray-400">
-                      {data.start_date && data.end_date
-                        ? `${new Date(data.start_date).toLocaleDateString()} — ${new Date(data.end_date).toLocaleDateString()}`
-                        : data.start_date
-                          ? `${t.common.from} ${new Date(data.start_date).toLocaleDateString()}`
-                          : data.end_date
-                            ? `${t.common.through} ${new Date(data.end_date).toLocaleDateString()}`
-                            : t.common.allTime}
-                    </p>
-                  </div>
-                </div>
-              </div>
+            {ACCOUNT_TYPES.map((acctType) => (
+              <option key={acctType} value={acctType}>
+                {acctType === 'all'
+                  ? t.reports.generalLedger.allTypes
+                  : acctType.charAt(0).toUpperCase() + acctType.slice(1)}
+              </option>
+            ))}
+          </select>
+        </div>
 
-              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Hash className="w-3 h-3 text-cyan-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.generalLedger.accounts}</p>
-                  </div>
-                  <p className="text-xl font-bold text-white tracking-tight font-mono">{totalAccounts}</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">{accountsWithActivity} {t.common.withActivity}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <ArrowDownRight className="w-3 h-3 text-gray-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Σ {t.common.opening}</p>
-                  </div>
-                  <p className="text-xl font-bold text-white tracking-tight font-mono">
-                    {formatCurrency(Math.abs(aggregateOpening))}
-                  </p>
-                </div>
-                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <ArrowUpRight className="w-3 h-3 text-gray-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Σ {t.common.closing}</p>
-                  </div>
-                  <p className={`text-xl font-bold tracking-tight font-mono ${aggregateClosing < 0 ? 'text-red-400' : 'text-white'}`}>
-                    {aggregateClosing < 0 ? '−' : ''}{formatCurrency(Math.abs(aggregateClosing))}
-                  </p>
-                </div>
-                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Hash className="w-3 h-3 text-gray-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.generalLedger.totalLines}</p>
-                  </div>
-                  <p className="text-xl font-bold text-white tracking-tight font-mono">{totalLines}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Filter className="w-3 h-3 text-gray-400" />
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.generalLedger.showing}</p>
-                  </div>
-                  <p className="text-xl font-bold text-white tracking-tight font-mono">{filteredAccounts.length}</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">{t.common.of} {totalAccounts} {t.reports.generalLedger.accounts.toLowerCase()}</p>
-                </div>
-              </div>
-            </div>
-          </motion.div>
+        <ReportSearchField
+          label={t.common.search}
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder={t.reports.generalLedger.searchPlaceholder}
+        />
 
-          {/* Toolbar: dates + type filter + search */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-            className="flex flex-wrap items-end gap-3 mb-6"
-          >
-            <div className="flex items-end gap-3">
-              <div>
-                <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">{t.common.startDate}</label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                  <input
-                    type="date"
-                    value={startDate || ''}
-                    onChange={(e) => setStartDate(e.target.value || null)}
-                    className="input-field pl-10 text-sm min-w-[160px]"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">{t.common.endDate}</label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                  <input
-                    type="date"
-                    value={endDate || ''}
-                    onChange={(e) => setEndDate(e.target.value || null)}
-                    className="input-field pl-10 text-sm min-w-[160px]"
-                  />
-                </div>
-              </div>
-              {(startDate || endDate) && (
-                <button
-                  onClick={clearDates}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-gray-400 hover:text-gray-200 border border-white/[0.06] hover:border-white/[0.12] bg-white/[0.02] transition-all h-[38px]"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  {t.common.clear}
-                </button>
-              )}
-            </div>
+        <div className="flex items-center gap-2 pb-0.5">
+          <button type="button" onClick={expandAll} className="btn btn-secondary btn-sm">
+            {t.common.expandAll}
+          </button>
+          <button type="button" onClick={collapseAll} className="btn btn-ghost btn-sm">
+            {t.common.collapseAll}
+          </button>
+        </div>
 
-            {/* Account type filter */}
-            <div className="relative min-w-[160px] w-full sm:w-auto" ref={dropdownRef}>
-              <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1.5">{t.common.type}</label>
-              <button
-                type="button"
-                onClick={() => setTypeDropdownOpen(!typeDropdownOpen)}
-                className="input-field text-sm w-full flex items-center justify-between gap-2 px-4 text-left cursor-pointer select-none bg-white/[0.04] border border-white/[0.08] rounded-xl text-gray-100 hover:border-white/[0.12] transition-all"
-              >
-                <span>
-                  {typeFilter === 'all' ? t.reports.generalLedger.allTypes : typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1)}
-                </span>
-                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${typeDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
+        <p className="numeric pb-2.5 text-xs text-subtle-foreground">
+          {filteredAccounts.length} {t.common.of} {totalAccounts}{' '}
+          {t.reports.shared.accountsShown}
+        </p>
+      </motion.div>
 
-              <AnimatePresence>
-                {typeDropdownOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute z-50 mt-1 w-full rounded-xl bg-surface-800 border border-white/[0.08] shadow-2xl shadow-black/40 overflow-hidden py-1"
-                  >
-                    {ACCOUNT_TYPES.map((acctType) => {
-                      const isSelected = typeFilter === acctType;
-                      const label = acctType === 'all' ? t.reports.generalLedger.allTypes : acctType.charAt(0).toUpperCase() + acctType.slice(1);
-                      return (
-                        <button
-                          key={acctType}
-                          type="button"
-                          onClick={() => {
-                            setTypeFilter(acctType);
-                            setTypeDropdownOpen(false);
-                          }}
-                          className={`w-full flex items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-white/[0.04] ${
-                            isSelected ? 'text-brand-400 bg-brand-500/5 font-medium' : 'text-gray-300'
-                          }`}
-                        >
-                          <span>{label}</span>
-                          {isSelected && <Check className="w-3.5 h-3.5 text-brand-400" />}
-                        </button>
-                      );
-                    })}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Search */}
-            <div className="relative flex-1 min-w-[260px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.reports.generalLedger.searchPlaceholder}
-                className="input-field pl-10 text-sm"
-              />
-            </div>
-
-            {/* Expand/Collapse controls */}
-            <div className="flex items-center rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden h-[46px] p-0.5">
-              <button
-                type="button"
-                onClick={expandAll}
-                className="px-5 h-full text-sm font-medium text-gray-300 hover:text-white hover:bg-white/[0.04] rounded-lg transition-all flex items-center justify-center whitespace-nowrap"
-              >
-                {t.common.expandAll}
-              </button>
-              <div className="w-[1px] h-5 bg-white/[0.08]" />
-              <button
-                type="button"
-                onClick={collapseAll}
-                className="px-5 h-full text-sm font-medium text-gray-300 hover:text-white hover:bg-white/[0.04] rounded-lg transition-all flex items-center justify-center whitespace-nowrap"
-              >
-                {t.common.collapseAll}
-              </button>
-            </div>
-
-            {/* Export CSV */}
-            <button
-              onClick={handleExportCsv}
-              disabled={exporting}
-              className="inline-flex items-center gap-1.5 px-4 h-[46px] rounded-xl bg-brand-500/10 border border-brand-500/20 text-brand-400 text-sm font-semibold hover:bg-brand-500/20 transition-colors disabled:opacity-50"
-            >
-              <Download className="w-4 h-4" />
-              {exporting ? t.common.exporting : t.common.exportCsv}
-            </button>
-
-            {/* Export PDF */}
-            <button
-              onClick={handleExportPdf}
-              disabled={exportingPdf}
-              className="inline-flex items-center gap-1.5 px-4 h-[46px] rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-semibold hover:bg-red-500/20 transition-colors disabled:opacity-50"
-            >
-              <FileDown className="w-4 h-4" />
-              {exportingPdf ? t.common.exportingPdf : t.common.exportPdf}
-            </button>
-          </motion.div>
-
-          {/* Empty state */}
-          {totalAccounts === 0 && (
-            <EmptyState
-              icon={<Library className="w-7 h-7 text-brand-400" />}
-              title={t.reports.generalLedger.noDataTitle}
-              description={t.reports.generalLedger.noDataDescription}
-            />
-          )}
-
-          {/* Search/filter empty state */}
-          {totalAccounts > 0 && filteredAccounts.length === 0 && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16">
-              <Search className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400 text-sm">{t.reports.generalLedger.noMatchFilters}</p>
-              <button
-                onClick={() => { setSearchQuery(''); setTypeFilter('all'); }}
-                className="mt-3 text-brand-400 text-xs font-medium hover:text-brand-300 transition-colors"
-              >
-                {t.common.clearFilters}
-              </button>
-            </motion.div>
-          )}
-
-          {/* Account cards */}
-          {filteredAccounts.length > 0 && (
-            <div className="space-y-3">
-              {filteredAccounts.map((account, i) => (
-                <AccountCard
-                  key={account.account_id}
-                  account={account}
-                  isExpanded={expandedAccounts.has(account.account_id)}
-                  onToggle={() => toggleAccount(account.account_id)}
-                  index={i}
-                />
-              ))}
-            </div>
-          )}
-        </>
+      {totalAccounts === 0 && (
+        <EmptyState
+          icon={<Library className="h-7 w-7 text-primary" />}
+          title={t.reports.generalLedger.noDataTitle}
+          description={t.reports.generalLedger.noDataDescription}
+        />
       )}
-    </>
+
+      {totalAccounts > 0 && filteredAccounts.length === 0 && (
+        <EmptyState
+          icon={<Search className="h-7 w-7 text-primary" />}
+          title={t.reports.shared.noMatchTitle}
+          description={t.reports.generalLedger.noMatchFilters}
+          action={
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setTypeFilter('all');
+              }}
+              className="btn btn-secondary btn-sm"
+            >
+              {t.common.clearFilters}
+            </button>
+          }
+        />
+      )}
+
+      {filteredAccounts.length > 0 && (
+        <div className="space-y-3">
+          {filteredAccounts.map((account, i) => (
+            <AccountCard
+              key={account.account_id}
+              account={account}
+              isExpanded={expandedAccounts.has(account.account_id)}
+              onToggle={() => toggleAccount(account.account_id)}
+              index={i}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
-// ── Account Card ──
 interface AccountCardProps {
   account: AccountLedgerRead;
   isExpanded: boolean;
@@ -477,6 +346,7 @@ interface AccountCardProps {
 
 function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps) {
   const { t } = useI18n();
+  const panelId = useId();
   const closing = parseAmount(account.closing_balance);
   const hasActivity = account.lines.length > 0;
 
@@ -484,94 +354,101 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: Math.min(index * 0.03, 0.5) }}
-      className={`glass-panel overflow-hidden ${!hasActivity ? 'opacity-60' : ''}`}
+      transition={{ duration: 0.25, delay: Math.min(index * 0.03, 0.4) }}
+      className="card overflow-hidden"
     >
-      {/* Account header — clickable */}
       <button
+        type="button"
         onClick={onToggle}
-        className="w-full flex items-center gap-4 p-4 lg:px-6 text-left hover:bg-white/[0.02] transition-colors"
+        aria-expanded={isExpanded}
+        aria-controls={panelId}
+        className="flex w-full items-center gap-4 px-4 py-3.5 text-start transition-colors hover:bg-surface-muted lg:px-5"
       >
-        <div className="flex-shrink-0">
-          {isExpanded
-            ? <ChevronDown className="w-4 h-4 text-gray-500" />
-            : <ChevronRight className="w-4 h-4 text-gray-500" />
-          }
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-mono font-semibold text-brand-400">{account.account_code}</span>
-            <span className="text-sm font-medium text-white truncate">{account.account_name}</span>
-            <AccountTypeBadge type={account.account_type} />
-          </div>
-        </div>
-        <div className="hidden sm:flex items-center gap-6 flex-shrink-0">
-          <div className="text-right">
-            <p className="text-[9px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.generalLedger.opening}</p>
-            <p className="text-xs font-mono text-gray-300">{formatCurrency(parseAmount(account.opening_balance))}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-[9px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.generalLedger.closing}</p>
-            <p className={`text-xs font-mono font-semibold ${closing < 0 ? 'text-red-400' : 'text-white'}`}>
-              {closing < 0 ? '−' : ''}{formatCurrency(Math.abs(closing))}
-            </p>
-          </div>
-          <div className="text-right min-w-[40px]">
-            <p className="text-[9px] uppercase tracking-wider text-gray-500 font-medium">{t.reports.generalLedger.lines}</p>
-            <p className="text-xs font-mono text-gray-400">{account.lines.length}</p>
-          </div>
-        </div>
-        {/* Mobile metrics */}
-        <div className="sm:hidden flex items-center gap-3 flex-shrink-0">
-          <div className="text-right">
-            <p className={`text-xs font-mono font-semibold ${closing < 0 ? 'text-red-400' : 'text-white'}`}>
-              {closing < 0 ? '−' : ''}{formatCurrency(Math.abs(closing))}
-            </p>
-            <p className="text-[9px] text-gray-500">{account.lines.length} {t.reports.generalLedger.lines.toLowerCase()}</p>
-          </div>
-        </div>
+        <span aria-hidden className="flex-shrink-0 text-subtle-foreground">
+          {isExpanded ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4 rtl:rotate-180" />
+          )}
+        </span>
+
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <span className="numeric text-xs font-semibold text-primary">{account.account_code}</span>
+          <span className="truncate text-sm font-medium text-foreground">{account.account_name}</span>
+          <AccountTypeBadge type={account.account_type} />
+          {!hasActivity && (
+            <span className="badge tone-neutral">{t.common.noActivity}</span>
+          )}
+        </span>
+
+        <span className="hidden flex-shrink-0 items-center gap-6 sm:flex">
+          <HeaderFigure
+            label={t.reports.generalLedger.opening}
+            value={formatSignedCurrency(parseAmount(account.opening_balance))}
+          />
+          <HeaderFigure
+            label={t.reports.generalLedger.closing}
+            value={formatSignedCurrency(closing)}
+            emphasis
+            className={closing < 0 ? 'text-danger' : 'text-foreground'}
+          />
+          <HeaderFigure
+            label={t.reports.generalLedger.lines}
+            value={String(account.lines.length)}
+          />
+        </span>
+
+        <span className="flex flex-shrink-0 flex-col items-end sm:hidden">
+          <span
+            className={`numeric text-xs font-semibold ${closing < 0 ? 'text-danger' : 'text-foreground'}`}
+          >
+            {formatSignedCurrency(closing)}
+          </span>
+          <span className="text-[10px] text-subtle-foreground">
+            {account.lines.length} {t.reports.generalLedger.lines.toLowerCase()}
+          </span>
+        </span>
       </button>
 
-      {/* Expanded ledger lines */}
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {isExpanded && (
           <motion.div
+            id={panelId}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25 }}
+            transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="border-t border-white/[0.06]">
+            <div className="border-t border-border">
               {account.lines.length === 0 ? (
-                <div className="px-6 py-8 text-center">
-                  <p className="text-sm text-gray-500">{t.common.noActivity}</p>
-                </div>
+                <p className="px-6 py-8 text-center text-sm text-subtle-foreground">
+                  {t.common.noActivity}
+                </p>
               ) : (
                 <>
                   {/* Desktop table */}
-                  <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full">
+                  <div className="table-wrap hidden md:block">
+                    <table className="data-table">
+                      <caption className="sr-only">
+                        {account.account_code} {account.account_name}
+                      </caption>
                       <thead>
-                        <tr className="border-b border-white/[0.04]">
-                          <th className="text-left text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-6 py-2">{t.reports.generalLedger.date}</th>
-                          <th className="text-left text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-4 py-2">{t.reports.generalLedger.entryNo}</th>
-                          <th className="text-center text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-2 py-2">{t.reports.generalLedger.ln}</th>
-                          <th className="text-left text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-4 py-2">{t.reports.generalLedger.description}</th>
-                          <th className="text-right text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-4 py-2">{t.reports.generalLedger.debit}</th>
-                          <th className="text-right text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-4 py-2">{t.reports.generalLedger.credit}</th>
-                          <th className="text-right text-[9px] uppercase tracking-wider font-semibold text-gray-600 px-6 py-2">{t.reports.generalLedger.balance}</th>
+                        <tr>
+                          <th scope="col">{t.reports.generalLedger.date}</th>
+                          <th scope="col">{t.reports.generalLedger.entryNo}</th>
+                          <th scope="col" className="cell-numeric">{t.reports.generalLedger.ln}</th>
+                          <th scope="col">{t.reports.generalLedger.description}</th>
+                          <th scope="col" className="cell-numeric">{t.reports.generalLedger.debit}</th>
+                          <th scope="col" className="cell-numeric">{t.reports.generalLedger.credit}</th>
+                          <th scope="col" className="cell-numeric">{t.reports.generalLedger.balance}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {/* Opening balance */}
-                        <tr className="border-b border-white/[0.03] bg-white/[0.01]">
-                          <td className="px-6 py-2" colSpan={4}>
-                            <span className="text-[11px] text-gray-500 italic">{t.common.openingBalance}</span>
-                          </td>
-                          <td colSpan={2} />
-                          <td className="px-6 py-2 text-right">
-                            <span className="text-xs font-mono text-gray-400">{formatCurrency(parseAmount(account.opening_balance))}</span>
+                        <tr className="row-total">
+                          <td colSpan={6}>{t.common.openingBalance}</td>
+                          <td className="cell-numeric">
+                            {formatSignedCurrency(parseAmount(account.opening_balance))}
                           </td>
                         </tr>
                         {account.lines.map((line) => (
@@ -579,24 +456,16 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
                         ))}
                       </tbody>
                       <tfoot>
-                        <tr className="border-t border-white/[0.06] bg-white/[0.02]">
-                          <td className="px-6 py-2" colSpan={4}>
-                            <span className="text-[11px] font-semibold text-white">{t.common.closingBalance}</span>
+                        <tr>
+                          <td colSpan={4}>{t.common.closingBalance}</td>
+                          <td className="cell-numeric text-success">
+                            {formatCurrency(account.lines.reduce((s, l) => s + parseAmount(l.debit), 0))}
                           </td>
-                          <td className="px-4 py-2 text-right">
-                            <span className="text-xs font-mono font-semibold text-emerald-400">
-                              {formatCurrency(account.lines.reduce((s, l) => s + parseAmount(l.debit), 0))}
-                            </span>
+                          <td className="cell-numeric text-danger">
+                            {formatCurrency(account.lines.reduce((s, l) => s + parseAmount(l.credit), 0))}
                           </td>
-                          <td className="px-4 py-2 text-right">
-                            <span className="text-xs font-mono font-semibold text-red-400">
-                              {formatCurrency(account.lines.reduce((s, l) => s + parseAmount(l.credit), 0))}
-                            </span>
-                          </td>
-                          <td className="px-6 py-2 text-right">
-                            <span className={`text-xs font-mono font-bold ${closing < 0 ? 'text-red-400' : 'text-white'}`}>
-                              {closing < 0 ? '−' : ''}{formatCurrency(Math.abs(closing))}
-                            </span>
+                          <td className={`cell-numeric ${closing < 0 ? 'text-danger' : 'text-foreground'}`}>
+                            {formatSignedCurrency(closing)}
                           </td>
                         </tr>
                       </tfoot>
@@ -604,17 +473,22 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
                   </div>
 
                   {/* Mobile cards */}
-                  <div className="md:hidden p-3 space-y-2">
-                    <div className="flex items-center justify-between px-2 py-1">
-                      <span className="text-[10px] text-gray-500 italic">{t.common.opening}: <span className="font-mono text-gray-400">{formatCurrency(parseAmount(account.opening_balance))}</span></span>
+                  <div className="space-y-2 p-3 md:hidden">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="overline">{t.common.opening}</span>
+                      <span className="numeric text-xs text-muted-foreground">
+                        {formatSignedCurrency(parseAmount(account.opening_balance))}
+                      </span>
                     </div>
                     {account.lines.map((line) => (
                       <MobileLedgerCard key={`${line.journal_entry_id}-${line.line_no}`} line={line} />
                     ))}
-                    <div className="flex items-center justify-between px-2 py-1 border-t border-white/[0.06]">
-                      <span className="text-[10px] font-semibold text-white">{t.common.closing}</span>
-                      <span className={`text-xs font-mono font-bold ${closing < 0 ? 'text-red-400' : 'text-white'}`}>
-                        {closing < 0 ? '−' : ''}{formatCurrency(Math.abs(closing))}
+                    <div className="flex items-center justify-between border-t border-border px-1 pt-2">
+                      <span className="text-xs font-semibold text-foreground">{t.common.closing}</span>
+                      <span
+                        className={`numeric text-xs font-semibold ${closing < 0 ? 'text-danger' : 'text-foreground'}`}
+                      >
+                        {formatSignedCurrency(closing)}
                       </span>
                     </div>
                   </div>
@@ -628,66 +502,84 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
   );
 }
 
-// ── Desktop ledger row ──
+function HeaderFigure({
+  label,
+  value,
+  emphasis,
+  className = 'text-muted-foreground',
+}: {
+  label: string;
+  value: string;
+  emphasis?: boolean;
+  className?: string;
+}) {
+  return (
+    <span className="block text-end">
+      <span className="overline block">{label}</span>
+      <span className={`numeric block text-xs ${emphasis ? 'font-semibold' : ''} ${className}`}>
+        {value}
+      </span>
+    </span>
+  );
+}
+
 function LedgerRow({ line }: { line: AccountLedgerLine }) {
   const bal = parseAmount(line.running_balance);
   return (
-    <tr className="border-b border-white/[0.02] hover:bg-white/[0.015] transition-colors">
-      <td className="px-6 py-2">
-        <span className="text-xs text-gray-400">{new Date(line.entry_date).toLocaleDateString()}</span>
+    <tr>
+      <td className="whitespace-nowrap text-xs text-muted-foreground">
+        {new Date(line.entry_date).toLocaleDateString()}
       </td>
-      <td className="px-4 py-2">
-        <span className="text-xs font-mono text-brand-400">{line.entry_no}</span>
+      <td className="numeric text-xs text-primary">{line.entry_no}</td>
+      <td className="cell-numeric text-xs text-subtle-foreground">{line.line_no}</td>
+      <td className="max-w-[240px] truncate text-xs text-muted-foreground">
+        {line.description || '—'}
       </td>
-      <td className="px-2 py-2 text-center">
-        <span className="text-[10px] text-gray-600">{line.line_no}</span>
-      </td>
-      <td className="px-4 py-2">
-        <span className="text-xs text-gray-300 truncate block max-w-[220px]">{line.description || '—'}</span>
-      </td>
-      <td className="px-4 py-2 text-right">
-        <span className="text-xs font-mono text-emerald-400">{fmtAmt(line.debit)}</span>
-      </td>
-      <td className="px-4 py-2 text-right">
-        <span className="text-xs font-mono text-red-400">{fmtAmt(line.credit)}</span>
-      </td>
-      <td className="px-6 py-2 text-right">
-        <span className={`text-xs font-mono font-semibold ${bal < 0 ? 'text-red-400' : 'text-gray-200'}`}>
-          {bal < 0 ? '−' : ''}{formatCurrency(Math.abs(bal))}
-        </span>
+      <td className="cell-numeric text-xs text-debit">{fmtAmt(line.debit)}</td>
+      <td className="cell-numeric text-xs text-credit">{fmtAmt(line.credit)}</td>
+      <td
+        className={`cell-numeric text-xs font-semibold ${bal < 0 ? 'text-danger' : 'text-foreground'}`}
+      >
+        {formatSignedCurrency(bal)}
       </td>
     </tr>
   );
 }
 
-// ── Mobile ledger card ──
 function MobileLedgerCard({ line }: { line: AccountLedgerLine }) {
+  const { t } = useI18n();
   const bal = parseAmount(line.running_balance);
   return (
-    <div className="rounded-lg bg-white/[0.02] border border-white/[0.04] p-3">
-      <div className="flex items-start justify-between mb-1.5">
-        <div>
-          <span className="text-[10px] font-mono text-brand-400">{line.entry_no}</span>
-          <p className="text-xs text-gray-300 mt-0.5">{line.description || 'No description'}</p>
-        </div>
-        <span className="text-[10px] text-gray-500 whitespace-nowrap">{new Date(line.entry_date).toLocaleDateString()}</span>
-      </div>
-      <div className="grid grid-cols-3 gap-2 pt-1.5 border-t border-white/[0.03]">
-        <div>
-          <p className="text-[8px] uppercase tracking-wider text-gray-600 font-medium">Dr</p>
-          <p className="text-[10px] font-mono text-emerald-400">{fmtAmt(line.debit)}</p>
-        </div>
-        <div>
-          <p className="text-[8px] uppercase tracking-wider text-gray-600 font-medium">Cr</p>
-          <p className="text-[10px] font-mono text-red-400">{fmtAmt(line.credit)}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-[8px] uppercase tracking-wider text-gray-600 font-medium">Bal</p>
-          <p className={`text-[10px] font-mono font-semibold ${bal < 0 ? 'text-red-400' : 'text-gray-200'}`}>
-            {bal < 0 ? '−' : ''}{formatCurrency(Math.abs(bal))}
+    <div className="rounded-lg border border-border-subtle bg-surface-muted p-3">
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <span className="numeric text-[11px] text-primary">{line.entry_no}</span>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {line.description || t.common.noDescription}
           </p>
         </div>
+        <span className="whitespace-nowrap text-[10px] text-subtle-foreground">
+          {new Date(line.entry_date).toLocaleDateString()}
+        </span>
       </div>
+      <dl className="grid grid-cols-3 gap-2 border-t border-border-subtle pt-2">
+        <div>
+          <dt className="overline">{t.reports.generalLedger.debit}</dt>
+          <dd className="numeric text-[11px] text-debit">{fmtAmt(line.debit)}</dd>
+        </div>
+        <div>
+          <dt className="overline">{t.reports.generalLedger.credit}</dt>
+          <dd className="numeric text-[11px] text-credit">{fmtAmt(line.credit)}</dd>
+        </div>
+        <div className="text-end">
+          <dt className="overline">{t.reports.generalLedger.balance}</dt>
+          <dd
+            className={`numeric text-[11px] font-semibold ${bal < 0 ? 'text-danger' : 'text-foreground'}`}
+          >
+            {formatSignedCurrency(bal)}
+          </dd>
+        </div>
+      </dl>
     </div>
   );
 }

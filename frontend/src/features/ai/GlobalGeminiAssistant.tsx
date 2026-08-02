@@ -24,10 +24,9 @@ export default function GlobalGeminiAssistant({
   companyId,
   companyName,
 }: GlobalGeminiAssistantProps) {
-  const { t, dir, language } = useI18n();
+  const { t, language } = useI18n();
   const tc = t.geminiAssistant;
   const [isOpen, setIsOpen] = useState(false);
-  const isRtl = dir === 'rtl';
 
   const {
     messages,
@@ -75,24 +74,16 @@ export default function GlobalGeminiAssistant({
   return (
     <>
       {/* Floating action button */}
-      <div
-        className={`fixed bottom-6 z-[58] ${isRtl ? 'left-6' : 'right-6'}`}
-      >
+      <div className="fixed bottom-6 z-[58] end-6">
         <motion.button
+          type="button"
           onClick={() => setIsOpen((prev) => !prev)}
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.94 }}
-          className={`
-            relative w-14 h-14 rounded-2xl
-            bg-gradient-to-br from-violet-600 to-brand-600
-            shadow-lg shadow-violet-500/30
-            flex items-center justify-center
-            text-white
-            transition-all duration-200
-            hover:shadow-violet-500/50 hover:shadow-xl
-            border border-white/10
-          `}
+          className="relative flex h-14 w-14 items-center justify-center rounded-xl bg-primary-solid text-primary-foreground shadow-lg transition-shadow duration-200 hover:bg-primary-solid-hover hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           title={isOpen ? tc.cancelAction : tc.askAI}
+          aria-label={isOpen ? tc.cancelAction : tc.askAI}
+          aria-expanded={isOpen}
           id="gemini-assistant-fab"
         >
           <AnimatePresence mode="wait">
@@ -104,7 +95,7 @@ export default function GlobalGeminiAssistant({
                 exit={{ rotate: 90, opacity: 0 }}
                 transition={{ duration: 0.15 }}
               >
-                <X className="w-6 h-6" />
+                <X aria-hidden className="h-6 w-6" />
               </motion.div>
             ) : (
               <motion.div
@@ -114,7 +105,7 @@ export default function GlobalGeminiAssistant({
                 exit={{ rotate: -90, opacity: 0 }}
                 transition={{ duration: 0.15 }}
               >
-                <Sparkles className="w-6 h-6" />
+                <Sparkles aria-hidden className="h-6 w-6" />
               </motion.div>
             )}
           </AnimatePresence>
@@ -126,12 +117,10 @@ export default function GlobalGeminiAssistant({
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 exit={{ scale: 0 }}
-                className={`
-                  absolute -top-1 ${isRtl ? '-left-1' : '-right-1'}
-                  w-4 h-4 rounded-full
-                  ${hasAction ? 'bg-amber-400' : 'bg-emerald-400'}
-                  border-2 border-surface-800
-                `}
+                aria-hidden
+                className={`absolute -top-1 h-4 w-4 rounded-full border-2 border-surface -end-1 ${
+                  hasAction ? 'bg-warning-solid' : 'bg-success-solid'
+                }`}
               />
             )}
           </AnimatePresence>
@@ -144,23 +133,13 @@ export default function GlobalGeminiAssistant({
               initial={{ opacity: 0, y: 4, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 4, scale: 0.95 }}
-              className={`
-                absolute bottom-16 ${isRtl ? 'left-0' : 'right-0'}
-                pointer-events-none
-              `}
+              className="pointer-events-none absolute bottom-16 end-0"
             >
               {/* Only show tooltip when there's a last message preview */}
               {lastMsg && lastMsg.role === 'assistant' && (
-                <div
-                  className={`
-                    px-3 py-2 rounded-xl bg-surface-700/90 border border-white/[0.08]
-                    shadow-xl backdrop-blur-sm
-                    ${isRtl ? 'text-right' : 'text-left'}
-                    max-w-[200px] whitespace-nowrap overflow-hidden text-ellipsis
-                  `}
-                >
-                  <p className="text-[10px] text-gray-500 mb-0.5">{tc.assistant}</p>
-                  <p className="text-xs text-gray-300 truncate">
+                <div className="max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap rounded-lg border border-border bg-surface-raised px-3 py-2 text-start shadow-lg">
+                  <p className="mb-0.5 text-[10px] text-subtle-foreground">{tc.assistant}</p>
+                  <p className="truncate text-xs text-muted-foreground">
                     {lastMsg.content.split('\n')[0].replace(/\*\*/g, '').slice(0, 40)}…
                   </p>
                 </div>

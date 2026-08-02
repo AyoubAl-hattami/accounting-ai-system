@@ -1,11 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import CompanyUserRoleBadge from '../../features/company-users/CompanyUserRoleBadge';
+import { I18nProvider } from '../../i18n';
+import { en } from '../../i18n/translations';
+
+const renderBadge = (role: Parameters<typeof CompanyUserRoleBadge>[0]['role']) =>
+  render(
+    <I18nProvider>
+      <CompanyUserRoleBadge role={role} />
+    </I18nProvider>,
+  );
 
 describe('CompanyUserRoleBadge', () => {
-  it('renders the capitalized role label', () => {
-    render(<CompanyUserRoleBadge role="admin" />);
-    expect(screen.getByText('Admin')).toBeInTheDocument();
+  it('renders the translated role label', () => {
+    renderBadge('admin');
+    expect(screen.getByText(en.companyUsersPage.roles.admin)).toBeInTheDocument();
   });
 
   it('renders each known role without throwing', () => {
@@ -19,8 +28,8 @@ describe('CompanyUserRoleBadge', () => {
     ];
 
     for (const role of roles) {
-      const { unmount } = render(<CompanyUserRoleBadge role={role} />);
-      expect(screen.getByText(role.charAt(0).toUpperCase() + role.slice(1))).toBeInTheDocument();
+      const { unmount } = renderBadge(role);
+      expect(screen.getByText(en.companyUsersPage.roles[role])).toBeInTheDocument();
       unmount();
     }
   });

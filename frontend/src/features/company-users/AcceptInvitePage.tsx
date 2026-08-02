@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { UserPlus, Loader2, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
+import { AlertCircle, ArrowRight, CheckCircle2, Loader2, UserPlus } from 'lucide-react';
 import apiClient from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useI18n } from '../../i18n';
+import { ThemeToggleButton } from '../../components/ui/ThemeToggle';
+import CompanyUserRoleBadge from './CompanyUserRoleBadge';
 import type { CompanyUserInvitationValidateResponse } from '../../api/types';
 
 export default function AcceptInvitePage() {
@@ -14,20 +16,26 @@ export default function AcceptInvitePage() {
   const { user: authUser } = useAuth();
   const { t } = useI18n();
 
+  const errorId = useId();
+  const emailId = useId();
+  const fullNameId = useId();
+  const passwordId = useId();
+  const confirmPasswordId = useId();
+
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  
+
   const [inviteData, setInviteData] = useState<CompanyUserInvitationValidateResponse | null>(null);
-  
+
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
   useEffect(() => {
     if (!token) {
-      setError(t.companyUsersPage.invalidInvitation || 'Invalid or missing invitation token.');
+      setError(t.companyUsersPage.invalidInvitation);
       setIsLoading(false);
       return;
     }
@@ -41,7 +49,7 @@ export default function AcceptInvitePage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         const detail = err.response?.data?.detail;
-        setError(detail || t.companyUsersPage.invalidInvitation || 'Failed to validate invitation.');
+        setError(detail || t.companyUsersPage.invalidInvitation);
       } finally {
         setIsLoading(false);
       }
@@ -56,11 +64,11 @@ export default function AcceptInvitePage() {
 
     if (!inviteData.user_exists) {
       if (password !== confirmPassword) {
-        setError(t.companyUsersPage.passwordMismatch || 'Passwords do not match.');
+        setError(t.companyUsersPage.passwordMismatch);
         return;
       }
       if (password.length < 8) {
-        setError(t.companyUsersPage.passwordTooShort || 'Password must be at least 8 characters.');
+        setError(t.companyUsersPage.passwordTooShort);
         return;
       }
     }
@@ -78,7 +86,7 @@ export default function AcceptInvitePage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const detail = err.response?.data?.detail;
-      setError(detail || 'Failed to accept invitation.');
+      setError(detail || t.companyUsersPage.acceptFailed);
     } finally {
       setIsSubmitting(false);
     }
@@ -90,171 +98,197 @@ export default function AcceptInvitePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-surface-900 flex items-center justify-center p-4">
-        <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
-      </div>
-    );
-  }
-
-  if (success) {
-    return (
-      <div className="min-h-screen bg-surface-900 flex items-center justify-center p-4 relative overflow-hidden">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md glass-panel p-8 text-center"
-        >
-          <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-8 h-8 text-green-400" />
-          </div>
-          <h2 className="text-xl font-semibold text-white mb-2">
-            {t.companyUsersPage.invitationAccepted || 'Invitation Accepted!'}
-          </h2>
-          <p className="text-gray-400 text-sm mb-6">
-            You have successfully joined the company.
-          </p>
-          <button
-            onClick={() => navigate('/login')}
-            className="btn-primary w-full flex items-center justify-center gap-2"
-          >
-            {t.companyUsersPage.goToLogin || 'Go to Login'}
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </motion.div>
+      <div className="flex min-h-screen items-center justify-center gap-3 bg-background p-4">
+        <Loader2 aria-hidden className="h-5 w-5 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">{t.companyUsersPage.validatingInvite}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-surface-900 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background effects */}
-      <div className="absolute inset-0">
-        <div className="absolute top-1/4 -left-32 w-96 h-96 bg-brand-600/8 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-violet-600/6 rounded-full blur-3xl" />
+    <div className="flex min-h-screen flex-col bg-background">
+      <div className="flex justify-end p-4">
+        <ThemeToggleButton />
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md relative z-10"
-      >
-        <div className="glass-panel p-8">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-2xl shadow-brand-500/30 mb-4">
-              <UserPlus className="w-7 h-7 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">
-              {t.companyUsersPage.acceptInvite || 'Accept Invitation'}
-            </h1>
-            {inviteData && (
-              <p className="text-gray-400 text-sm mt-2">
-                You have been invited to join <span className="text-white font-semibold">{inviteData.company_name}</span> as <span className="text-white font-semibold">{inviteData.role}</span>.
+      <div className="flex flex-1 items-center justify-center px-4 pb-16">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: 'easeOut' }}
+          className="w-full max-w-sm"
+        >
+          {success ? (
+            <div className="card p-7 text-center">
+              <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl border border-success-border bg-success-soft">
+                <CheckCircle2 aria-hidden className="h-6 w-6 text-success" />
+              </span>
+              <h1 className="text-lg font-semibold text-foreground">
+                {t.companyUsersPage.invitationAccepted}
+              </h1>
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                {t.companyUsersPage.joinedSuccessfully}
               </p>
-            )}
-          </div>
-
-          {error && (
-            <div className="mb-6 flex items-start gap-2.5 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20">
-              <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-300">{error}</p>
+              <button
+                type="button"
+                onClick={() => navigate('/login')}
+                className="btn btn-primary btn-block mt-6"
+              >
+                {t.companyUsersPage.goToLogin}
+                <ArrowRight aria-hidden className="h-4 w-4 rtl:rotate-180" />
+              </button>
             </div>
-          )}
-
-          {inviteData && (
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {t.companyUsersPage.inviteEmail || 'Email'}
-                </label>
-                <input
-                  type="email"
-                  value={inviteData.email}
-                  disabled
-                  className="input-field opacity-60 cursor-not-allowed"
-                />
+          ) : (
+            <>
+              <div className="mb-8 text-center">
+                <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-solid text-primary-foreground shadow-md">
+                  <UserPlus aria-hidden className="h-6 w-6" />
+                </span>
+                <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                  {t.companyUsersPage.acceptInvite}
+                </h1>
+                {inviteData && (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {t.companyUsersPage.invitedDescription}
+                  </p>
+                )}
               </div>
 
-              {!inviteData.user_exists ? (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Full Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      className="input-field"
-                    />
+              <div className="card p-7">
+                {error && (
+                  <div role="alert" id={errorId} className="callout tone-danger mb-6">
+                    <AlertCircle aria-hidden className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                    <p className="min-w-0 flex-1 text-sm">{error}</p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      {t.companyUsersPage.setPassword || 'Password'}
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="input-field"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      {t.companyUsersPage.confirmPassword || 'Confirm Password'}
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="input-field"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="btn-primary w-full mt-2"
-                  >
-                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : (t.companyUsersPage.acceptInvite || 'Accept Invitation')}
-                  </button>
-                </>
-              ) : (
-                <>
-                  {!authUser ? (
-                    <div className="bg-white/[0.02] border border-white/[0.04] p-4 rounded-xl text-center space-y-4 mt-2">
-                      <p className="text-sm text-gray-300">
-                        You already have an account with this email.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={handleLoginRedirect}
-                        className="btn-primary w-full"
-                      >
-                        Log in to Accept
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="bg-white/[0.02] border border-white/[0.04] p-4 rounded-xl text-center space-y-4 mt-2">
-                      <p className="text-sm text-gray-300">
-                        You are currently logged in.
-                      </p>
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="btn-primary w-full"
-                      >
-                        {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : (t.companyUsersPage.acceptInvite || 'Accept Invitation')}
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </form>
+                )}
+
+                {inviteData && (
+                  <>
+                    <dl className="mb-6 space-y-2.5 rounded-lg border border-border-subtle bg-surface-muted px-3.5 py-3 text-sm">
+                      <div className="flex items-baseline justify-between gap-4">
+                        <dt className="text-xs text-subtle-foreground">
+                          {t.companyUsersPage.companyLabel}
+                        </dt>
+                        <dd className="min-w-0 truncate text-end font-medium text-foreground">
+                          {inviteData.company_name}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <dt className="text-xs text-subtle-foreground">{t.companyUsersPage.role}</dt>
+                        <dd>
+                          <CompanyUserRoleBadge role={inviteData.role} />
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                      <div>
+                        <label htmlFor={emailId} className="field-label">
+                          {t.companyUsersPage.inviteEmail}
+                        </label>
+                        <input
+                          id={emailId}
+                          type="email"
+                          value={inviteData.email}
+                          disabled
+                          readOnly
+                          className="input"
+                        />
+                      </div>
+
+                      {!inviteData.user_exists ? (
+                        <>
+                          <div>
+                            <label htmlFor={fullNameId} className="field-label">
+                              {t.companyUsersPage.fullName}
+                            </label>
+                            <input
+                              id={fullNameId}
+                              type="text"
+                              required
+                              autoComplete="name"
+                              value={fullName}
+                              onChange={(e) => setFullName(e.target.value)}
+                              className="input"
+                            />
+                          </div>
+
+                          <div>
+                            <label htmlFor={passwordId} className="field-label">
+                              {t.companyUsersPage.setPassword}
+                            </label>
+                            <input
+                              id={passwordId}
+                              type="password"
+                              required
+                              minLength={8}
+                              autoComplete="new-password"
+                              value={password}
+                              onChange={(e) => setPassword(e.target.value)}
+                              aria-describedby={error ? errorId : undefined}
+                              className="input"
+                            />
+                            <p className="field-hint">{t.companyUsersPage.passwordTooShort}</p>
+                          </div>
+
+                          <div>
+                            <label htmlFor={confirmPasswordId} className="field-label">
+                              {t.companyUsersPage.confirmPassword}
+                            </label>
+                            <input
+                              id={confirmPasswordId}
+                              type="password"
+                              required
+                              autoComplete="new-password"
+                              value={confirmPassword}
+                              onChange={(e) => setConfirmPassword(e.target.value)}
+                              aria-describedby={error ? errorId : undefined}
+                              className="input"
+                            />
+                          </div>
+
+                          <button type="submit" disabled={isSubmitting} className="btn btn-primary btn-block">
+                            {isSubmitting && <Loader2 aria-hidden className="h-4 w-4 animate-spin" />}
+                            {isSubmitting ? t.companyUsersPage.accepting : t.companyUsersPage.acceptInvite}
+                          </button>
+                        </>
+                      ) : (
+                        <div className="space-y-4 rounded-lg border border-border-subtle bg-surface-muted p-4">
+                          <p className="text-sm text-muted-foreground">
+                            {authUser
+                              ? t.companyUsersPage.readyToAccept
+                              : t.companyUsersPage.accountExists}
+                          </p>
+                          {authUser ? (
+                            <button
+                              type="submit"
+                              disabled={isSubmitting}
+                              className="btn btn-primary btn-block"
+                            >
+                              {isSubmitting && <Loader2 aria-hidden className="h-4 w-4 animate-spin" />}
+                              {isSubmitting
+                                ? t.companyUsersPage.accepting
+                                : t.companyUsersPage.acceptInvite}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleLoginRedirect}
+                              className="btn btn-primary btn-block"
+                            >
+                              {t.companyUsersPage.logInToAccept}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </form>
+                  </>
+                )}
+              </div>
+            </>
           )}
-        </div>
-      </motion.div>
+        </motion.div>
+      </div>
     </div>
   );
 }
