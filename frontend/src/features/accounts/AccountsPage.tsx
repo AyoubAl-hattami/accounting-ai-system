@@ -362,7 +362,10 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
                           {acc.is_system ? t.accountsPage.systemAccount : t.accountsPage.manualAccount}
                         </span>
                       </td>
-                      <td className="max-w-[220px] truncate text-xs text-muted-foreground">
+                      <td
+                        className="max-w-[220px] truncate text-xs text-muted-foreground"
+                        title={acc.description || undefined}
+                      >
                         {acc.description || '—'}
                       </td>
                     </tr>

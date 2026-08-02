@@ -239,7 +239,7 @@ export default function AppShell({
       </aside>
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="glass sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b px-4 lg:px-6">
+        <header className="glass sticky top-0 z-30 flex h-[4.5rem] items-center justify-between gap-4 border-b px-4 lg:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
@@ -259,12 +259,15 @@ export default function AppShell({
 
           <div className="flex flex-shrink-0 items-center gap-2">
             {selectedCompany && (
-              <span className="badge tone-neutral hidden md:inline-flex">
-                <span aria-hidden className="relative flex h-1.5 w-1.5">
+              <span
+                className="badge tone-neutral hidden max-w-[190px] xl:inline-flex"
+                title={selectedCompany.name}
+              >
+                <span aria-hidden className="relative flex h-1.5 w-1.5 flex-shrink-0">
                   <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-70 motion-safe:animate-ping" />
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
                 </span>
-                {selectedCompany.name}
+                <span className="truncate">{selectedCompany.name}</span>
               </span>
             )}
 
@@ -300,7 +303,10 @@ export default function AppShell({
 
         {/* Keyed on the route so each section fades and lifts in rather than
             swapping instantly. */}
-        <main key={activePath} className="motion-safe:page-enter flex-1 p-4 lg:p-6">
+        <main
+          key={activePath}
+          className="motion-safe:page-enter pb-safe-fab flex-1 px-4 pt-4 lg:px-6 lg:pt-6"
+        >
           {children}
         </main>
       </div>

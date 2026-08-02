@@ -291,7 +291,7 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr>
+                  <tr className="row-grand">
                     <td colSpan={3}>{t.reports.trialBalance.totals}</td>
                     <td className="cell-numeric text-success">
                       {formatCurrency(parseAmount(data.total_debit))}
@@ -343,7 +343,7 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
               </div>
             ))}
 
-            <div className="card border-primary-border bg-surface-muted p-4">
+            <div className="card border-2 border-primary-border bg-surface-muted p-5">
               <p className="section-title mb-3">{t.reports.trialBalance.totals}</p>
               <dl className="grid grid-cols-2 gap-4">
                 <MobileFigure

@@ -331,6 +331,10 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
 
     const grow = layout === 'card' ? 'flex-1 justify-center' : '';
     const lockedLastAdmin = isOnlyAdmin && user.role === 'admin';
+    /* The platform-wide actions carry the longest labels and are the rarest to
+       use, so in a table row they shrink to their icon and keep the wording in
+       the tooltip and the confirmation dialog. */
+    const compact = layout === 'row';
 
     return (
       <div className={`flex flex-wrap items-center gap-2 ${layout === 'row' ? 'justify-end' : ''}`}>
@@ -392,10 +396,12 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
               <button
                 type="button"
                 onClick={() => handleOpenDeleteAccount(user)}
+                title={compact ? t.companyUsersPage.deleteAccount : undefined}
+                aria-label={compact ? t.companyUsersPage.deleteAccount : undefined}
                 className={`btn btn-danger-ghost btn-sm ${grow}`}
               >
                 <Trash2 aria-hidden className="h-3.5 w-3.5" />
-                {t.companyUsersPage.deleteAccount}
+                {!compact && t.companyUsersPage.deleteAccount}
               </button>
             )}
           </>
@@ -405,10 +411,12 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
           <button
             type="button"
             onClick={() => openConfirm(setReactivateAccountUser)(user)}
+            title={compact ? t.companyUsersPage.reactivateAccount : undefined}
+            aria-label={compact ? t.companyUsersPage.reactivateAccount : undefined}
             className={`btn btn-tone tone-primary btn-sm ${grow}`}
           >
             <CheckCircle2 aria-hidden className="h-3.5 w-3.5" />
-            {t.companyUsersPage.reactivateAccount}
+            {!compact && t.companyUsersPage.reactivateAccount}
           </button>
         )}
       </div>
@@ -562,7 +570,11 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
                       <th scope="col">{t.companyUsersPage.role}</th>
                       <th scope="col">{t.common.status}</th>
                       <th scope="col">{t.companyUsersPage.createdAt}</th>
-                      <th scope="col">{t.companyUsersPage.updatedAt}</th>
+                      {/* Last-changed is reference data; it yields width to the
+                          action buttons until the viewport can afford both. */}
+                      <th scope="col" className="hidden xl:table-cell">
+                        {t.companyUsersPage.updatedAt}
+                      </th>
                       <th scope="col" className="text-end">
                         {t.common.actions}
                       </th>
@@ -584,7 +596,7 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
                         <td className="numeric whitespace-nowrap text-xs text-muted-foreground">
                           {formatDateTime(user.created_at)}
                         </td>
-                        <td className="numeric whitespace-nowrap text-xs text-muted-foreground">
+                        <td className="numeric hidden whitespace-nowrap text-xs text-muted-foreground xl:table-cell">
                           {formatDateTime(user.updated_at)}
                         </td>
                         <td className="text-end">{renderActions(user, 'row')}</td>

@@ -415,7 +415,7 @@ function AccountLedgerContent({ selectedCompanyId, companiesLoading }: AccountLe
                 ))}
               </tbody>
               <tfoot>
-                <tr>
+                <tr className="row-grand">
                   <td colSpan={4}>{t.reports.accountLedger.closingBalance}</td>
                   <td className="cell-numeric text-debit">{formatCurrency(totalDebits)}</td>
                   <td className="cell-numeric text-credit">{formatCurrency(totalCredits)}</td>
@@ -442,13 +442,13 @@ function AccountLedgerContent({ selectedCompanyId, companiesLoading }: AccountLe
               ))}
             </div>
 
-            <div className="border-t border-border bg-surface-muted px-4 py-3">
-              <div className="mb-1 flex items-center justify-between">
-                <span className="text-xs font-semibold text-foreground">
+            <div className="border-t-2 border-border-strong bg-surface-sunken px-4 py-4">
+              <div className="mb-1.5 flex items-center justify-between gap-3">
+                <span className="text-sm font-bold text-foreground">
                   {t.reports.accountLedger.closingBalance}
                 </span>
                 <span
-                  className={`numeric text-sm font-semibold ${closing < 0 ? 'text-danger' : 'text-foreground'}`}
+                  className={`numeric text-base font-bold ${closing < 0 ? 'text-danger' : 'text-foreground'}`}
                 >
                   {formatSignedCurrency(closing)}
                 </span>

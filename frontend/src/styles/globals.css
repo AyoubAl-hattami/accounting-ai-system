@@ -155,6 +155,9 @@
   --duration-slow:   320ms;
   --ease-standard:   cubic-bezier(0.4, 0, 0.2, 1);
   --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Launcher height + its offset + a gap, so page content clears the corner. */
+  --fab-safe-area: 6.5rem;
 }
 
 html.dark {
@@ -675,11 +678,13 @@ html.dark {
     @apply border-b-0;
   }
 
-  /* Totals / subtotal rows must read as summaries, not as data. */
+  /* Totals carry the answer the report exists to give, so they are set a step
+     larger and heavier than the data above and separated by a hard rule. */
   .data-table tfoot td,
   .data-table .row-total td,
   .data-table td.cell-total {
-    @apply border-t border-border bg-surface-muted font-semibold text-foreground;
+    @apply border-t-2 border-border-strong bg-surface-sunken px-4 py-4
+           text-[15px] font-bold text-foreground;
   }
 
   .data-table tfoot tr:hover {
@@ -687,9 +692,44 @@ html.dark {
     box-shadow: none;
   }
 
+  /* Grand totals sit below the section subtotals and must win the comparison. */
+  .data-table tfoot tr.row-grand td {
+    @apply text-base;
+    background-color: var(--surface-overlay);
+  }
+
   .cell-numeric {
     @apply text-right;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Keeps a wide financial table's primary actions reachable without a
+     horizontal scroll: the last column rides along the trailing edge. It needs
+     its own opaque fill because the row underneath scrolls past it. */
+  .data-table .cell-sticky-end {
+    position: sticky;
+    inset-inline-end: 0;
+    z-index: 1;
+    background-color: var(--surface);
+  }
+
+  .data-table thead th.cell-sticky-end {
+    z-index: 11;
+    background-color: var(--surface-muted);
+  }
+
+  .data-table tbody tr:hover .cell-sticky-end {
+    /* Layered over the opaque fill so the translucent row tint still reads. */
+    background-image: linear-gradient(var(--row-hover), var(--row-hover));
+  }
+
+  .data-table .cell-sticky-end::before {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 1px;
+    background-color: var(--border);
   }
 
   html[dir='rtl'] .data-table thead th,
@@ -826,6 +866,12 @@ html.dark {
      continuity instead of a hard cut. */
   .page-enter {
     animation: slide-up var(--duration-slow) var(--ease-emphasized) both;
+  }
+
+  /* Reserves the corner the assistant launcher occupies, so a report's closing
+     totals and a table's pagination are never parked underneath it. */
+  .pb-safe-fab {
+    padding-bottom: var(--fab-safe-area);
   }
 }
 

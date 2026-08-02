@@ -111,7 +111,7 @@ export default function ReportSectionTable({
                 ))}
               </tbody>
               <tfoot>
-                <tr>
+                <tr className="row-grand">
                   <td colSpan={3}>{totalLabel}</td>
                   <td className={`cell-numeric ${figureClass}`}>
                     {formatCurrency(parseAmount(totalAmount))}
@@ -144,9 +144,9 @@ export default function ReportSectionTable({
                 </div>
               </div>
             ))}
-            <div className="flex items-center justify-between bg-surface-muted px-4 py-3">
-              <span className="text-xs font-semibold text-foreground">{totalLabel}</span>
-              <span className={`numeric text-sm font-semibold ${figureClass}`}>
+            <div className="flex items-center justify-between gap-3 border-t-2 border-border-strong bg-surface-sunken px-4 py-4">
+              <span className="text-sm font-bold text-foreground">{totalLabel}</span>
+              <span className={`numeric text-base font-bold ${figureClass}`}>
                 {formatCurrency(parseAmount(totalAmount))}
               </span>
             </div>

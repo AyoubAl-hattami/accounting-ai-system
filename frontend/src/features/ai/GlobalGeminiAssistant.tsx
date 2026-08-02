@@ -27,6 +27,7 @@ export default function GlobalGeminiAssistant({
   const { t, language } = useI18n();
   const tc = t.geminiAssistant;
   const [isOpen, setIsOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
   const {
     messages,
@@ -73,14 +74,19 @@ export default function GlobalGeminiAssistant({
 
   return (
     <>
-      {/* Floating action button */}
-      <div className="fixed bottom-6 z-[58] end-6">
+      {/* Floating action button. Deliberately compact and pinned to the corner
+          that `--fab-safe-area` keeps clear of page content. */}
+      <div
+        className="fixed bottom-5 z-[58] end-5"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
         <motion.button
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.94 }}
-          className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-solid bg-gradient-primary text-primary-foreground shadow-[0_10px_30px_-8px_var(--primary-glow)] transition-[box-shadow,filter] duration-normal ease-emphasized hover:brightness-110 hover:shadow-[0_16px_44px_-10px_var(--primary-glow)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-solid bg-gradient-primary text-primary-foreground shadow-[0_10px_30px_-8px_var(--primary-glow)] transition-[box-shadow,filter] duration-normal ease-emphasized hover:brightness-110 hover:shadow-[0_16px_44px_-10px_var(--primary-glow)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           title={isOpen ? tc.cancelAction : tc.askAI}
           aria-label={isOpen ? tc.cancelAction : tc.askAI}
           aria-expanded={isOpen}
@@ -95,7 +101,7 @@ export default function GlobalGeminiAssistant({
                 exit={{ rotate: 90, opacity: 0 }}
                 transition={{ duration: 0.15 }}
               >
-                <X aria-hidden className="h-6 w-6" />
+                <X aria-hidden className="h-5 w-5" />
               </motion.div>
             ) : (
               <motion.div
@@ -105,7 +111,7 @@ export default function GlobalGeminiAssistant({
                 exit={{ rotate: -90, opacity: 0 }}
                 transition={{ duration: 0.15 }}
               >
-                <Sparkles aria-hidden className="h-6 w-6" />
+                <Sparkles aria-hidden className="h-5 w-5" />
               </motion.div>
             )}
           </AnimatePresence>
@@ -118,7 +124,7 @@ export default function GlobalGeminiAssistant({
                 animate={{ scale: 1 }}
                 exit={{ scale: 0 }}
                 aria-hidden
-                className="absolute -top-1 flex h-4 w-4 -end-1"
+                className="absolute -top-1 flex h-3.5 w-3.5 -end-1"
               >
                 <span
                   className={`absolute inline-flex h-full w-full rounded-full opacity-70 motion-safe:animate-ping ${
@@ -126,7 +132,7 @@ export default function GlobalGeminiAssistant({
                   }`}
                 />
                 <span
-                  className={`relative inline-flex h-4 w-4 rounded-full border-2 border-surface ${
+                  className={`relative inline-flex h-3.5 w-3.5 rounded-full border-2 border-surface ${
                     hasAction ? 'bg-warning-solid' : 'bg-success-solid'
                   }`}
                 />
@@ -135,24 +141,23 @@ export default function GlobalGeminiAssistant({
           </AnimatePresence>
         </motion.button>
 
-        {/* Tooltip on hover (when closed) */}
+        {/* Last-reply preview. Gated on hover: left always-on it parks a panel
+            over whatever sits in the bottom corner of the page. */}
         <AnimatePresence>
-          {!isOpen && (
+          {!isOpen && hovered && lastMsg?.role === 'assistant' && (
             <motion.div
               initial={{ opacity: 0, y: 4, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 4, scale: 0.95 }}
-              className="pointer-events-none absolute bottom-16 end-0"
+              transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+              className="pointer-events-none absolute bottom-14 end-0"
             >
-              {/* Only show tooltip when there's a last message preview */}
-              {lastMsg && lastMsg.role === 'assistant' && (
-                <div className="glass max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap rounded-xl border px-3 py-2 text-start shadow-floating">
-                  <p className="mb-0.5 text-[10px] text-subtle-foreground">{tc.assistant}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {lastMsg.content.split('\n')[0].replace(/\*\*/g, '').slice(0, 40)}…
-                  </p>
-                </div>
-              )}
+              <div className="glass max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap rounded-xl border px-3 py-2 text-start shadow-floating">
+                <p className="mb-0.5 text-[10px] text-subtle-foreground">{tc.assistant}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {lastMsg.content.split('\n')[0].replace(/\*\*/g, '').slice(0, 40)}…
+                </p>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

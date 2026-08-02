@@ -291,26 +291,28 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.2 }}
-            className={`card flex flex-wrap items-center justify-between gap-4 border-2 px-5 py-4 ${
+            className={`card flex flex-wrap items-center justify-between gap-5 border-2 bg-surface-sunken px-6 py-6 ${
               isProfit ? 'border-success-border' : 'border-danger-border'
             }`}
           >
             <div className="flex items-center gap-3">
               <span
                 aria-hidden
-                className={`badge tone-${isProfit ? 'success' : 'danger'} h-10 w-10 flex-shrink-0 justify-center rounded-lg p-0`}
+                className={`badge tone-${isProfit ? 'success' : 'danger'} h-11 w-11 flex-shrink-0 justify-center rounded-lg p-0`}
               >
                 {isProfit ? <TrendingUp className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
               </span>
               <div>
-                <p className="section-title">{t.reports.profitAndLoss.netIncome}</p>
+                <p className="text-base font-bold text-foreground">
+                  {t.reports.profitAndLoss.netIncome}
+                </p>
                 <p className="text-xs text-subtle-foreground">
                   {t.reports.profitAndLoss.incomeMinusExpenses}
                 </p>
               </div>
             </div>
             <p
-              className={`numeric text-2xl font-semibold ${isProfit ? 'text-success' : 'text-danger'}`}
+              className={`numeric text-3xl font-bold ${isProfit ? 'text-success' : 'text-danger'}`}
             >
               {formatSignedCurrency(netProfit)}
             </p>

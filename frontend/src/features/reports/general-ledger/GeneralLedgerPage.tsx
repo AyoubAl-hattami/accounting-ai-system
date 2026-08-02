@@ -456,7 +456,7 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
                         ))}
                       </tbody>
                       <tfoot>
-                        <tr>
+                        <tr className="row-grand">
                           <td colSpan={4}>{t.common.closingBalance}</td>
                           <td className="cell-numeric text-success">
                             {formatCurrency(account.lines.reduce((s, l) => s + parseAmount(l.debit), 0))}
@@ -483,10 +483,10 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
                     {account.lines.map((line) => (
                       <MobileLedgerCard key={`${line.journal_entry_id}-${line.line_no}`} line={line} />
                     ))}
-                    <div className="flex items-center justify-between border-t border-border px-1 pt-2">
-                      <span className="text-xs font-semibold text-foreground">{t.common.closing}</span>
+                    <div className="mt-1 flex items-center justify-between rounded-lg border-t-2 border-border-strong bg-surface-sunken px-3 py-3">
+                      <span className="text-sm font-bold text-foreground">{t.common.closing}</span>
                       <span
-                        className={`numeric text-xs font-semibold ${closing < 0 ? 'text-danger' : 'text-foreground'}`}
+                        className={`numeric text-base font-bold ${closing < 0 ? 'text-danger' : 'text-foreground'}`}
                       >
                         {formatSignedCurrency(closing)}
                       </span>

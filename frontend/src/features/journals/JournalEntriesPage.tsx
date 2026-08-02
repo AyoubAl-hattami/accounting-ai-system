@@ -272,7 +272,7 @@ function JournalEntriesContent({
    * makes the next step obvious.
    */
   const renderActions = (entry: JournalEntry) => (
-    <div className="flex flex-wrap items-center justify-end gap-1.5">
+    <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
       {entry.status === 'draft' && (
         <>
           {canReviewJournal(userRole) && (
@@ -517,14 +517,18 @@ function JournalEntriesContent({
                     <th scope="col">{t.journals.entryDate}</th>
                     <th scope="col">{t.common.description}</th>
                     <th scope="col">{t.common.status}</th>
-                    <th scope="col">{t.common.source}</th>
+                    {/* Provenance is context, not a decision input — it yields
+                        width first, and stays available in the expanded row. */}
+                    <th scope="col" className="hidden xl:table-cell">
+                      {t.common.source}
+                    </th>
                     <th scope="col" className="cell-numeric">
                       {t.journals.debit}
                     </th>
                     <th scope="col" className="cell-numeric">
                       {t.journals.credit}
                     </th>
-                    <th scope="col" className="text-end">
+                    <th scope="col" className="cell-sticky-end text-end">
                       {t.common.actions}
                     </th>
                   </tr>
@@ -574,7 +578,7 @@ function JournalEntriesContent({
                           </td>
                           <td>
                             <span
-                              className="block max-w-[260px] truncate"
+                              className="block max-w-[200px] truncate xl:max-w-[260px]"
                               title={entry.description || undefined}
                             >
                               {entry.description || '—'}
@@ -583,7 +587,7 @@ function JournalEntriesContent({
                           <td>
                             <JournalStatusBadge status={entry.status} />
                           </td>
-                          <td>
+                          <td className="hidden xl:table-cell">
                             <span className="block text-xs font-medium text-muted-foreground">
                               {journalSourceLabel(entry.source_type, t)}
                             </span>
@@ -605,7 +609,12 @@ function JournalEntriesContent({
                               )}
                             </span>
                           </td>
-                          <td onClick={(e) => e.stopPropagation()}>{renderActions(entry)}</td>
+                          <td
+                            className="cell-sticky-end"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {renderActions(entry)}
+                          </td>
                         </tr>
 
                         {isExpanded && (
