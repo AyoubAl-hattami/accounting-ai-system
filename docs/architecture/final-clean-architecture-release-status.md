@@ -207,3 +207,80 @@ per the no-push/no-PR/no-merge constraint). A human reviewer should still confir
 the deleted `features-clean/pages-clean` directories aren't needed for a specific
 upcoming migration before merging, though the grep evidence in Phase 62 strongly
 suggests they are not.
+
+---
+
+## Phase 68: whole-repo honest structure cleanup
+
+**Status date:** 2026-08-02
+
+Phase 68 removed every remaining decorative/scaffolding-only directory across
+the whole repository (not just frontend), and added a permanent guard against
+them coming back. Clean Architecture in this repo is represented by real code,
+tests, and docs — never by empty or README-only folders describing what a
+layer "may later contain."
+
+### Directories removed
+
+Backend (all were README-only "scaffolding only" placeholders, or leaf
+packages containing nothing but a comment-only `__init__.py`, with zero
+imports found via `git grep`):
+- `backend/app/domain/` and all six subfolders (`accounting`, `ai`, `audit`,
+  `companies`, `fiscal`, `identity`)
+- `backend/app/interfaces/` and `backend/app/interfaces/api/`
+- `backend/app/application/assistant/`
+- `backend/app/infrastructure/ai/` and `backend/app/infrastructure/ai/providers/`
+- `backend/app/infrastructure/database/sqlalchemy/mappers/`
+- `backend/app/infrastructure/security/`
+
+Frontend (README-only scaffolding, or unused re-export shims with zero
+importers found via `git grep`):
+- `frontend/src/widgets/` and all five subfolders
+- `frontend/src/shared/hooks/`, `shared/i18n/`, `shared/lib/`, `shared/types/`,
+  `shared/ui/`, `shared/api/`, `shared/theme/`, and finally `frontend/src/shared/`
+  itself (once emptied of everything but its own scaffolding README)
+- `frontend/src/app/layout/`, `app/providers/`, `app/routes/`, `app/styles/`,
+  and finally `frontend/src/app/` itself
+- `frontend/src/entities/audit-event/`, `entities/company/`,
+  `entities/fiscal-period/`, `entities/journal/`, `entities/user/` (unused type
+  re-export shims — `frontend/src/entities/account/` was kept because it is
+  actually imported by live features and tests)
+
+`backend/app/domain/` does not exist anymore. It was never anything but
+`README.md` scaffolding files — `tests/test_architecture_guards.py`'s
+`test_domain_directory_contains_no_python_files` still passes because it
+early-returns when `DOMAIN_ROOT` does not exist. If real, pure domain logic is
+ever extracted from `backend/app/modules/accounting`, the domain layer should
+be reintroduced at that point with actual code and tests, not in advance as an
+empty skeleton.
+
+### Guard against regressions
+
+`scripts/check_no_placeholder_dirs.py` scans only `git ls-files`-tracked
+directories and fails if any tracked directory contains nothing but
+placeholder content (`.gitkeep`, a short/placeholder-worded `README.md`, an
+empty `__init__.py`, or an empty `index.ts`/`index.tsx`). Run it locally with:
+
+```
+python scripts/check_no_placeholder_dirs.py
+```
+
+It is wired into `.github/workflows/backend-validation.yml` as an early step
+so a future PR that reintroduces a decorative folder fails CI.
+
+### What stayed, and why
+
+- `backend/app/application/*` subfolders all contain multiple real files
+  (`dto.py`, `ports.py`, `use_cases.py`, tests) and are actively used — kept.
+- `backend/app/infrastructure/audit/`, `infrastructure/auth/`,
+  `infrastructure/exports/`, `infrastructure/database/sqlalchemy/repositories/`
+  all contain real adapter code — kept (their README files describe intent but
+  the directories are not placeholder-only).
+- `frontend/src/entities/account/` — real, imported by
+  `AccountsPage.tsx`, `CreateJournalEntryModal.tsx`, five report pages, and two
+  smoke tests — kept.
+- `docs/architecture/*`, `docs/baseline/*` — substantial, real documentation
+  (100+ lines each) — kept in full.
+- `_snapshots/` and `audit-report/` at the repo root are not tracked by git
+  (excluded via `.git/info/exclude`); they were left untouched since they are
+  local-only working-tree artifacts, not part of the repository.

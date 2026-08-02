@@ -263,3 +263,20 @@ access; unblocked in Phase 61-A.
 3. **Promote entity API helpers** — `entities/account/useAccounts.ts` calls
    apiClient directly; consider extracting `entities/account/api.ts` to separate
    transport from the hook (mirrors `features-clean/accounts/api.ts` pattern).
+
+---
+
+## Phase 68 update — widgets/app/shared scaffolding and unused entities removed
+
+`frontend/src/widgets/*`, `frontend/src/shared/*` (hooks, i18n, lib, types,
+ui, api, theme), and `frontend/src/app/*` (layout, providers, routes, styles)
+existed only as `README.md` scaffolding with no real code, and were removed.
+`frontend/src/entities/audit-event`, `entities/company`, `entities/fiscal-period`,
+`entities/journal`, and `entities/user` contained unused type re-export shims
+with zero importers (confirmed via `git grep`) and were also removed;
+`entities/account` was kept because it is genuinely imported by live features
+and smoke tests. See
+`docs/architecture/final-clean-architecture-release-status.md` (Phase 68
+section) for the full list. The "Recommended next steps" section above that
+references `features-clean/` is now historical — that staging directory was
+already removed in Phase 62.

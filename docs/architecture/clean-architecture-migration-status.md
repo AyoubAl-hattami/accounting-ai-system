@@ -210,3 +210,17 @@ git diff --stat
 git diff --name-only
 git diff --check
 ```
+
+---
+
+## Phase 68 — whole-repo placeholder directory cleanup
+
+Every decorative, README-only "scaffolding only" directory across the whole
+repo (backend `app/domain/*`, `app/interfaces/*`, `app/application/assistant`,
+`app/infrastructure/ai/*`, `app/infrastructure/database/sqlalchemy/mappers`,
+`app/infrastructure/security`; frontend `src/widgets/*`, `src/shared/*`,
+`src/app/*`, and unused `src/entities/*` re-export shims) has been removed.
+See `docs/architecture/final-clean-architecture-release-status.md` (Phase 68
+section) for the full list and rationale, and run
+`python scripts/check_no_placeholder_dirs.py` to verify no placeholder-only
+directory has been reintroduced.
