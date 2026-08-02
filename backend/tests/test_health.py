@@ -36,5 +36,5 @@ def test_version_check():
 
     assert data["status"] == "ok"
     assert data["app_name"] == "Accounting AI System"
-    assert data["environment"] == "development"
+    assert data["environment"] == os.getenv("APP_ENV", "development")
     assert data["version"] == "0.1.0"

@@ -451,9 +451,18 @@ def test_postgresql_concurrent_duplicate_creation_has_one_winner(
 ):
     bs = deterministic_accounting_bootstrap
     email = _email('concurrent_create')
+    # Pre-capture ORM-backed properties in the main thread.
+    # bs.auth_headers and bs.company_id access expired ORM objects through the
+    # fixture's shared SQLAlchemy session.  Evaluating them inside worker
+    # threads causes concurrent lazy-load attempts on the same session, which
+    # SQLAlchemy forbids ("This session is provisioning a new connection;
+    # concurrent operations are not permitted").  Capturing plain Python values
+    # here ensures worker threads never touch the session.
+    _headers = bs.auth_headers
+    _company_id = bs.company_id
 
     def create():
-        return _create_invite(base_url, bs.auth_headers, bs.company_id, email).status_code
+        return _create_invite(base_url, _headers, _company_id, email).status_code
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         statuses = list(executor.map(lambda _value: create(), range(2)))

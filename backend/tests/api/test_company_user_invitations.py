@@ -28,7 +28,12 @@ def test_create_invitation_success(base_url, deterministic_accounting_bootstrap)
 def test_create_invitation_already_member(
     base_url, deterministic_accounting_bootstrap
 ):
-    """Inviting a user who is already a company member returns status=error."""
+    """Inviting an active company member raises a 409 conflict.
+
+    The domain service raises UserAlreadyMember which the route maps to
+    HTTP 409 with the exact detail string.  The old soft-error 200 body
+    was retired when invitation errors were promoted to domain exceptions.
+    """
     bs = deterministic_accounting_bootstrap
     # The factory admin user is already a member of bs.company.
     data = {
@@ -41,10 +46,8 @@ def test_create_invitation_already_member(
         json=data,
         headers=bs.auth_headers,
     )
-    assert response.status_code == 200, response.json()
-    content = response.json()
-    assert content["status"] == "error"
-    assert content["message"] == "User is already a member of this company"
+    assert response.status_code == 409, response.json()
+    assert response.json()["detail"] == "User is already a member of this company"
 
 
 def test_validate_and_accept_invitation_new_user(

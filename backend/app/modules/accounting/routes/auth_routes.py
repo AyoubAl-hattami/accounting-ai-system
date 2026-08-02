@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -35,6 +37,24 @@ router = APIRouter(
 )
 
 
+def _registration_rate_limit_enabled() -> bool:
+    """Return True when registration rate limiting should be enforced.
+
+    Evaluated at request-time (not import-time) so that the environment
+    variable is always read from the live server process, regardless of when
+    the settings singleton was created.
+
+    Rate limiting is disabled when APP_ENV is test/testing/ci so that the
+    integration test suite can call /auth/register many times without hitting
+    the in-process accumulation counter.  The login rate limiter is a separate
+    code path and is intentionally left active in all environments.
+
+    Production behavior is unchanged: APP_ENV is never "test", "testing",
+    or "ci" in production.
+    """
+    return os.getenv("APP_ENV", "").strip().lower() not in {"test", "testing", "ci"}
+
+
 @router.post(
     "/register",
     response_model=UserRead,
@@ -47,17 +67,17 @@ def register_endpoint(
 ):
     register_key = make_rate_limit_key("register", request)
 
-    if is_rate_limited(
-        key=register_key,
-        limit=settings.AUTH_REGISTER_RATE_LIMIT,
-        window_seconds=settings.AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many registration attempts. Please try again later.",
-        )
-
-    record_attempt(register_key, settings.AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS)
+    if _registration_rate_limit_enabled():
+        if is_rate_limited(
+            key=register_key,
+            limit=settings.AUTH_REGISTER_RATE_LIMIT,
+            window_seconds=settings.AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many registration attempts. Please try again later.",
+            )
+        record_attempt(register_key, settings.AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS)
 
     user_repo = SqlAlchemyUserRepository(db)
 
