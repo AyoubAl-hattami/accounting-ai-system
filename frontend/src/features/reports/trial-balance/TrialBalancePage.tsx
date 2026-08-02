@@ -29,6 +29,7 @@ import ReportSummaryTile from '../components/ReportSummaryTile';
 import ReportExportButtons from '../components/ReportExportButtons';
 import ReportDateField from '../components/ReportDateField';
 import ReportSearchField from '../components/ReportSearchField';
+import MoneyAmount from '../../../components/ui/MoneyAmount';
 import { useTrialBalance } from './useTrialBalance';
 import { useI18n } from '../../../i18n';
 import { formatCurrency } from '../../../lib/format';
@@ -172,13 +173,13 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
         <ReportSummaryTile
           label={t.common.debitTotal}
           value={formatCurrency(parseAmount(data.total_debit))}
-          tone="success"
+          tone="debit"
           icon={ArrowDownRight}
         />
         <ReportSummaryTile
           label={t.common.creditTotal}
           value={formatCurrency(parseAmount(data.total_credit))}
-          tone="danger"
+          tone="credit"
           icon={ArrowUpRight}
         />
         <ReportSummaryTile
@@ -191,6 +192,22 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
           value={formatCurrency(parseAmount(data.total_credit_balance))}
           icon={Scale}
         />
+        {/* The one figure on this page whose sign means something: which side the
+            ledger leans when it does not tie. Hidden while balanced, where it
+            would only ever read 0.00. */}
+        {!data.is_balanced && (
+          <ReportSummaryTile
+            label={t.reports.trialBalance.difference}
+            value={
+              <MoneyAmount
+                value={parseAmount(data.total_debit_balance) - parseAmount(data.total_credit_balance)}
+                showPlus
+              />
+            }
+            tone="danger"
+            icon={XCircle}
+          />
+        )}
       </ReportHeader>
 
       {data.lines.length > 0 && <TopAccountsChart lines={data.lines} t={t} />}
@@ -293,10 +310,10 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
                 <tfoot>
                   <tr className="row-grand">
                     <td colSpan={3}>{t.reports.trialBalance.totals}</td>
-                    <td className="cell-numeric text-success">
+                    <td className="cell-numeric text-debit">
                       {formatCurrency(parseAmount(data.total_debit))}
                     </td>
-                    <td className="cell-numeric text-danger">
+                    <td className="cell-numeric text-credit">
                       {formatCurrency(parseAmount(data.total_credit))}
                     </td>
                     <td className="cell-numeric">
@@ -349,12 +366,12 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
                 <MobileFigure
                   label={t.reports.trialBalance.debit}
                   value={formatCurrency(parseAmount(data.total_debit))}
-                  className="text-success"
+                  className="text-debit"
                 />
                 <MobileFigure
                   label={t.reports.trialBalance.credit}
                   value={formatCurrency(parseAmount(data.total_credit))}
-                  className="text-danger"
+                  className="text-credit"
                 />
               </dl>
             </div>

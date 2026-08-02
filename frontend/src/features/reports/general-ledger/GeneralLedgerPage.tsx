@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useId } from 'react';
+import { useState, useEffect, useMemo, useId, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Library,
@@ -20,9 +20,10 @@ import ReportSummaryTile from '../components/ReportSummaryTile';
 import ReportExportButtons from '../components/ReportExportButtons';
 import ReportDateField from '../components/ReportDateField';
 import ReportSearchField from '../components/ReportSearchField';
+import MoneyAmount from '../../../components/ui/MoneyAmount';
 import { useGeneralLedger } from './useGeneralLedger';
 import { useI18n } from '../../../i18n';
-import { formatCurrency, formatSignedCurrency } from '../../../lib/format';
+import { formatCurrency } from '../../../lib/format';
 import type { AccountLedgerRead, AccountLedgerLine } from '../../../api/types';
 
 function parseAmount(v: string): number {
@@ -213,13 +214,13 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
         />
         <ReportSummaryTile
           label={`Σ ${t.common.opening}`}
-          value={formatSignedCurrency(aggregateOpening)}
+          value={<MoneyAmount value={aggregateOpening} />}
           tone={aggregateOpening < 0 ? 'danger' : 'neutral'}
           icon={ArrowDownRight}
         />
         <ReportSummaryTile
           label={`Σ ${t.common.closing}`}
-          value={formatSignedCurrency(aggregateClosing)}
+          value={<MoneyAmount value={aggregateClosing} />}
           tone={aggregateClosing < 0 ? 'danger' : 'neutral'}
           icon={ArrowUpRight}
         />
@@ -384,13 +385,12 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
         <span className="hidden flex-shrink-0 items-center gap-6 sm:flex">
           <HeaderFigure
             label={t.reports.generalLedger.opening}
-            value={formatSignedCurrency(parseAmount(account.opening_balance))}
+            value={<MoneyAmount value={account.opening_balance} className="text-xs" />}
           />
           <HeaderFigure
             label={t.reports.generalLedger.closing}
-            value={formatSignedCurrency(closing)}
+            value={<MoneyAmount value={closing} className="text-xs" />}
             emphasis
-            className={closing < 0 ? 'text-danger' : 'text-foreground'}
           />
           <HeaderFigure
             label={t.reports.generalLedger.lines}
@@ -399,11 +399,7 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
         </span>
 
         <span className="flex flex-shrink-0 flex-col items-end sm:hidden">
-          <span
-            className={`numeric text-xs font-semibold ${closing < 0 ? 'text-danger' : 'text-foreground'}`}
-          >
-            {formatSignedCurrency(closing)}
-          </span>
+          <MoneyAmount value={closing} className="text-xs font-semibold" />
           <span className="text-[10px] text-subtle-foreground">
             {account.lines.length} {t.reports.generalLedger.lines.toLowerCase()}
           </span>
@@ -448,7 +444,7 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
                         <tr className="row-total">
                           <td colSpan={6}>{t.common.openingBalance}</td>
                           <td className="cell-numeric">
-                            {formatSignedCurrency(parseAmount(account.opening_balance))}
+                            <MoneyAmount value={account.opening_balance} />
                           </td>
                         </tr>
                         {account.lines.map((line) => (
@@ -458,14 +454,17 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
                       <tfoot>
                         <tr className="row-grand">
                           <td colSpan={4}>{t.common.closingBalance}</td>
-                          <td className="cell-numeric text-success">
+                          {/* Debit and credit are magnitudes, not gains and
+                              losses — they keep the cool pair used by the rows
+                              above rather than success/danger. */}
+                          <td className="cell-numeric text-debit">
                             {formatCurrency(account.lines.reduce((s, l) => s + parseAmount(l.debit), 0))}
                           </td>
-                          <td className="cell-numeric text-danger">
+                          <td className="cell-numeric text-credit">
                             {formatCurrency(account.lines.reduce((s, l) => s + parseAmount(l.credit), 0))}
                           </td>
-                          <td className={`cell-numeric ${closing < 0 ? 'text-danger' : 'text-foreground'}`}>
-                            {formatSignedCurrency(closing)}
+                          <td className="cell-numeric">
+                            <MoneyAmount value={closing} />
                           </td>
                         </tr>
                       </tfoot>
@@ -476,20 +475,14 @@ function AccountCard({ account, isExpanded, onToggle, index }: AccountCardProps)
                   <div className="space-y-2 p-3 md:hidden">
                     <div className="flex items-center justify-between px-1">
                       <span className="overline">{t.common.opening}</span>
-                      <span className="numeric text-xs text-muted-foreground">
-                        {formatSignedCurrency(parseAmount(account.opening_balance))}
-                      </span>
+                      <MoneyAmount value={account.opening_balance} className="text-xs" />
                     </div>
                     {account.lines.map((line) => (
                       <MobileLedgerCard key={`${line.journal_entry_id}-${line.line_no}`} line={line} />
                     ))}
                     <div className="mt-1 flex items-center justify-between rounded-lg border-t-2 border-border-strong bg-surface-sunken px-3 py-3">
                       <span className="text-sm font-bold text-foreground">{t.common.closing}</span>
-                      <span
-                        className={`numeric text-base font-bold ${closing < 0 ? 'text-danger' : 'text-foreground'}`}
-                      >
-                        {formatSignedCurrency(closing)}
-                      </span>
+                      <MoneyAmount value={closing} className="text-base font-bold" />
                     </div>
                   </div>
                 </>
@@ -509,7 +502,7 @@ function HeaderFigure({
   className = 'text-muted-foreground',
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   emphasis?: boolean;
   className?: string;
 }) {
@@ -524,7 +517,6 @@ function HeaderFigure({
 }
 
 function LedgerRow({ line }: { line: AccountLedgerLine }) {
-  const bal = parseAmount(line.running_balance);
   return (
     <tr>
       <td className="whitespace-nowrap text-xs text-muted-foreground">
@@ -532,15 +524,15 @@ function LedgerRow({ line }: { line: AccountLedgerLine }) {
       </td>
       <td className="numeric text-xs text-primary">{line.entry_no}</td>
       <td className="cell-numeric text-xs text-subtle-foreground">{line.line_no}</td>
-      <td className="max-w-[240px] truncate text-xs text-muted-foreground">
-        {line.description || '—'}
+      <td className="text-xs text-muted-foreground">
+        <span className="line-clamp-2 max-w-[240px] break-words" title={line.description || undefined}>
+          {line.description || '—'}
+        </span>
       </td>
       <td className="cell-numeric text-xs text-debit">{fmtAmt(line.debit)}</td>
       <td className="cell-numeric text-xs text-credit">{fmtAmt(line.credit)}</td>
-      <td
-        className={`cell-numeric text-xs font-semibold ${bal < 0 ? 'text-danger' : 'text-foreground'}`}
-      >
-        {formatSignedCurrency(bal)}
+      <td className="cell-numeric">
+        <MoneyAmount value={line.running_balance} className="text-xs font-semibold" />
       </td>
     </tr>
   );
@@ -548,7 +540,6 @@ function LedgerRow({ line }: { line: AccountLedgerLine }) {
 
 function MobileLedgerCard({ line }: { line: AccountLedgerLine }) {
   const { t } = useI18n();
-  const bal = parseAmount(line.running_balance);
   return (
     <div className="rounded-lg border border-border-subtle bg-surface-muted p-3">
       <div className="mb-2 flex items-start justify-between gap-3">
@@ -573,10 +564,8 @@ function MobileLedgerCard({ line }: { line: AccountLedgerLine }) {
         </div>
         <div className="text-end">
           <dt className="overline">{t.reports.generalLedger.balance}</dt>
-          <dd
-            className={`numeric text-[11px] font-semibold ${bal < 0 ? 'text-danger' : 'text-foreground'}`}
-          >
-            {formatSignedCurrency(bal)}
+          <dd>
+            <MoneyAmount value={line.running_balance} className="text-[11px] font-semibold" />
           </dd>
         </div>
       </dl>

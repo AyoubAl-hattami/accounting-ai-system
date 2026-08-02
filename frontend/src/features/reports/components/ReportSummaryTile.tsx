@@ -1,9 +1,11 @@
+import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { reportToneText, type ReportTone } from './reportTone';
 
 interface ReportSummaryTileProps {
   label: string;
-  value: string;
+  /** A node so signed figures can bring their own positive/negative colour. */
+  value: ReactNode;
   tone?: ReportTone;
   icon?: LucideIcon;
   /** Secondary line under the figure, e.g. a comparison or account count. */

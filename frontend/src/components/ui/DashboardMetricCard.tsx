@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { type ReactNode } from 'react';
 import { type LucideIcon } from 'lucide-react';
 
 export type MetricTone =
@@ -14,7 +15,8 @@ export type MetricTone =
 
 interface DashboardMetricCardProps {
   label: string;
-  value: string;
+  /** A node so signed figures can bring their own positive/negative colour. */
+  value: ReactNode;
   icon: LucideIcon;
   index?: number;
   /** Drives the icon tile and the chip so a card only ever needs one colour decision. */

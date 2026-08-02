@@ -417,6 +417,7 @@ export const en: Translations = {
       debitBalance: 'Debit Balance',
       creditBalance: 'Credit Balance',
       totals: 'Totals',
+      difference: 'Difference',
     },
     profitAndLoss: {
       pageTitle: 'Profit & Loss',
@@ -1174,6 +1175,7 @@ export const ar: Translations = {
       debitBalance: 'رصيد مدين',
       creditBalance: 'رصيد دائن',
       totals: 'الإجماليات',
+      difference: 'الفرق',
     },
     profitAndLoss: {
       pageTitle: 'الأرباح والخسائر',

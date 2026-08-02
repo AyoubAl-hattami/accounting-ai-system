@@ -6,7 +6,10 @@ export type ReportTone =
   | 'danger'
   | 'info'
   | 'violet'
-  | 'teal';
+  | 'teal'
+  /** The cool accounting pair — a debit is not good news and a credit is not bad. */
+  | 'debit'
+  | 'credit';
 
 /** Text colour for a figure carrying the given tone. */
 export const reportToneText: Record<ReportTone, string> = {
@@ -18,4 +21,6 @@ export const reportToneText: Record<ReportTone, string> = {
   info: 'text-info',
   violet: 'text-violet',
   teal: 'text-teal',
+  debit: 'text-debit',
+  credit: 'text-credit',
 };

@@ -432,6 +432,8 @@ export interface Translations {
       debitBalance: string;
       creditBalance: string;
       totals: string;
+      /** Debit total less credit total — only shown when the report is out of balance. */
+      difference: string;
     };
     profitAndLoss: {
       pageTitle: string;

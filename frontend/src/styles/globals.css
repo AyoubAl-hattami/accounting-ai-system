@@ -699,8 +699,31 @@ html.dark {
   }
 
   .cell-numeric {
-    @apply text-right;
+    @apply whitespace-nowrap text-right;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Signed amounts ─────────────────────────────────────────────────────
+     A figure only earns one of these colours when its sign is real: balances,
+     movements, differences, bottom lines. Debit and credit columns keep the
+     cool --debit / --credit pair, because a credit is not a gain. */
+  .amount-positive,
+  .amount-negative,
+  .amount-zero {
+    @apply whitespace-nowrap tracking-tight;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .amount-positive {
+    @apply text-positive;
+  }
+
+  .amount-negative {
+    @apply text-negative;
+  }
+
+  .amount-zero {
+    @apply text-subtle-foreground;
   }
 
   /* Keeps a wide financial table's primary actions reachable without a

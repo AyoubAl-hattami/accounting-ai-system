@@ -31,9 +31,10 @@ import ReportSectionTable from '../components/ReportSectionTable';
 import ReportExportButtons from '../components/ReportExportButtons';
 import ReportDateField from '../components/ReportDateField';
 import ReportSearchField from '../components/ReportSearchField';
+import MoneyAmount from '../../../components/ui/MoneyAmount';
 import { useProfitAndLoss } from './useProfitAndLoss';
 import { useI18n } from '../../../i18n';
-import { formatCurrency, formatSignedCurrency } from '../../../lib/format';
+import { formatCurrency } from '../../../lib/format';
 import type { Translations } from '../../../i18n/types';
 
 function parseAmount(v: string): number {
@@ -202,7 +203,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
         />
         <ReportSummaryTile
           label={t.reports.profitAndLoss.netResult}
-          value={formatSignedCurrency(netProfit)}
+          value={<MoneyAmount value={netProfit} showPlus />}
           tone={isProfit ? 'success' : 'danger'}
           icon={Wallet}
           hint={t.reports.profitAndLoss.incomeMinusExpenses}
@@ -311,11 +312,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
                 </p>
               </div>
             </div>
-            <p
-              className={`numeric text-3xl font-bold ${isProfit ? 'text-success' : 'text-danger'}`}
-            >
-              {formatSignedCurrency(netProfit)}
-            </p>
+            <MoneyAmount value={netProfit} showPlus className="text-3xl font-bold" />
           </motion.div>
         </>
       )}

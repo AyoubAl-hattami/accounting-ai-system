@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import {
   BarChart,
@@ -35,9 +35,10 @@ import ReportSectionTable from '../components/ReportSectionTable';
 import ReportExportButtons from '../components/ReportExportButtons';
 import ReportDateField from '../components/ReportDateField';
 import ReportSearchField from '../components/ReportSearchField';
+import MoneyAmount from '../../../components/ui/MoneyAmount';
 import { useBalanceSheet } from './useBalanceSheet';
 import { useI18n } from '../../../i18n';
-import { formatCurrency, formatSignedCurrency } from '../../../lib/format';
+import { formatCurrency } from '../../../lib/format';
 import type { Translations } from '../../../i18n/types';
 
 function parseAmount(v: string): number {
@@ -208,13 +209,13 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
         />
         <ReportSummaryTile
           label={t.reports.balanceSheet.retainedEarnings}
-          value={formatSignedCurrency(retained)}
+          value={<MoneyAmount value={retained} />}
           tone={retained < 0 ? 'danger' : 'teal'}
           icon={retained < 0 ? TrendingDown : TrendingUp}
         />
         <ReportSummaryTile
           label={t.reports.balanceSheet.currentYearEarnings}
-          value={formatSignedCurrency(currentYear)}
+          value={<MoneyAmount value={currentYear} showPlus />}
           tone={currentYear < 0 ? 'danger' : 'success'}
           icon={currentYear < 0 ? TrendingDown : TrendingUp}
         />
@@ -260,14 +261,14 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
             icon={retained < 0 ? TrendingDown : TrendingUp}
             tone={retained < 0 ? 'danger' : 'teal'}
             label={t.reports.balanceSheet.retainedEarnings}
-            value={formatSignedCurrency(retained)}
+            value={<MoneyAmount value={retained} />}
           />
           <EquationOperator symbol="+" />
           <EquationTerm
             icon={currentYear < 0 ? TrendingDown : TrendingUp}
             tone={currentYear < 0 ? 'danger' : 'success'}
             label={t.reports.balanceSheet.currentYearEarnings}
-            value={formatSignedCurrency(currentYear)}
+            value={<MoneyAmount value={currentYear} showPlus />}
           />
         </div>
       </motion.div>
@@ -366,7 +367,8 @@ function EquationTerm({
   icon: LucideIcon;
   tone: ReportTone;
   label: string;
-  value: string;
+  /** A node so signed figures can bring their own positive/negative colour. */
+  value: ReactNode;
 }) {
   return (
     <span className="flex items-center gap-2">

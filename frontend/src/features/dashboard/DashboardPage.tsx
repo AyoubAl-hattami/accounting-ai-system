@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import PageLayout from '../../components/layout/PageLayout';
 import DashboardMetricCard from '../../components/ui/DashboardMetricCard';
+import MoneyAmount from '../../components/ui/MoneyAmount';
 import ChartCard from '../../components/charts/ChartCard';
 import LoadingState from '../../components/feedback/LoadingState';
 import ErrorState from '../../components/feedback/ErrorState';
@@ -146,7 +147,7 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
               />
               <DashboardMetricCard
                 label={t.dashboard.netIncome}
-                value={formatCurrency(netIncome)}
+                value={<MoneyAmount value={netIncome} showPlus compact />}
                 icon={netIncome >= 0 ? TrendingUp : TrendingDown}
                 index={3}
                 tone={netIncome >= 0 ? 'success' : 'danger'}

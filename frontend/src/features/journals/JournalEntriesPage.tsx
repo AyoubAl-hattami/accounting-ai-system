@@ -515,11 +515,15 @@ function JournalEntriesContent({
                     <th scope="col" className="w-8" />
                     <th scope="col">{t.journals.entryNo}</th>
                     <th scope="col">{t.journals.entryDate}</th>
-                    <th scope="col">{t.common.description}</th>
+                    <th scope="col" className="w-[260px]">
+                      {t.common.description}
+                    </th>
                     <th scope="col">{t.common.status}</th>
                     {/* Provenance is context, not a decision input — it yields
-                        width first, and stays available in the expanded row. */}
-                    <th scope="col" className="hidden xl:table-cell">
+                        width to the money and the actions until the viewport is
+                        wide enough for all three, and stays available in the
+                        expanded row regardless. */}
+                    <th scope="col" className="hidden 2xl:table-cell">
                       {t.common.source}
                     </th>
                     <th scope="col" className="cell-numeric">
@@ -567,7 +571,7 @@ function JournalEntriesContent({
                           </td>
                           <td>
                             <span
-                              className="numeric block max-w-[140px] truncate text-sm font-semibold text-primary"
+                              className="numeric block max-w-[120px] truncate text-sm font-semibold text-primary"
                               title={entry.entry_no}
                             >
                               {entry.entry_no}
@@ -576,9 +580,11 @@ function JournalEntriesContent({
                           <td className="whitespace-nowrap text-muted-foreground">
                             {new Date(entry.entry_date).toLocaleDateString()}
                           </td>
+                          {/* Capped and clamped to two lines: a long description
+                              grows downward, never sideways into the money. */}
                           <td>
                             <span
-                              className="block max-w-[200px] truncate xl:max-w-[260px]"
+                              className="line-clamp-2 max-w-[240px] break-words"
                               title={entry.description || undefined}
                             >
                               {entry.description || '—'}
@@ -587,7 +593,7 @@ function JournalEntriesContent({
                           <td>
                             <JournalStatusBadge status={entry.status} />
                           </td>
-                          <td className="hidden xl:table-cell">
+                          <td className="hidden 2xl:table-cell">
                             <span className="block text-xs font-medium text-muted-foreground">
                               {journalSourceLabel(entry.source_type, t)}
                             </span>
@@ -595,12 +601,14 @@ function JournalEntriesContent({
                               {t.common.by}: {entry.creator_name || t.common.notAvailable}
                             </span>
                           </td>
-                          <td className="cell-numeric text-debit">
+                          <td className="cell-numeric font-semibold text-debit">
                             {fmtCurrency(totals.debit)}
                           </td>
                           <td className="cell-numeric">
                             <span className="inline-flex items-center gap-1.5">
-                              <span className="text-credit">{fmtCurrency(totals.credit)}</span>
+                              <span className="font-semibold text-credit">
+                                {fmtCurrency(totals.credit)}
+                              </span>
                               {totals.balanced && (
                                 <CheckCircle2
                                   aria-label={t.journals.balanced}
@@ -679,7 +687,10 @@ function JournalEntriesContent({
                         <span className="numeric text-xs font-semibold text-primary">
                           {entry.entry_no}
                         </span>
-                        <p className="mt-0.5 text-sm font-medium text-foreground">
+                        <p
+                          className="mt-0.5 line-clamp-2 text-sm font-medium text-foreground"
+                          title={entry.description || undefined}
+                        >
                           {entry.description || t.common.noDescription}
                         </p>
                       </div>
