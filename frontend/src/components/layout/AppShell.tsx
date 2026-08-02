@@ -1,28 +1,31 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useAuth } from '../../auth/AuthContext';
-import { canViewPage, canManageSettings } from '../../auth/permissions';
-import { useI18n } from '../../i18n';
-import CompanySelector from './CompanySelector';
-import type { Company, CompanyUserRole } from '../../api/types';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
-  LayoutDashboard,
-  BookOpen,
-  Receipt,
   BarChart3,
-  FileText,
-  Scale,
   BookMarked,
-  Library,
-  Settings,
-  LogOut,
+  BookOpen,
   ChevronLeft,
+  FileText,
+  Globe,
+  LayoutDashboard,
+  Library,
+  LogOut,
   Menu,
+  Receipt,
+  Scale,
+  Settings,
   Shield,
   Users,
-  Globe,
+  X,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { useAuth } from '../../auth/AuthContext';
+import { canManageSettings, canViewPage } from '../../auth/permissions';
+import { useI18n } from '../../i18n';
+import { ThemeToggleButton } from '../ui/ThemeToggle';
+import CompanySelector from './CompanySelector';
+import type { Company, CompanyUserRole } from '../../api/types';
 import GlobalGeminiAssistant from '../../features/ai/GlobalGeminiAssistant';
 
 interface AppShellProps {
@@ -34,6 +37,12 @@ interface AppShellProps {
   pageSubtitle?: string;
   activePath?: string;
   userRole?: CompanyUserRole | null;
+}
+
+interface NavItem {
+  icon: LucideIcon;
+  label: string;
+  path: string;
 }
 
 export default function AppShell({
@@ -52,98 +61,132 @@ export default function AppShell({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  const isRtl = dir === 'rtl';
   const toggleLanguage = () => setLanguage(language === 'en' ? 'ar' : 'en');
 
-  const sidebarWidth = collapsed ? 'w-[72px]' : 'w-64';
-
-  // Use translated page title/subtitle with fallback
   const displayTitle = pageTitle || t.dashboard.pageTitle;
   const displaySubtitle = pageSubtitle || t.dashboard.pageSubtitle;
 
-  const allNavItems = [
-    { icon: LayoutDashboard, label: t.nav.dashboard, path: '/dashboard' },
-    { icon: BookOpen, label: t.nav.journalEntries, path: '/journal-entries' },
-    { icon: Receipt, label: t.nav.accounts, path: '/accounts' },
-    { icon: Shield, label: t.nav.auditLogs, path: '/audit-logs' },
-    { icon: Users, label: t.nav.companyUsers, path: '/company-users' },
-    { icon: BarChart3, label: t.nav.trialBalance, path: '/reports/trial-balance' },
-    { icon: FileText, label: t.nav.profitAndLoss, path: '/reports/profit-and-loss' },
-    { icon: Scale, label: t.nav.balanceSheet, path: '/reports/balance-sheet' },
-    { icon: BookMarked, label: t.nav.accountLedger, path: '/reports/account-ledger' },
-    { icon: Library, label: t.nav.generalLedger, path: '/reports/general-ledger' },
-  ];
-
-  // Filter nav items based on user role
-  const navItems = allNavItems.filter((item) => canViewPage(userRole, item.path));
+  // Grouping turns a flat ten-item list into four short scannable blocks.
+  const navGroups: { label: string; items: NavItem[] }[] = [
+    {
+      label: t.nav.groupOverview,
+      items: [{ icon: LayoutDashboard, label: t.nav.dashboard, path: '/dashboard' }],
+    },
+    {
+      label: t.nav.groupBookkeeping,
+      items: [
+        { icon: BookOpen, label: t.nav.journalEntries, path: '/journal-entries' },
+        { icon: Receipt, label: t.nav.accounts, path: '/accounts' },
+      ],
+    },
+    {
+      label: t.nav.groupReports,
+      items: [
+        { icon: BarChart3, label: t.nav.trialBalance, path: '/reports/trial-balance' },
+        { icon: FileText, label: t.nav.profitAndLoss, path: '/reports/profit-and-loss' },
+        { icon: Scale, label: t.nav.balanceSheet, path: '/reports/balance-sheet' },
+        { icon: BookMarked, label: t.nav.accountLedger, path: '/reports/account-ledger' },
+        { icon: Library, label: t.nav.generalLedger, path: '/reports/general-ledger' },
+      ],
+    },
+    {
+      label: t.nav.groupAdministration,
+      items: [
+        { icon: Users, label: t.nav.companyUsers, path: '/company-users' },
+        { icon: Shield, label: t.nav.auditLogs, path: '/audit-logs' },
+      ],
+    },
+  ]
+    .map((group) => ({ ...group, items: group.items.filter((i) => canViewPage(userRole, i.path)) }))
+    .filter((group) => group.items.length > 0);
 
   const handleNav = (path: string) => {
     navigate(path);
     setMobileOpen(false);
   };
 
-  const isRtl = dir === 'rtl';
+  const roleLabel = userRole ? userRole.charAt(0).toUpperCase() + userRole.slice(1) : null;
 
-  // Role display label
-  const roleLabel = userRole
-    ? userRole.charAt(0).toUpperCase() + userRole.slice(1)
-    : null;
+  const renderNavButton = ({ icon: Icon, label, path }: NavItem) => {
+    const isActive = path === activePath;
+    return (
+      <button
+        key={path}
+        type="button"
+        onClick={() => handleNav(path)}
+        aria-current={isActive ? 'page' : undefined}
+        title={collapsed ? label : undefined}
+        className={`nav-item ${isActive ? 'nav-item-active' : ''} ${collapsed ? 'justify-center' : ''}`}
+      >
+        <Icon className="h-[18px] w-[18px] flex-shrink-0" />
+        {!collapsed && <span className="truncate">{label}</span>}
+      </button>
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-surface-900 flex">
-      {/* Mobile overlay */}
+    <div className="flex min-h-screen bg-background">
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+            className="fixed inset-0 z-40 bg-backdrop lg:hidden"
             onClick={() => setMobileOpen(false)}
           />
         )}
       </AnimatePresence>
 
-      {/* Sidebar */}
       <aside
-        className={`
-          fixed lg:sticky top-0 h-screen z-50
-          ${isRtl ? 'right-0' : 'left-0'}
-          ${sidebarWidth}
-          bg-surface-800/80 backdrop-blur-2xl
-          ${isRtl ? 'border-l' : 'border-r'} border-white/[0.06]
-          flex flex-col
-          transition-all duration-300 ease-in-out
-          ${mobileOpen
-            ? 'translate-x-0'
-            : isRtl
-              ? 'translate-x-full lg:translate-x-0'
-              : '-translate-x-full lg:translate-x-0'
-          }
-        `}
+        className={`fixed top-0 z-50 flex h-screen flex-col bg-surface transition-[width,transform] duration-300 ease-in-out lg:sticky
+          ${isRtl ? 'right-0 border-l' : 'left-0 border-r'} border-border
+          ${collapsed ? 'w-[72px]' : 'w-64'}
+          ${
+            mobileOpen
+              ? 'translate-x-0'
+              : isRtl
+                ? 'translate-x-full lg:translate-x-0'
+                : '-translate-x-full lg:translate-x-0'
+          }`}
       >
-        {/* Logo area */}
-        <div className="h-16 flex items-center px-4 border-b border-white/[0.06]">
-          <div className="flex items-center gap-3 overflow-hidden cursor-pointer" onClick={() => handleNav('/dashboard')}>
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center flex-shrink-0 shadow-lg shadow-brand-500/20">
-              <Scale className="w-5 h-5 text-white" />
-            </div>
-            <AnimatePresence>
-              {!collapsed && (
-                <motion.div
-                  initial={{ opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: 'auto' }}
-                  exit={{ opacity: 0, width: 0 }}
-                  className="overflow-hidden whitespace-nowrap"
-                >
-                  <h1 className="text-base font-bold text-white tracking-tight">{t.nav.appName}</h1>
-                  <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">{t.nav.appTagline}</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+        <div className="flex h-16 flex-shrink-0 items-center gap-3 border-b border-border px-4">
+          <button
+            type="button"
+            onClick={() => handleNav('/dashboard')}
+            className="flex min-w-0 flex-1 items-center gap-3 text-start"
+          >
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary-solid text-primary-foreground">
+              <Scale className="h-[18px] w-[18px]" />
+            </span>
+            {!collapsed && (
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold tracking-tight text-foreground">
+                  {t.nav.appName}
+                </span>
+                <span className="overline block truncate">{t.nav.appTagline}</span>
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            aria-label={t.nav.closeMenu}
+            className="btn-icon lg:hidden"
+          >
+            <X className="h-[18px] w-[18px]" />
+          </button>
         </div>
 
-        {/* Company selector */}
         <CompanySelector
           companies={companies}
           selectedCompany={selectedCompany}
@@ -151,128 +194,106 @@ export default function AppShell({
           collapsed={collapsed}
         />
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
-            const isActive = item.path === activePath;
-            return (
-              <button
-                key={item.path}
-                onClick={() => handleNav(item.path)}
-                className={`
-                  w-full flex items-center gap-3 px-3 py-2.5 rounded-xl
-                  transition-all duration-200 group
-                  ${isActive
-                    ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
-                  }
-                  ${collapsed ? 'justify-center' : ''}
-                `}
-              >
-                <item.icon className={`w-[18px] h-[18px] flex-shrink-0 ${isActive ? 'text-brand-400' : 'group-hover:text-gray-200'}`} />
-                {!collapsed && (
-                  <span className="text-sm font-medium truncate">{item.label}</span>
-                )}
-              </button>
-            );
-          })}
+        <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-3">
+          {navGroups.map((group) => (
+            <div key={group.label} className="space-y-1">
+              {!collapsed && <p className="overline px-3 pb-1">{group.label}</p>}
+              {group.items.map(renderNavButton)}
+            </div>
+          ))}
         </nav>
 
-        {/* Bottom area */}
-        <div className="px-3 py-3 border-t border-white/[0.06] space-y-1">
-          {canManageSettings(userRole) && (
-            <button
-              onClick={() => handleNav('/settings')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group
-                ${activePath === '/settings'
-                  ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] border border-transparent'
-                }
-                ${collapsed ? 'justify-center' : ''}
-              `}
-            >
-              <Settings className={`w-[18px] h-[18px] flex-shrink-0 ${activePath === '/settings' ? 'text-brand-400' : 'group-hover:text-gray-200'}`} />
-              {!collapsed && <span className="text-sm font-medium">{t.nav.settings}</span>}
-            </button>
-          )}
+        <div className="flex-shrink-0 space-y-1 border-t border-border px-3 py-3">
+          {canManageSettings(userRole) &&
+            renderNavButton({ icon: Settings, label: t.nav.settings, path: '/settings' })}
           <button
+            type="button"
             onClick={logout}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-red-400 hover:bg-red-500/[0.06] transition-all duration-200 ${collapsed ? 'justify-center' : ''}`}
+            title={collapsed ? t.nav.signOut : undefined}
+            className={`nav-item hover:bg-danger-soft hover:text-danger ${collapsed ? 'justify-center' : ''}`}
           >
-            <LogOut className="w-[18px] h-[18px] flex-shrink-0" />
-            {!collapsed && <span className="text-sm font-medium">{t.nav.signOut}</span>}
+            <LogOut className="h-[18px] w-[18px] flex-shrink-0" />
+            {!collapsed && <span className="truncate">{t.nav.signOut}</span>}
           </button>
         </div>
 
-        {/* Collapse button */}
         <button
+          type="button"
           onClick={() => setCollapsed(!collapsed)}
-          className={`hidden lg:flex absolute ${isRtl ? '-left-3' : '-right-3'} top-20 w-6 h-6 items-center justify-center rounded-full bg-surface-600 border border-white/[0.1] text-gray-400 hover:text-white hover:bg-surface-500 transition-all duration-200`}
+          aria-label={collapsed ? t.nav.expandSidebar : t.nav.collapseSidebar}
+          title={collapsed ? t.nav.expandSidebar : t.nav.collapseSidebar}
+          className={`absolute top-[74px] hidden h-6 w-6 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-muted-foreground shadow-sm transition-colors hover:text-foreground lg:flex ${
+            isRtl ? '-left-3' : '-right-3'
+          }`}
         >
-          <ChevronLeft className={`w-3.5 h-3.5 transition-transform duration-300 ${collapsed ? (isRtl ? '' : 'rotate-180') : (isRtl ? 'rotate-180' : '')}`} />
+          <ChevronLeft
+            className={`h-3.5 w-3.5 transition-transform duration-300 ${
+              collapsed !== isRtl ? 'rotate-180' : ''
+            }`}
+          />
         </button>
       </aside>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-h-screen min-w-0">
-        {/* Top bar */}
-        <header className="h-16 flex items-center justify-between px-4 lg:px-6 border-b border-white/[0.06] bg-surface-800/40 backdrop-blur-xl sticky top-0 z-30">
-          <div className="flex items-center gap-4">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-border bg-surface px-4 lg:px-6">
+          <div className="flex min-w-0 items-center gap-3">
             <button
+              type="button"
               onClick={() => setMobileOpen(true)}
-              className="lg:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/[0.06] transition-colors"
+              aria-label={t.nav.openMenu}
+              className="btn-icon lg:hidden"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="h-[18px] w-[18px]" />
             </button>
-            <div>
-              <h2 className="text-lg font-semibold text-white">{displayTitle}</h2>
-              <p className="text-xs text-gray-500">{displaySubtitle}</p>
+            <div className="min-w-0">
+              <h1 className="truncate text-base font-semibold tracking-tight text-foreground">
+                {displayTitle}
+              </h1>
+              <p className="truncate text-xs text-muted-foreground">{displaySubtitle}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+
+          <div className="flex flex-shrink-0 items-center gap-2">
             {selectedCompany && (
-              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-500/[0.06] border border-brand-500/10">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                <span className="text-xs font-medium text-brand-300">{selectedCompany.name}</span>
-              </div>
+              <span className="badge tone-neutral hidden md:inline-flex">
+                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-success" />
+                {selectedCompany.name}
+              </span>
             )}
 
-            {/* Language toggle */}
             <button
+              type="button"
               onClick={toggleLanguage}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-brand-500/30 hover:bg-white/[0.06] transition-all duration-200 group"
+              className="btn btn-ghost btn-sm gap-1.5"
               title={language === 'en' ? 'التبديل إلى العربية' : 'Switch to English'}
             >
-              <Globe className="w-3.5 h-3.5 text-gray-400 group-hover:text-brand-400 transition-colors" />
-              <span className="text-[11px] font-bold text-brand-400 uppercase tracking-wide">
+              <Globe className="h-[18px] w-[18px]" />
+              <span className="text-[11px] font-semibold uppercase tracking-wide">
                 {language === 'en' ? 'EN' : 'AR'}
-              </span>
-              <span className="text-[10px] text-gray-500 group-hover:text-gray-300 transition-colors">
-                / {language === 'en' ? 'عر' : 'EN'}
               </span>
             </button>
 
-            <div className={`${isRtl ? 'text-left' : 'text-right'} hidden sm:block`}>
-              <p className="text-sm font-medium text-gray-200">{user?.full_name || user?.email}</p>
-              <p className="text-[11px] text-gray-500">
-                {user?.is_superuser
-                  ? t.common.administrator
-                  : roleLabel || t.common.user}
+            <ThemeToggleButton />
+
+            <div className="mx-1 hidden h-6 w-px bg-border sm:block" />
+
+            <div className="hidden text-end sm:block">
+              <p className="max-w-[180px] truncate text-sm font-medium text-foreground">
+                {user?.full_name || user?.email}
+              </p>
+              <p className="text-[11px] text-subtle-foreground">
+                {user?.is_superuser ? t.common.administrator : roleLabel || t.common.user}
               </p>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-violet-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-brand-500/20">
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary-solid text-sm font-semibold text-primary-foreground">
               {(user?.full_name || user?.email || 'U')[0].toUpperCase()}
-            </div>
+            </span>
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 p-4 lg:p-6">
-          {children}
-        </main>
+        <main className="flex-1 p-4 lg:p-6">{children}</main>
       </div>
 
-      {/* Gemini Assistant — visible on all authenticated pages */}
       <GlobalGeminiAssistant
         companyId={selectedCompany?.id ?? null}
         userRole={userRole}

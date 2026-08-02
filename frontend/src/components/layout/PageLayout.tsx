@@ -51,7 +51,7 @@ export default function PageLayout({
         userRole={userRole}
       >
         <EmptyState
-          icon={<Building2 className="w-7 h-7 text-brand-400" />}
+          icon={<Building2 className="w-7 h-7 text-primary" />}
           title={t.common.noCompaniesYet}
           description={t.common.noCompaniesDescription}
           className="py-32"

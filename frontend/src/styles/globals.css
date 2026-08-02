@@ -1,57 +1,225 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Semantic token definitions ─────────────────────────────────────────────
-   These variables reproduce the current dark-mode appearance unchanged.
-   Light-mode overrides can be added inside `html.light { }` when needed.
-   Components should use semantic utilities (bg-page, text-content, etc.)
-   rather than raw palette utilities (bg-surface-900, text-gray-100, etc.).
-   ──────────────────────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS
+
+   `:root` holds the light palette; `html.dark` overrides it with a
+   hand-tuned dark palette (not a mechanical inversion). Every colour used by
+   the app resolves through one of these variables, so both themes stay
+   coherent and a single edit here propagates everywhere.
+
+   Naming:
+     background / surface-*   → elevation ladder, page → card → raised → overlay
+     foreground / *-foreground → text ladder, primary → muted → subtle
+     border-*                 → hairline ladder, subtle → default → strong
+     <tone> / <tone>-soft /   → readable text colour, tinted fill, tinted
+       <tone>-border            hairline, and solid fill for buttons
+   ════════════════════════════════════════════════════════════════════════════ */
+
 :root {
-  /* Surfaces */
-  --color-page:             #0a0a0f; /* surface-900 */
-  --color-surface:          #0f0f17; /* surface-800 */
-  --color-surface-subtle:   #14141f; /* surface-700 */
-  --color-surface-elevated: #1a1a28; /* surface-600 */
-  --color-surface-overlay:  #22222f; /* surface-500 */
+  color-scheme: light;
 
-  /* Content */
-  --color-content:           #f3f4f6; /* gray-100 */
-  --color-content-secondary: #9ca3af; /* gray-400 */
-  --color-content-muted:     #6b7280; /* gray-500 */
-  --color-content-inverse:   #0a0a0f; /* dark surface — for text on accent */
+  /* ── Elevation ─────────────────────────────────────────────────────────── */
+  --background:       #f5f7fa;
+  --surface:          #ffffff;
+  --surface-muted:    #f4f6f9;
+  --surface-raised:   #ffffff;
+  --surface-overlay:  #eef1f6;
+  --surface-sunken:   #eaeef4;
+  --backdrop:         rgba(15, 23, 42, 0.42);
 
-  /* Borders */
-  --color-border:        rgba(255, 255, 255, 0.08);
-  --color-border-subtle: rgba(255, 255, 255, 0.04);
-  --color-focus:         #6366f1; /* brand-500 */
+  /* ── Text ──────────────────────────────────────────────────────────────── */
+  --foreground:        #0f172a;
+  --muted-foreground:  #4d5b70;
+  --subtle-foreground: #697588;
+  --inverse:           #ffffff;
 
-  /* Accent (brand violet) */
-  --color-accent:       #4f46e5; /* brand-600 */
-  --color-accent-hover: #4338ca; /* brand-700 */
-  --color-accent-subtle: rgba(99, 102, 241, 0.12); /* brand-500 @ low opacity */
-  --color-on-accent:    #ffffff;
+  /* ── Hairlines & focus ─────────────────────────────────────────────────── */
+  --border:        #e2e7ee;
+  --border-subtle: #eef1f5;
+  --border-strong: #cbd3e0;
+  --ring:          #4f46e5;
+  --ring-soft:     rgba(79, 70, 229, 0.22);
+  --ring-danger:   rgba(220, 38, 38, 0.22);
 
-  /* Status */
-  --color-success: #22c55e; /* green-500 */
-  --color-warning: #f59e0b; /* amber-500 */
-  --color-danger:  #ef4444; /* red-500 */
-  --color-info:    #3b82f6; /* blue-500 */
+  /* ── Primary (indigo — brand, navigation, primary actions) ─────────────── */
+  --primary:            #4338ca;
+  --primary-solid:      #4f46e5;
+  --primary-solid-hover:#4338ca;
+  --primary-foreground: #ffffff;
+  --primary-soft:       #eef2ff;
+  --primary-soft-hover: #e0e7ff;
+  --primary-border:     #c7d2fe;
 
-  /* Accounting */
-  --color-debit:   #60a5fa; /* blue-400 */
-  --color-credit:  #34d399; /* emerald-400 */
-  --color-balance: #a78bfa; /* violet-400 */
+  /* ── Secondary (neutral action surface) ────────────────────────────────── */
+  --secondary:            #f1f4f9;
+  --secondary-hover:      #e6ebf3;
+  --secondary-foreground: #33415a;
 
-  /* Radius */
-  --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
+  /* ── Status tones ──────────────────────────────────────────────────────── */
+  --success:        #04785a;
+  --success-solid:  #059669;
+  --success-soft:   #ecfdf5;
+  --success-border: #a7f3d0;
+
+  --warning:        #a35707;
+  --warning-solid:  #d97706;
+  --warning-soft:   #fffbeb;
+  --warning-border: #fcd980;
+
+  --danger:            #b91c1c;
+  --danger-solid:      #dc2626;
+  --danger-solid-hover:#b91c1c;
+  --danger-soft:       #fef2f2;
+  --danger-border:     #fbc7c7;
+
+  --info:        #1d4ed8;
+  --info-solid:  #2563eb;
+  --info-soft:   #eff6ff;
+  --info-border: #bfdbfe;
+
+  --violet:        #6d28d9;
+  --violet-soft:   #f5f3ff;
+  --violet-border: #ddd6fe;
+
+  --rose:        #be123c;
+  --rose-soft:   #fff1f2;
+  --rose-border: #fecdd3;
+
+  --teal:        #0f766e;
+  --teal-soft:   #f0fdfa;
+  --teal-border: #99f6e4;
+
+  --neutral:        #55637a;
+  --neutral-soft:   #f1f5f9;
+  --neutral-border: #e2e8f0;
+
+  /* ── Accounting semantics ──────────────────────────────────────────────── */
+  /* Debit and credit are a matched cool pair, deliberately NOT the success /
+     danger colours: a credit is not "good" and a debit is not "bad". Only
+     positive/negative carry that judgement. */
+  --debit:    #1d4ed8;
+  --credit:   #0f766e;
+  --positive: #04785a;
+  --negative: #be123c;
+
+  /* ── Report / chart series ─────────────────────────────────────────────── */
+  --chart-1: #4f46e5;
+  --chart-2: #0d9488;
+  --chart-3: #d97706;
+  --chart-4: #7c3aed;
+  --chart-5: #dc2626;
+  --chart-grid: #e6eaf1;
+
+  /* ── Shape & depth ─────────────────────────────────────────────────────── */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 4px 12px -2px rgba(16, 24, 40, 0.08), 0 2px 4px -2px rgba(16, 24, 40, 0.04);
+  --shadow-lg: 0 12px 28px -6px rgba(16, 24, 40, 0.12), 0 4px 10px -4px rgba(16, 24, 40, 0.06);
+  --shadow-xl: 0 24px 56px -12px rgba(16, 24, 40, 0.20);
 }
+
+html.dark {
+  color-scheme: dark;
+
+  --background:       #0a0e16;
+  --surface:          #111725;
+  --surface-muted:    #161d2d;
+  --surface-raised:   #1a2334;
+  --surface-overlay:  #222c40;
+  --surface-sunken:   #0d121d;
+  --backdrop:         rgba(2, 5, 12, 0.68);
+
+  --foreground:        #e7ecf4;
+  --muted-foreground:  #a2adc0;
+  --subtle-foreground: #7d8899;
+  --inverse:           #0a0e16;
+
+  --border:        #232d40;
+  --border-subtle: #1a2231;
+  --border-strong: #33405a;
+  --ring:          #818cf8;
+  --ring-soft:     rgba(129, 140, 248, 0.30);
+  --ring-danger:   rgba(248, 113, 113, 0.28);
+
+  --primary:            #a5b4fc;
+  --primary-solid:      #4f46e5;
+  --primary-solid-hover:#6366f1;
+  --primary-foreground: #ffffff;
+  --primary-soft:       rgba(129, 140, 248, 0.14);
+  --primary-soft-hover: rgba(129, 140, 248, 0.22);
+  --primary-border:     rgba(129, 140, 248, 0.30);
+
+  --secondary:            #1c2536;
+  --secondary-hover:      #24304a;
+  --secondary-foreground: #cbd5e6;
+
+  --success:        #34d399;
+  --success-solid:  #059669;
+  --success-soft:   rgba(52, 211, 153, 0.13);
+  --success-border: rgba(52, 211, 153, 0.28);
+
+  --warning:        #fbbf24;
+  --warning-solid:  #d97706;
+  --warning-soft:   rgba(251, 191, 36, 0.13);
+  --warning-border: rgba(251, 191, 36, 0.28);
+
+  --danger:            #f87171;
+  --danger-solid:      #dc2626;
+  --danger-solid-hover:#ef4444;
+  --danger-soft:       rgba(248, 113, 113, 0.13);
+  --danger-border:     rgba(248, 113, 113, 0.28);
+
+  --info:        #60a5fa;
+  --info-solid:  #2563eb;
+  --info-soft:   rgba(96, 165, 250, 0.13);
+  --info-border: rgba(96, 165, 250, 0.28);
+
+  --violet:        #b39cfb;
+  --violet-soft:   rgba(167, 139, 250, 0.13);
+  --violet-border: rgba(167, 139, 250, 0.28);
+
+  --rose:        #fb7185;
+  --rose-soft:   rgba(251, 113, 133, 0.13);
+  --rose-border: rgba(251, 113, 133, 0.28);
+
+  --teal:        #2dd4bf;
+  --teal-soft:   rgba(45, 212, 191, 0.13);
+  --teal-border: rgba(45, 212, 191, 0.28);
+
+  --neutral:        #9aa6ba;
+  --neutral-soft:   rgba(148, 163, 184, 0.12);
+  --neutral-border: rgba(148, 163, 184, 0.22);
+
+  --debit:    #60a5fa;
+  --credit:   #2dd4bf;
+  --positive: #34d399;
+  --negative: #fb7185;
+
+  --chart-1: #818cf8;
+  --chart-2: #2dd4bf;
+  --chart-3: #fbbf24;
+  --chart-4: #c4b5fd;
+  --chart-5: #fb7185;
+  --chart-grid: #232d40;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.40), 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.45), 0 2px 4px -2px rgba(0, 0, 0, 0.30);
+  --shadow-lg: 0 12px 28px -6px rgba(0, 0, 0, 0.55), 0 4px 10px -4px rgba(0, 0, 0, 0.35);
+  --shadow-xl: 0 24px 56px -12px rgba(0, 0, 0, 0.70);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   BASE
+   ════════════════════════════════════════════════════════════════════════════ */
 
 @layer base {
   * {
@@ -60,127 +228,427 @@
     box-sizing: border-box;
   }
 
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
-    @apply bg-page text-content font-sans antialiased;
+    @apply bg-background text-foreground font-sans antialiased;
     min-height: 100vh;
+    font-feature-settings: 'cv05' 1, 'ss03' 1;
+  }
+
+  /* Financial figures must align digit-for-digit down a column. */
+  th,
+  td,
+  input[type='number'] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1, h2, h3, h4 {
+    @apply text-foreground;
+    letter-spacing: -0.011em;
+  }
+
+  h1 { @apply text-2xl font-semibold; letter-spacing: -0.021em; }
+  h2 { @apply text-lg font-semibold; letter-spacing: -0.017em; }
+  h3 { @apply text-sm font-semibold; }
+
+  hr { @apply border-border; }
+
+  /* Native controls render with the correct theme via `color-scheme`; this
+     keeps dropdown popups legible without per-option colour classes. */
+  option {
+    @apply bg-surface text-foreground;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--primary-soft-hover);
+    color: var(--foreground);
   }
 
   ::-webkit-scrollbar {
-    width: 6px;
+    width: 10px;
+    height: 10px;
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-surface;
+    background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-surface-overlay rounded-full;
+    background: var(--border-strong);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-accent;
+    background: var(--subtle-foreground);
+    background-clip: content-box;
   }
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   COMPONENT PRIMITIVES
+   ════════════════════════════════════════════════════════════════════════════ */
+
 @layer components {
-  .glass-panel {
-    @apply bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-2xl;
+  /* ── Surfaces ────────────────────────────────────────────────────────── */
+
+  .card {
+    @apply bg-surface border border-border rounded-xl shadow-xs;
   }
 
-  .glass-panel-hover {
-    @apply glass-panel transition-all duration-300 hover:bg-white/[0.07] hover:border-white/[0.1] hover:shadow-lg hover:shadow-brand-500/5;
+  .card-interactive {
+    @apply card transition-[border-color,box-shadow,transform] duration-200
+           hover:border-border-strong hover:shadow-md;
   }
 
-  .gradient-text {
-    @apply bg-gradient-to-r from-brand-400 via-brand-300 to-indigo-300 bg-clip-text text-transparent;
+  .panel {
+    @apply bg-surface-muted border border-border-subtle rounded-lg;
   }
 
-  .input-field {
-    @apply w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/50 transition-all duration-200;
+  /* ── Typography helpers ──────────────────────────────────────────────── */
+
+  .page-title {
+    @apply text-xl font-semibold tracking-tight text-foreground;
+  }
+
+  .page-description {
+    @apply text-sm text-muted-foreground;
+  }
+
+  .section-title {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  .field-label {
+    @apply block text-xs font-medium text-muted-foreground mb-1.5;
+  }
+
+  .overline {
+    @apply text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle-foreground;
+  }
+
+  .numeric {
+    font-variant-numeric: tabular-nums;
+    @apply tracking-tight;
+  }
+
+  /* ── Form controls ───────────────────────────────────────────────────── */
+
+  .input {
+    @apply w-full rounded-lg border border-border bg-surface px-3 py-2
+           text-sm text-foreground placeholder:text-subtle-foreground
+           transition-colors duration-150
+           hover:border-border-strong
+           focus:border-primary-solid focus:outline-none focus:ring-2 focus:ring-ring-soft
+           disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-subtle-foreground;
+  }
+
+  .input-invalid {
+    @apply border-danger-border focus:border-danger focus:ring-ring-danger;
+  }
+
+  .select {
+    @apply input pr-9 appearance-none bg-no-repeat cursor-pointer;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23697588' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+    background-position: right 0.65rem center;
+    background-size: 1rem;
+  }
+
+  html.dark .select {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%237d8899' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+  }
+
+  html[dir='rtl'] .select {
+    @apply pr-3 pl-9;
+    background-position: left 0.65rem center;
+  }
+
+  .field-error {
+    @apply mt-1.5 flex items-start gap-1.5 text-xs text-danger;
+  }
+
+  .field-hint {
+    @apply mt-1.5 text-xs text-subtle-foreground;
+  }
+
+  /* ── Buttons ─────────────────────────────────────────────────────────── */
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap
+           rounded-lg px-3.5 py-2 text-sm font-medium
+           transition-colors duration-150
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
+           focus-visible:ring-offset-background
+           disabled:pointer-events-none disabled:opacity-50;
   }
 
   .btn-primary {
-    @apply w-full py-3.5 bg-gradient-to-r from-brand-600 to-brand-500 text-white font-semibold rounded-xl transition-all duration-300 hover:from-brand-500 hover:to-brand-400 hover:shadow-lg hover:shadow-brand-500/25 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none;
+    @apply btn bg-primary-solid text-primary-foreground shadow-xs
+           hover:bg-primary-solid-hover;
+  }
+
+  .btn-secondary {
+    @apply btn bg-secondary text-secondary-foreground border border-border
+           hover:bg-secondary-hover hover:border-border-strong;
+  }
+
+  .btn-ghost {
+    @apply btn text-muted-foreground hover:bg-surface-overlay hover:text-foreground;
+  }
+
+  .btn-danger {
+    @apply btn bg-danger-solid text-primary-foreground shadow-xs
+           hover:bg-danger-solid-hover;
+  }
+
+  .btn-danger-ghost {
+    @apply btn text-danger border border-danger-border bg-danger-soft
+           hover:border-danger hover:brightness-105;
+  }
+
+  /* Workflow action button whose colour comes from a `tone-*` class, so a
+     status-driven action (review / post / void / reverse) keeps its meaning
+     without introducing another hardcoded palette. */
+  .btn-tone {
+    @apply btn border;
+    color: var(--tone-fg, var(--primary));
+    background-color: var(--tone-soft, var(--primary-soft));
+    border-color: var(--tone-border, var(--primary-border));
+  }
+
+  .btn-tone:hover:not(:disabled) {
+    border-color: var(--tone-fg, var(--primary));
+  }
+
+  .btn-sm {
+    @apply px-2.5 py-1.5 text-xs gap-1.5 rounded-md;
+  }
+
+  .btn-lg {
+    @apply px-5 py-2.5 text-sm;
+  }
+
+  .btn-block {
+    @apply w-full;
+  }
+
+  /* Compact square button used for icon-only affordances. */
+  .btn-icon {
+    @apply btn h-9 w-9 p-0 text-muted-foreground
+           hover:bg-surface-overlay hover:text-foreground;
+  }
+
+  /* ── Badges / status chips ───────────────────────────────────────────── */
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full border px-2 py-0.5
+           text-[11px] font-semibold leading-5 whitespace-nowrap;
+    color: var(--tone-fg, var(--neutral));
+    background-color: var(--tone-soft, var(--neutral-soft));
+    border-color: var(--tone-border, var(--neutral-border));
+  }
+
+  .badge-uppercase {
+    @apply text-[10px] uppercase tracking-[0.06em];
+  }
+
+  .tone-neutral { --tone-fg: var(--neutral); --tone-soft: var(--neutral-soft); --tone-border: var(--neutral-border); }
+  .tone-primary { --tone-fg: var(--primary); --tone-soft: var(--primary-soft); --tone-border: var(--primary-border); }
+  .tone-success { --tone-fg: var(--success); --tone-soft: var(--success-soft); --tone-border: var(--success-border); }
+  .tone-warning { --tone-fg: var(--warning); --tone-soft: var(--warning-soft); --tone-border: var(--warning-border); }
+  .tone-danger  { --tone-fg: var(--danger);  --tone-soft: var(--danger-soft);  --tone-border: var(--danger-border); }
+  .tone-info    { --tone-fg: var(--info);    --tone-soft: var(--info-soft);    --tone-border: var(--info-border); }
+  .tone-violet  { --tone-fg: var(--violet);  --tone-soft: var(--violet-soft);  --tone-border: var(--violet-border); }
+  .tone-rose    { --tone-fg: var(--rose);    --tone-soft: var(--rose-soft);    --tone-border: var(--rose-border); }
+  .tone-teal    { --tone-fg: var(--teal);    --tone-soft: var(--teal-soft);    --tone-border: var(--teal-border); }
+
+  /* Callout blocks reuse the same tone variables as badges. */
+  .callout {
+    @apply flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-sm;
+    color: var(--tone-fg, var(--neutral));
+    background-color: var(--tone-soft, var(--neutral-soft));
+    border-color: var(--tone-border, var(--neutral-border));
+  }
+
+  /* ── Tables ──────────────────────────────────────────────────────────── */
+
+  .table-wrap {
+    @apply w-full overflow-x-auto;
+  }
+
+  .data-table {
+    @apply w-full text-sm border-collapse;
+  }
+
+  .data-table thead th {
+    @apply sticky top-0 z-10 bg-surface-muted px-4 py-2.5 text-left
+           text-[11px] font-semibold uppercase tracking-[0.06em] text-subtle-foreground
+           border-b border-border whitespace-nowrap;
+  }
+
+  .data-table tbody td {
+    @apply px-4 py-3 border-b border-border-subtle text-foreground align-middle;
+  }
+
+  .data-table tbody tr {
+    @apply transition-colors duration-100;
+  }
+
+  .data-table tbody tr:hover {
+    @apply bg-surface-muted;
+  }
+
+  .data-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  /* Totals / subtotal rows must read as summaries, not as data. */
+  .data-table tfoot td,
+  .data-table .row-total td,
+  .data-table td.cell-total {
+    @apply bg-surface-muted font-semibold text-foreground border-t border-border;
+  }
+
+  .cell-numeric {
+    @apply text-right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  html[dir='rtl'] .data-table thead th,
+  html[dir='rtl'] .data-table tbody td {
+    @apply text-right;
+  }
+
+  html[dir='rtl'] .cell-numeric {
+    @apply text-left;
+  }
+
+  /* ── Layout chrome ───────────────────────────────────────────────────── */
+
+  .filter-bar {
+    @apply flex flex-wrap items-end gap-3 rounded-xl border border-border
+           bg-surface p-4 shadow-xs;
+  }
+
+  .modal-backdrop {
+    @apply fixed inset-0 z-50 backdrop-blur-[2px];
+    background-color: var(--backdrop);
+  }
+
+  .modal-panel {
+    @apply relative z-50 w-full overflow-hidden rounded-xl border border-border
+           bg-surface shadow-xl;
+  }
+
+  .modal-header {
+    @apply flex items-start justify-between gap-4 border-b border-border px-6 py-4;
+  }
+
+  .modal-footer {
+    @apply flex items-center justify-end gap-2.5 border-t border-border
+           bg-surface-muted px-6 py-4;
+  }
+
+  .nav-item {
+    @apply flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium
+           text-muted-foreground transition-colors duration-150
+           hover:bg-surface-overlay hover:text-foreground;
+  }
+
+  .nav-item-active {
+    @apply bg-primary-soft text-primary hover:bg-primary-soft-hover hover:text-primary;
+  }
+
+  .skeleton {
+    @apply animate-pulse rounded bg-surface-overlay;
   }
 }
 
-/* ── RTL / Arabic Language Support ── */
-html.lang-ar {
-  font-family: 'Thabit', 'Noto Sans Arabic', 'Segoe UI', 'Arial', system-ui, sans-serif;
+/* ════════════════════════════════════════════════════════════════════════════
+   PRINT — financial reports are routinely printed or saved as PDF.
+   Force a light, ink-efficient rendering and drop app chrome.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+@media print {
+  html.dark {
+    color-scheme: light;
+    --background: #ffffff;
+    --surface: #ffffff;
+    --surface-muted: #f5f5f5;
+    --surface-raised: #ffffff;
+    --surface-overlay: #eeeeee;
+    --foreground: #111111;
+    --muted-foreground: #333333;
+    --subtle-foreground: #555555;
+    --border: #cccccc;
+    --border-subtle: #dddddd;
+    --border-strong: #999999;
+  }
+
+  body {
+    background: #ffffff;
+  }
+
+  aside,
+  header,
+  .no-print {
+    display: none !important;
+  }
+
+  .card,
+  .modal-panel {
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   RTL / ARABIC SUPPORT
+   ════════════════════════════════════════════════════════════════════════════ */
+
+html.lang-ar,
 html.lang-ar body {
   font-family: 'Thabit', 'Noto Sans Arabic', 'Segoe UI', 'Arial', system-ui, sans-serif;
 }
 
-/* RTL sidebar position */
-html[dir="rtl"] aside {
-  left: auto;
-  right: 0;
-}
+html[dir='rtl'] .text-left { text-align: right; }
+html[dir='rtl'] .text-right { text-align: left; }
 
-/* RTL sidebar slide on mobile */
-html[dir="rtl"] aside {
-  transform: translateX(100%);
-}
-
-html[dir="rtl"] aside.translate-x-0,
-html[dir="rtl"] aside[style*="translate"] {
-  transform: translateX(0);
-}
-
-@media (min-width: 1024px) {
-  html[dir="rtl"] aside {
-    transform: translateX(0);
-  }
-}
-
-/* RTL border adjustments for sidebar */
-html[dir="rtl"] aside {
-  border-right: none;
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-/* RTL collapse button position */
-html[dir="rtl"] aside button[class*="-right-3"] {
-  right: auto;
-  left: -0.75rem;
-}
-
-/* RTL text alignment fixes */
-html[dir="rtl"] .text-left {
+html[dir='rtl'] input,
+html[dir='rtl'] textarea {
   text-align: right;
 }
 
-html[dir="rtl"] .text-right {
-  text-align: left;
-}
-
-/* RTL flex row reverse for specific patterns */
-html[dir="rtl"] input,
-html[dir="rtl"] textarea {
-  text-align: right;
-}
-
-html[dir="rtl"] input[type="email"],
-html[dir="rtl"] input[type="number"] {
+html[dir='rtl'] input[type='email'],
+html[dir='rtl'] input[type='number'],
+html[dir='rtl'] input[type='date'] {
   text-align: left;
   direction: ltr;
 }
 
-/* RTL scrollbar position */
-html[dir="rtl"] ::-webkit-scrollbar {
-  direction: rtl;
-}
+html[dir='rtl'] .ml-auto { margin-left: 0; margin-right: auto; }
+html[dir='rtl'] .mr-auto { margin-right: 0; margin-left: auto; }
 
-/* RTL margin/padding logical adjustments */
-html[dir="rtl"] .ml-auto {
-  margin-left: 0;
-  margin-right: auto;
-}
+/* ════════════════════════════════════════════════════════════════════════════
+   MOTION
+   ════════════════════════════════════════════════════════════════════════════ */
 
-html[dir="rtl"] .mr-auto {
-  margin-right: 0;
-  margin-left: auto;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
-

@@ -1,5 +1,4 @@
 import { motion } from 'framer-motion';
-import { BarChart3 } from 'lucide-react';
 
 interface ChartCardProps {
   title: string;
@@ -22,27 +21,22 @@ export default function ChartCard({
 }: ChartCardProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay }}
-      className="glass-panel p-5"
+      transition={{ duration: 0.4, delay }}
+      className="card p-5"
     >
-      <div className="flex items-center gap-2 mb-4">
-        <BarChart3 className="w-4 h-4 text-brand-400" />
-        <div>
-          <h3 className="text-sm font-semibold text-white">{title}</h3>
-          {subtitle && (
-            <p className="text-[11px] text-gray-500 mt-0.5">{subtitle}</p>
-          )}
-        </div>
+      <div className="mb-5">
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
       </div>
 
       {isEmpty ? (
         <div
-          className="flex items-center justify-center rounded-xl bg-white/[0.02] border border-white/[0.04]"
+          className="flex items-center justify-center rounded-lg border border-dashed border-border bg-surface-muted"
           style={{ height }}
         >
-          <p className="text-sm text-gray-500">{emptyMessage}</p>
+          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
         </div>
       ) : (
         <div style={{ width: '100%', height }}>{children}</div>

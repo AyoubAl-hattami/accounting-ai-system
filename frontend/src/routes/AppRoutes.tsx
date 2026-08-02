@@ -19,7 +19,7 @@ const SettingsPage = lazy(() => import('../features/settings/SettingsPage'));
 
 function RouteLoader() {
   return (
-    <div className="min-h-screen bg-surface-900 p-8">
+    <div className="min-h-screen bg-background p-8">
       <LoadingState />
     </div>
   );

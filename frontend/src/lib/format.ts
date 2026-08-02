@@ -7,6 +7,15 @@ export function formatCurrency(n: number): string {
 }
 
 /**
+ * Format a signed figure using the accounting convention: negatives are wrapped
+ * in parentheses instead of taking a minus prefix, so columns stay aligned and
+ * losses stay unambiguous once the report is printed in black and white.
+ */
+export function formatSignedCurrency(n: number): string {
+  return n < 0 ? `(${formatCurrency(Math.abs(n))})` : formatCurrency(n);
+}
+
+/**
  * Format a number as compact currency (e.g. "1.2K", "3.5M").
  * Used in dashboard cards and summaries where space is limited.
  */

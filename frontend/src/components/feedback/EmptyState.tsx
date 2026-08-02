@@ -14,7 +14,7 @@ export default function EmptyState({
   title,
   description,
   action,
-  className = 'py-20',
+  className = 'py-16',
 }: EmptyStateProps) {
   return (
     <motion.div
@@ -22,17 +22,17 @@ export default function EmptyState({
       animate={{ opacity: 1, scale: 1 }}
       className={`flex items-center justify-center ${className}`}
     >
-      <div className="glass-panel p-8 max-w-sm text-center">
+      <div className="card max-w-sm p-8 text-center">
         {icon && (
-          <div className="w-14 h-14 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center mx-auto mb-4">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-surface-muted text-muted-foreground">
             {icon}
           </div>
         )}
-        <h3 className="text-white font-semibold text-lg mb-2">{title}</h3>
+        <h3 className="mb-1.5 text-base font-semibold text-foreground">{title}</h3>
         {description && (
-          <p className="text-gray-400 text-sm leading-relaxed">{description}</p>
+          <p className="text-sm leading-relaxed text-muted-foreground">{description}</p>
         )}
-        {action && <div className="mt-5">{action}</div>}
+        {action && <div className="mt-6">{action}</div>}
       </div>
     </motion.div>
   );
