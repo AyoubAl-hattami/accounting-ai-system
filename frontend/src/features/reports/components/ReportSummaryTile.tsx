@@ -22,9 +22,14 @@ export default function ReportSummaryTile({
   emphasis,
 }: ReportSummaryTileProps) {
   return (
-    <div className="bg-surface px-5 py-4">
+    <div className="group relative bg-surface px-5 py-4 transition-colors duration-fast ease-standard hover:bg-surface-muted">
       <div className="mb-1.5 flex items-center gap-1.5">
-        {Icon && <Icon aria-hidden className={`h-3.5 w-3.5 flex-shrink-0 ${reportToneText[tone]}`} />}
+        {Icon && (
+          <Icon
+            aria-hidden
+            className={`h-3.5 w-3.5 flex-shrink-0 transition-transform duration-normal ease-emphasized group-hover:scale-110 ${reportToneText[tone]}`}
+          />
+        )}
         <span className="overline truncate">{label}</span>
       </div>
       <p

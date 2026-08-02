@@ -105,9 +105,9 @@ function MessageBubble({ message, dir, language }: { message: GeminiMessage; dir
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
+      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
       className={`flex gap-2.5 ${isUser ? (dir === 'rtl' ? 'flex-row-reverse' : 'flex-row-reverse') : 'flex-row'}`}
     >
       {/* Avatar */}
@@ -192,7 +192,8 @@ function SuggestedActionCard({
       initial={{ opacity: 0, y: 12, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -8, scale: 0.97 }}
-      className="mx-3 mb-3 overflow-hidden rounded-lg border border-violet-border bg-surface"
+      transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+      className="mx-3 mb-3 overflow-hidden rounded-xl border border-violet-border bg-surface shadow-card"
     >
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-violet-border bg-violet-soft px-3 py-2.5">
@@ -503,7 +504,7 @@ export default function GeminiAssistantPanel({
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: isRtl ? -40 : 40, scale: 0.96 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className={`fixed inset-x-2 bottom-2 z-[60] flex h-[calc(100dvh-1rem)] max-h-[720px] flex-col overflow-hidden rounded-lg border border-border-strong bg-surface shadow-xl backdrop-blur-2xl transition-[width] sm:inset-x-auto sm:bottom-20 sm:h-[min(640px,calc(100vh-120px))] ${isRtl ? 'sm:left-4' : 'sm:right-4'} ${showHistory ? 'sm:w-[min(760px,calc(100vw-2rem))]' : 'sm:w-[420px]'}`}
+            className={`glass fixed inset-x-2 bottom-2 z-[60] flex h-[calc(100dvh-1rem)] max-h-[720px] flex-col overflow-hidden rounded-2xl border shadow-floating transition-[width] duration-normal ease-emphasized sm:inset-x-auto sm:bottom-20 sm:h-[min(640px,calc(100vh-120px))] ${isRtl ? 'sm:left-4' : 'sm:right-4'} ${showHistory ? 'sm:w-[min(760px,calc(100vw-2rem))]' : 'sm:w-[420px]'}`}
             id="gemini-assistant-panel"
             dir={dir}
             role="dialog"
@@ -526,7 +527,7 @@ export default function GeminiAssistantPanel({
                     )}
                   </button>
                 )}
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary-solid shadow-sm">
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary-solid bg-gradient-primary shadow-[0_6px_18px_-8px_var(--primary-glow)]">
                   <Sparkles aria-hidden className="h-4 w-4 text-primary-foreground" />
                 </div>
                 <div className="min-w-0">
@@ -625,9 +626,9 @@ export default function GeminiAssistantPanel({
 
                 <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
                   {isHistoryLoading && conversations.length === 0 && [0, 1, 2].map((item) => (
-                    <div key={item} className="animate-pulse rounded-lg border border-border-subtle p-3">
-                      <div className="h-3 w-2/3 rounded bg-surface-overlay" />
-                      <div className="mt-2 h-2 w-full rounded bg-surface-overlay" />
+                    <div key={item} className="rounded-lg border border-border-subtle p-3">
+                      <div className="skeleton h-3 w-2/3" />
+                      <div className="skeleton mt-2 h-2 w-full" />
                     </div>
                   ))}
 

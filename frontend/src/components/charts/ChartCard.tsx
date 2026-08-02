@@ -23,8 +23,8 @@ export default function ChartCard({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay }}
-      className="card p-5"
+      transition={{ duration: 0.4, delay, ease: [0.16, 1, 0.3, 1] }}
+      className="card card-lift p-5"
     >
       <div className="mb-5">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>

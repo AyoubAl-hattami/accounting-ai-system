@@ -73,7 +73,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               initial={{ opacity: 0, y: 24, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, scale: 0.92, transition: { duration: 0.15 } }}
-              className="pointer-events-auto flex w-full select-none items-start gap-3 overflow-hidden rounded-lg border border-border bg-surface-raised p-3.5 shadow-lg"
+              transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+              className="glass pointer-events-auto flex w-full select-none items-start gap-3 overflow-hidden rounded-xl border p-3.5 shadow-floating"
             >
               <span
                 aria-hidden
@@ -87,7 +88,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 type="button"
                 onClick={() => dismiss(toast.id)}
                 aria-label={t.common.close}
-                className="-m-1 flex-shrink-0 rounded-md p-1 text-subtle-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+                className="-m-1 flex-shrink-0 rounded-md p-1 text-subtle-foreground transition-[color,background-color,transform] duration-fast ease-standard hover:bg-surface-overlay hover:text-foreground active:scale-90"
               >
                 <X className="h-4 w-4" />
               </button>

@@ -43,19 +43,19 @@ export default function PaginationControls({
           type="button"
           onClick={onPrev}
           disabled={!hasPrev}
-          className="btn btn-secondary btn-sm"
+          className="btn btn-secondary btn-sm group"
         >
-          <ChevronLeft className="h-3.5 w-3.5 rtl:rotate-180" />
+          <ChevronLeft className="h-3.5 w-3.5 transition-transform duration-normal ease-emphasized rtl:rotate-180 group-hover:-translate-x-0.5 rtl:group-hover:translate-x-0.5" />
           {t.common.previous}
         </button>
         <button
           type="button"
           onClick={onNext}
           disabled={!hasNext}
-          className="btn btn-secondary btn-sm"
+          className="btn btn-secondary btn-sm group"
         >
           {t.common.next}
-          <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" />
+          <ChevronRight className="h-3.5 w-3.5 transition-transform duration-normal ease-emphasized rtl:rotate-180 group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5" />
         </button>
       </div>
     </nav>

@@ -38,7 +38,21 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="relative flex min-h-screen flex-col overflow-hidden">
+      {/* Decorative light field. Three slow-drifting blobs read as depth behind
+          the glass card; they are purely presentational. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute -left-40 -top-40 h-[34rem] w-[34rem] rounded-full bg-primary-solid opacity-[0.18] blur-[120px] motion-safe:animate-aurora" />
+        <div
+          className="absolute -right-32 top-10 h-[30rem] w-[30rem] rounded-full bg-violet opacity-[0.16] blur-[120px] motion-safe:animate-aurora"
+          style={{ animationDelay: '-5s' }}
+        />
+        <div
+          className="absolute bottom-[-14rem] left-1/3 h-[28rem] w-[28rem] rounded-full bg-info opacity-[0.14] blur-[120px] motion-safe:animate-aurora"
+          style={{ animationDelay: '-9s' }}
+        />
+      </div>
+
       <div className="flex justify-end p-4">
         <ThemeToggleButton />
       </div>
@@ -47,18 +61,18 @@ export default function LoginPage() {
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: 'easeOut' }}
+          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           className="w-full max-w-sm"
         >
           <div className="mb-8 text-center">
-            <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-solid text-primary-foreground shadow-md">
-              <Scale className="h-6 w-6" />
+            <span className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-brand text-white shadow-[0_18px_40px_-12px_var(--primary-glow)]">
+              <Scale className="h-7 w-7" />
             </span>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">{t.login.title}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{t.login.subtitle}</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">{t.login.title}</h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">{t.login.subtitle}</p>
           </div>
 
-          <div className="card p-7">
+          <div className="glass rounded-xl border p-7 shadow-floating">
             <div className="mb-6">
               <h2 className="text-base font-semibold text-foreground">{t.login.welcomeBack}</h2>
               <p className="mt-0.5 text-sm text-muted-foreground">{t.login.signInPrompt}</p>
@@ -125,7 +139,11 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <button type="submit" disabled={isLoading} className="btn btn-primary btn-block">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="btn btn-primary btn-block btn-lg"
+              >
                 {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
                 {isLoading ? t.login.signingIn : t.login.signIn}
               </button>

@@ -15,11 +15,26 @@ export function ThemeToggleButton() {
     <button
       type="button"
       onClick={toggleTheme}
-      className="btn-icon"
+      className="btn-icon group relative overflow-hidden"
       title={label}
       aria-label={label}
     >
-      {goingDark ? <Moon className="h-[18px] w-[18px]" /> : <Sun className="h-[18px] w-[18px]" />}
+      {/* The two icons swap along an arc, so flipping the theme reads as one
+          continuous movement instead of a glyph substitution. */}
+      <span className="relative block h-[18px] w-[18px]">
+        <Sun
+          aria-hidden
+          className={`absolute inset-0 h-[18px] w-[18px] transition-all duration-normal ease-emphasized ${
+            goingDark ? '-translate-y-5 rotate-90 opacity-0' : 'translate-y-0 rotate-0 opacity-100'
+          }`}
+        />
+        <Moon
+          aria-hidden
+          className={`absolute inset-0 h-[18px] w-[18px] transition-all duration-normal ease-emphasized ${
+            goingDark ? 'translate-y-0 rotate-0 opacity-100' : 'translate-y-5 -rotate-90 opacity-0'
+          }`}
+        />
+      </span>
     </button>
   );
 }

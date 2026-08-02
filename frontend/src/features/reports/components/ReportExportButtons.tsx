@@ -26,9 +26,12 @@ export default function ReportExportButtons({
         type="button"
         onClick={onExportCsv}
         disabled={busy}
-        className="btn btn-secondary btn-sm"
+        className="btn btn-secondary btn-sm group"
       >
-        <Download aria-hidden className="h-3.5 w-3.5" />
+        <Download
+          aria-hidden
+          className="h-3.5 w-3.5 transition-transform duration-normal ease-emphasized group-hover:translate-y-0.5"
+        />
         {exportingCsv ? t.common.exporting : t.common.exportCsv}
       </button>
       {onExportPdf && (
@@ -36,9 +39,12 @@ export default function ReportExportButtons({
           type="button"
           onClick={onExportPdf}
           disabled={busy}
-          className="btn btn-secondary btn-sm"
+          className="btn btn-secondary btn-sm group"
         >
-          <FileDown aria-hidden className="h-3.5 w-3.5" />
+          <FileDown
+            aria-hidden
+            className="h-3.5 w-3.5 transition-transform duration-normal ease-emphasized group-hover:translate-y-0.5"
+          />
           {exportingPdf ? t.common.exportingPdf : t.common.exportPdf}
         </button>
       )}

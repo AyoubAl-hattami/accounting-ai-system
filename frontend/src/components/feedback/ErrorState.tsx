@@ -18,8 +18,8 @@ export default function ErrorState({ message, onRetry }: ErrorStateProps) {
       role="alert"
     >
       <div className="card max-w-sm p-8 text-center">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg border border-danger-border bg-danger-soft">
-          <AlertTriangle className="h-6 w-6 text-danger" />
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-danger-border bg-danger-soft text-danger shadow-[0_10px_28px_-14px_var(--danger-glow)]">
+          <AlertTriangle className="h-6 w-6" />
         </div>
         <h3 className="mb-1.5 text-base font-semibold text-foreground">
           {t.common.connectionError}

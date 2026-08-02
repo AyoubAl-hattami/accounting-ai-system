@@ -34,17 +34,25 @@ export default function DashboardMetricCard({
 }: DashboardMetricCardProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: index * 0.05, ease: 'easeOut' }}
-      className="card p-5 transition-colors hover:border-border-strong"
+      transition={{ duration: 0.36, delay: index * 0.06, ease: [0.16, 1, 0.3, 1] }}
+      className={`card card-lift tone-${tone} group overflow-hidden p-5`}
     >
+      {/* Hairline of tone colour along the top edge — enough to identify the
+          metric at a glance without tinting the whole card. */}
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-px opacity-70"
+        style={{ background: 'linear-gradient(90deg, transparent, var(--tone-fg), transparent)' }}
+      />
+
       <div className="mb-4 flex items-start justify-between gap-3">
         <span
-          className={`badge tone-${tone} h-9 w-9 justify-center rounded-lg p-0`}
           aria-hidden
+          className={`badge tone-${tone} h-10 w-10 justify-center rounded-xl p-0 transition-transform duration-normal ease-emphasized group-hover:scale-110`}
         >
-          <Icon className="h-4 w-4" />
+          <Icon className="h-[18px] w-[18px]" />
         </span>
         {chip && <span className={`badge badge-uppercase tone-${chipTone ?? tone}`}>{chip}</span>}
       </div>

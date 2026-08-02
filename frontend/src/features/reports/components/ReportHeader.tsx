@@ -49,16 +49,23 @@ export default function ReportHeader({
     <motion.section
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35 }}
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       className="card overflow-hidden"
     >
-      <div className="flex flex-col gap-4 border-b border-border bg-surface-muted px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
+      {/* The masthead carries a brand wash so a statement opens like a document
+          rather than like another table. */}
+      <div className="relative flex flex-col gap-4 overflow-hidden border-b border-border bg-surface-muted px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-[0.10]"
+          style={{ background: 'var(--gradient-brand)' }}
+        />
+        <div className="relative flex min-w-0 items-center gap-3">
           <span
             aria-hidden
-            className="badge tone-primary h-10 w-10 flex-shrink-0 justify-center rounded-lg p-0"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-primary text-white shadow-[0_10px_26px_-10px_var(--primary-glow)]"
           >
-            <Icon className="h-[18px] w-[18px]" />
+            <Icon className="h-5 w-5" />
           </span>
           <div className="min-w-0">
             <h2 className="page-title truncate">{title}</h2>
@@ -66,7 +73,7 @@ export default function ReportHeader({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex flex-wrap items-center gap-2">
           {status && (
             <span className={`badge tone-${status.tone} px-3 py-1 text-xs`}>
               {StatusIcon && <StatusIcon aria-hidden className="h-3.5 w-3.5" />}

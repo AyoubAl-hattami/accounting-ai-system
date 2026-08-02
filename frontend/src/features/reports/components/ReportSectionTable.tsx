@@ -55,13 +55,18 @@ export default function ReportSectionTable({
     <motion.section
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay }}
-      className="card overflow-hidden"
+      transition={{ duration: 0.34, delay, ease: [0.16, 1, 0.3, 1] }}
+      className={`card group tone-${tone} overflow-hidden`}
     >
-      <div className="flex items-center gap-3 border-b border-border bg-surface-muted px-5 py-3">
+      <div className="relative flex items-center gap-3 overflow-hidden border-b border-border bg-surface-muted px-5 py-3">
         <span
           aria-hidden
-          className={`badge tone-${tone} h-8 w-8 flex-shrink-0 justify-center rounded-lg p-0`}
+          className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-70"
+          style={{ background: 'linear-gradient(90deg, transparent, var(--tone-fg), transparent)' }}
+        />
+        <span
+          aria-hidden
+          className={`badge tone-${tone} h-8 w-8 flex-shrink-0 justify-center rounded-lg p-0 transition-transform duration-normal ease-emphasized group-hover:scale-110`}
         >
           <Icon className="h-4 w-4" />
         </span>

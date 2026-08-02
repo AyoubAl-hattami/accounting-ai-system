@@ -242,10 +242,10 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
 function ChartTooltipContent({ active, payload, label }: { active?: boolean; payload?: { value: number; fill: string; name: string }[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-surface-raised border border-border-strong rounded-lg px-3 py-2 shadow-xl">
+    <div className="glass rounded-xl border px-3 py-2 shadow-floating">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
       {payload.map((p, i) => (
-        <p key={i} className="text-sm font-semibold" style={{ color: p.fill }}>
+        <p key={i} className="text-sm font-semibold numeric" style={{ color: p.fill }}>
           {p.name}: {p.value?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </p>
       ))}

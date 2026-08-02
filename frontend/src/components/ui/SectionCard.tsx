@@ -30,14 +30,19 @@ export default function SectionCard({
     <motion.section
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay }}
-      className="card overflow-hidden"
+      transition={{ duration: 0.35, delay, ease: [0.16, 1, 0.3, 1] }}
+      className="card group overflow-hidden"
     >
-      <div className="flex flex-col gap-3 border-b border-border bg-surface-muted px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="relative flex flex-col gap-3 overflow-hidden border-b border-border bg-surface-muted px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-60"
+          style={{ background: 'var(--gradient-brand)' }}
+        />
+        <div className="relative flex min-w-0 items-center gap-3">
           <span
             aria-hidden
-            className={`badge tone-${tone} h-10 w-10 flex-shrink-0 justify-center rounded-lg p-0`}
+            className={`badge tone-${tone} h-10 w-10 flex-shrink-0 justify-center rounded-xl p-0 transition-transform duration-normal ease-emphasized group-hover:scale-105`}
           >
             <Icon className="h-[18px] w-[18px]" />
           </span>
@@ -48,7 +53,7 @@ export default function SectionCard({
             )}
           </div>
         </div>
-        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        {actions && <div className="relative flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
       {children}
     </motion.section>

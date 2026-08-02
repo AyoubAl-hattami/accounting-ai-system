@@ -394,7 +394,7 @@ function SettingField({
         {hint && (
           <span className="group relative inline-flex">
             <HelpCircle className="h-3.5 w-3.5 cursor-help text-subtle-foreground" />
-            <span className="absolute bottom-full start-1/2 z-10 mb-1.5 hidden w-48 -translate-x-1/2 rounded-lg border border-border bg-surface-raised p-2 text-[11px] font-normal leading-normal text-muted-foreground shadow-lg group-hover:block">
+            <span className="absolute bottom-full start-1/2 z-10 mb-1.5 hidden w-48 -translate-x-1/2 rounded-lg border border-border bg-surface-raised p-2 text-[11px] font-normal leading-normal text-muted-foreground shadow-floating group-hover:block">
               {hint}
             </span>
           </span>

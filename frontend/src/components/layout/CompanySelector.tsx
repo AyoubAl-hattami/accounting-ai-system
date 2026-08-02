@@ -46,9 +46,9 @@ export default function CompanySelector({
         aria-haspopup="listbox"
         aria-expanded={open}
         title={collapsed ? label : undefined}
-        className={`flex w-full items-center gap-2.5 rounded-lg border border-border bg-surface-muted p-2.5 text-start transition-colors hover:border-border-strong hover:bg-surface-overlay ${
+        className={`flex w-full items-center gap-2.5 rounded-lg border border-border bg-surface-muted p-2.5 text-start transition-[border-color,background-color,box-shadow] duration-fast ease-standard hover:border-primary-border hover:bg-surface-overlay hover:shadow-glow ${
           collapsed ? 'justify-center' : ''
-        }`}
+        } ${open ? 'border-primary-border shadow-glow' : ''}`}
       >
         <Building2 className="h-4 w-4 flex-shrink-0 text-primary" />
         {!collapsed && (
@@ -60,8 +60,8 @@ export default function CompanySelector({
               </span>
             </span>
             <ChevronDown
-              className={`h-3.5 w-3.5 flex-shrink-0 text-subtle-foreground transition-transform duration-200 ${
-                open ? 'rotate-180' : ''
+              className={`h-3.5 w-3.5 flex-shrink-0 text-subtle-foreground transition-transform duration-normal ease-emphasized ${
+                open ? 'rotate-180 text-primary' : ''
               }`}
             />
           </>
@@ -72,11 +72,12 @@ export default function CompanySelector({
         {open && (
           <motion.div
             role="listbox"
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.14 }}
-            className={`absolute top-full z-50 mt-1 overflow-hidden rounded-lg border border-border bg-surface-raised shadow-lg ${
+            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            style={{ transformOrigin: 'top center' }}
+            className={`glass absolute top-full z-50 mt-1.5 overflow-hidden rounded-xl border shadow-floating ${
               collapsed ? 'start-3 w-56' : 'start-3 end-3'
             }`}
           >
@@ -93,10 +94,10 @@ export default function CompanySelector({
                       onSelect(c.id);
                       setOpen(false);
                     }}
-                    className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-start transition-colors ${
+                    className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-start transition-[color,background-color,transform] duration-fast ease-standard active:scale-[0.98] ${
                       isSelected
                         ? 'bg-primary-soft text-primary'
-                        : 'text-muted-foreground hover:bg-surface-muted hover:text-foreground'
+                        : 'text-muted-foreground hover:bg-surface-overlay hover:text-foreground'
                     }`}
                   >
                     <Building2 className="h-3.5 w-3.5 flex-shrink-0" />

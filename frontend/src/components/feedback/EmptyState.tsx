@@ -24,7 +24,7 @@ export default function EmptyState({
     >
       <div className="card max-w-sm p-8 text-center">
         {icon && (
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-surface-muted text-muted-foreground">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-primary-border bg-primary-soft text-primary shadow-[0_10px_28px_-14px_var(--primary-glow)]">
             {icon}
           </div>
         )}

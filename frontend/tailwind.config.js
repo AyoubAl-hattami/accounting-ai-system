@@ -109,6 +109,11 @@ const tokens = {
   'chart-4': 'var(--chart-4)',
   'chart-5': 'var(--chart-5)',
   'chart-grid': 'var(--chart-grid)',
+
+  // Depth layer — frosted chrome and the primary glow halo.
+  glass: 'var(--glass)',
+  'glass-border': 'var(--glass-border)',
+  'primary-glow': 'var(--primary-glow)',
 };
 
 export default {
@@ -149,16 +154,28 @@ export default {
         md: 'var(--shadow-md)',
         lg: 'var(--shadow-lg)',
         xl: 'var(--shadow-xl)',
+        card: 'var(--shadow-card)',
+        floating: 'var(--shadow-floating)',
+        glow: 'var(--shadow-glow)',
         none: 'none',
       },
-      keyframes: {
-        'fade-in': {
-          from: { opacity: '0' },
-          to: { opacity: '1' },
-        },
+      backgroundImage: {
+        'gradient-app': 'var(--gradient-app)',
+        'gradient-primary': 'var(--gradient-primary)',
+        'gradient-brand': 'var(--gradient-brand)',
+        'gradient-card': 'var(--gradient-card)',
+        'gradient-nav-active': 'var(--gradient-nav-active)',
       },
-      animation: {
-        'fade-in': 'fade-in 0.2s ease-out',
+      // The motion scale. Keyframes and the `animate-*` utilities that use
+      // them live in globals.css, next to the duration/easing tokens.
+      transitionDuration: {
+        fast: 'var(--duration-fast)',
+        normal: 'var(--duration-normal)',
+        slow: 'var(--duration-slow)',
+      },
+      transitionTimingFunction: {
+        standard: 'var(--ease-standard)',
+        emphasized: 'var(--ease-emphasized)',
       },
     },
   },

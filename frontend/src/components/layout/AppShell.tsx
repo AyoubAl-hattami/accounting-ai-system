@@ -134,23 +134,23 @@ export default function AppShell({
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen">
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-backdrop lg:hidden"
+            className="fixed inset-0 z-40 bg-backdrop backdrop-blur-sm lg:hidden"
             onClick={() => setMobileOpen(false)}
           />
         )}
       </AnimatePresence>
 
       <aside
-        className={`fixed top-0 z-50 flex h-screen flex-col bg-surface transition-[width,transform] duration-300 ease-in-out lg:sticky
-          ${isRtl ? 'right-0 border-l' : 'left-0 border-r'} border-border
-          ${collapsed ? 'w-[72px]' : 'w-64'}
+        className={`glass fixed top-0 z-50 flex h-screen flex-col transition-[width,transform] duration-slow ease-emphasized lg:sticky
+          ${isRtl ? 'right-0 border-l' : 'left-0 border-r'}
+          ${collapsed ? 'w-[76px]' : 'w-64'}
           ${
             mobileOpen
               ? 'translate-x-0'
@@ -163,9 +163,9 @@ export default function AppShell({
           <button
             type="button"
             onClick={() => handleNav('/dashboard')}
-            className="flex min-w-0 flex-1 items-center gap-3 text-start"
+            className="group flex min-w-0 flex-1 items-center gap-3 text-start"
           >
-            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary-solid text-primary-foreground">
+            <span className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gradient-brand text-white shadow-[0_6px_18px_-6px_var(--primary-glow)] transition-transform duration-fast ease-emphasized group-hover:scale-105">
               <Scale className="h-[18px] w-[18px]" />
             </span>
             {!collapsed && (
@@ -195,8 +195,12 @@ export default function AppShell({
         />
 
         <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-3">
-          {navGroups.map((group) => (
-            <div key={group.label} className="space-y-1">
+          {navGroups.map((group, groupIndex) => (
+            <div
+              key={group.label}
+              className="motion-safe:animate-slide-up space-y-1"
+              style={{ animationDelay: `${groupIndex * 60}ms` }}
+            >
               {!collapsed && <p className="overline px-3 pb-1">{group.label}</p>}
               {group.items.map(renderNavButton)}
             </div>
@@ -222,12 +226,12 @@ export default function AppShell({
           onClick={() => setCollapsed(!collapsed)}
           aria-label={collapsed ? t.nav.expandSidebar : t.nav.collapseSidebar}
           title={collapsed ? t.nav.expandSidebar : t.nav.collapseSidebar}
-          className={`absolute top-[74px] hidden h-6 w-6 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-muted-foreground shadow-sm transition-colors hover:text-foreground lg:flex ${
+          className={`absolute top-[74px] hidden h-6 w-6 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-muted-foreground shadow-sm transition-all duration-fast ease-emphasized hover:scale-110 hover:border-primary-border hover:text-primary lg:flex ${
             isRtl ? '-left-3' : '-right-3'
           }`}
         >
           <ChevronLeft
-            className={`h-3.5 w-3.5 transition-transform duration-300 ${
+            className={`h-3.5 w-3.5 transition-transform duration-slow ease-emphasized ${
               collapsed !== isRtl ? 'rotate-180' : ''
             }`}
           />
@@ -235,7 +239,7 @@ export default function AppShell({
       </aside>
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-border bg-surface px-4 lg:px-6">
+        <header className="glass sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b px-4 lg:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
@@ -245,7 +249,7 @@ export default function AppShell({
             >
               <Menu className="h-[18px] w-[18px]" />
             </button>
-            <div className="min-w-0">
+            <div key={activePath} className="motion-safe:animate-fade-in min-w-0">
               <h1 className="truncate text-base font-semibold tracking-tight text-foreground">
                 {displayTitle}
               </h1>
@@ -256,7 +260,10 @@ export default function AppShell({
           <div className="flex flex-shrink-0 items-center gap-2">
             {selectedCompany && (
               <span className="badge tone-neutral hidden md:inline-flex">
-                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-success" />
+                <span aria-hidden className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-70 motion-safe:animate-ping" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
+                </span>
                 {selectedCompany.name}
               </span>
             )}
@@ -285,13 +292,17 @@ export default function AppShell({
                 {user?.is_superuser ? t.common.administrator : roleLabel || t.common.user}
               </p>
             </div>
-            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary-solid text-sm font-semibold text-primary-foreground">
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-primary text-sm font-semibold text-white shadow-[0_6px_18px_-8px_var(--primary-glow)]">
               {(user?.full_name || user?.email || 'U')[0].toUpperCase()}
             </span>
           </div>
         </header>
 
-        <main className="flex-1 p-4 lg:p-6">{children}</main>
+        {/* Keyed on the route so each section fades and lifts in rather than
+            swapping instantly. */}
+        <main key={activePath} className="motion-safe:page-enter flex-1 p-4 lg:p-6">
+          {children}
+        </main>
       </div>
 
       <GlobalGeminiAssistant

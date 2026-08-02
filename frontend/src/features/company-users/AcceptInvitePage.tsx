@@ -106,7 +106,15 @@ export default function AcceptInvitePage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="relative flex min-h-screen flex-col overflow-hidden">
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute -left-40 -top-40 h-[34rem] w-[34rem] rounded-full bg-primary-solid opacity-[0.18] blur-[120px] motion-safe:animate-aurora" />
+        <div
+          className="absolute -right-32 top-10 h-[30rem] w-[30rem] rounded-full bg-violet opacity-[0.16] blur-[120px] motion-safe:animate-aurora"
+          style={{ animationDelay: '-5s' }}
+        />
+      </div>
+
       <div className="flex justify-end p-4">
         <ThemeToggleButton />
       </div>
@@ -115,11 +123,11 @@ export default function AcceptInvitePage() {
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: 'easeOut' }}
+          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           className="w-full max-w-sm"
         >
           {success ? (
-            <div className="card p-7 text-center">
+            <div className="glass rounded-xl border p-7 shadow-floating text-center">
               <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl border border-success-border bg-success-soft">
                 <CheckCircle2 aria-hidden className="h-6 w-6 text-success" />
               </span>
@@ -141,7 +149,7 @@ export default function AcceptInvitePage() {
           ) : (
             <>
               <div className="mb-8 text-center">
-                <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-solid text-primary-foreground shadow-md">
+                <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-brand text-white shadow-[0_14px_34px_-12px_var(--primary-glow)]">
                   <UserPlus aria-hidden className="h-6 w-6" />
                 </span>
                 <h1 className="text-xl font-semibold tracking-tight text-foreground">
@@ -154,7 +162,7 @@ export default function AcceptInvitePage() {
                 )}
               </div>
 
-              <div className="card p-7">
+              <div className="glass rounded-xl border p-7 shadow-floating">
                 {error && (
                   <div role="alert" id={errorId} className="callout tone-danger mb-6">
                     <AlertCircle aria-hidden className="mt-0.5 h-4 w-4 flex-shrink-0" />

@@ -555,7 +555,7 @@ function JournalEntriesContent({
                             >
                               <ChevronDown
                                 aria-hidden
-                                className={`h-4 w-4 transition-transform duration-200 ${
+                                className={`h-4 w-4 transition-transform duration-normal ease-emphasized ${
                                   isExpanded ? 'rotate-180' : ''
                                 }`}
                               />
@@ -678,7 +678,7 @@ function JournalEntriesContent({
                         <JournalStatusBadge status={entry.status} />
                         <ChevronDown
                           aria-hidden
-                          className={`h-4 w-4 text-subtle-foreground transition-transform duration-200 ${
+                          className={`h-4 w-4 text-subtle-foreground transition-transform duration-normal ease-emphasized ${
                             isExpanded ? 'rotate-180' : ''
                           }`}
                         />

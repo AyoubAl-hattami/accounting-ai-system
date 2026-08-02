@@ -14,13 +14,13 @@ export default function AccessDenied() {
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       className="flex items-center justify-center py-24"
       role="alert"
     >
       <div className="card max-w-md p-10 text-center">
-        <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-lg border border-danger-border bg-danger-soft">
-          <ShieldOff className="h-6 w-6 text-danger" />
+        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-danger-border bg-danger-soft text-danger shadow-[0_10px_28px_-14px_var(--danger-glow)]">
+          <ShieldOff className="h-6 w-6" />
         </div>
 
         <h2 className="mb-2 text-xl font-semibold text-foreground">
