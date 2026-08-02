@@ -22,7 +22,6 @@ entities/     ← domain types + thin presentational atoms + reusable domain hoo
   journal/
   user/
 features/     ← live feature slices (state hooks + full UI components)
-features-clean/ ← clean architecture pilot stubs (hooks + API only, no UI) — staging only, not imported by live app
 app/          ← application shell (README only)
 components/   ← shared UI kit (layout, feedback, charts)
 auth/         ← auth context and guards
@@ -101,6 +100,76 @@ not cost anything since it is tree-shaken from the production bundle.
 
 ---
 
+## Phase 62 — features-clean / pages-clean removal (2026-08-02)
+
+Every hook staged in `features-clean/` (`useAccounts`, `useAuditLogs`, `useCompanies`,
+`useDashboardData`, `useJournalEntries`) had already been superseded by real, live
+implementations during Phase 56-61 (`entities/account/useAccounts.ts`,
+`features/audit/useAuditLogs.ts`, `features/companies/useCompanies.ts`,
+`features/dashboard/useDashboardData.ts`, `features/journals/useJournalEntries.ts`).
+`pages-clean/` contained only `README.md` planning stubs, no code.
+
+**Proof of zero usage** (run from `frontend/src`, before deletion):
+
+```
+grep -rn "features-clean\|pages-clean" frontend/src --include=*.ts --include=*.tsx -l \
+  | grep -v "^frontend/src/features-clean\|^frontend/src/pages-clean"
+# → no output (zero matches outside the directories themselves)
+
+for sym in useAccounts useAuditLogs useCompanies useDashboardData useJournalEntries; do
+  grep -rln "$sym" frontend/src --include=*.ts --include=*.tsx | grep -v features-clean
+done
+# → only found under entities/account and features/*, never features-clean
+
+grep -rln "features-clean" frontend/ --include=*.json --include=*.ts --include=*.tsx \
+  --include=*.js --include=*.mjs | grep -v node_modules
+# → no output (no config/barrel/route references)
+```
+
+**Action:** Deleted `frontend/src/features-clean/` (26 files: accounts, audit,
+company-user-management, dashboard, journal-entry-create, report-export, plus
+README-only stubs for accounting-assistant, ai-journal-suggestion,
+company-invitation, journal-entry-post, journal-entry-reverse, journal-entry-review)
+and `frontend/src/pages-clean/` (7 README-only stubs) via `git rm -r`. No promotion
+was needed — the corresponding logic already lives in `entities/` and `features/`.
+
+`frontend/tests/architecture_guard.test.mjs` subtest "live app must not import from
+features-clean or pages-clean" still passes (now vacuously, since the directories no
+longer exist) — the guard file itself was left unmodified since it correctly
+generalizes to "directory absent" as a pass condition.
+
+`frontend/src/features-clean` and `frontend/src/pages-clean` **no longer exist** after
+Phase 62.
+
+---
+
+## Phase 63 — remaining live feature audit (2026-08-02)
+
+Reviewed `features/dashboard`, `features/reports/*`, `features/audit`,
+`features/company-users`, `features/journals` (incl. `journals/assistant`),
+`features/ai`, `entities/*`, `shared/*`.
+
+- Ran the architecture guard's cross-feature-import subtest after Phase 62 deletion:
+  `node --test frontend/tests/architecture_guard.test.mjs` → 4/4 pass, 0 violations.
+- Manual grep for deep/sibling imports (`grep -rn "from '\.\./\.\./features/" frontend/src/features`)
+  found no cross-feature imports beyond what the guard already checks.
+- `entities/` currently holds: `account` (types, `AccountTypeBadge`, `useAccounts`),
+  `audit-event`, `company`, `fiscal-period`, `journal`, `user` (the latter five are
+  README-documented placeholders, not yet populated with promoted code — this is
+  existing, pre-Phase-62 state, not new debt).
+- No duplicated entity-level components/hooks were found living inside features that
+  should move to entities — `useAuditLogs`, `useCompanies`, `useDashboardData`,
+  `useJournalEntries` are feature-specific data-fetching hooks tied to one page each,
+  not reusable domain primitives, so they correctly remain in `features/`.
+- `features/journals/assistant/*` and `features/ai/*` are feature-specific AI workflow
+  code (journal-suggestion UI, Gemini assistant panel) and correctly remain feature-local.
+
+**Conclusion:** No code changes were required for Phase 63. All reviewed areas were
+already compliant with the shared → entities → features → widgets → pages dependency
+rule. This is recorded here rather than fabricating unnecessary refactors.
+
+---
+
 ## Smoke tests added (Phase 61-A)
 
 Location: `frontend/src/test/smoke/`
@@ -110,12 +179,26 @@ Location: `frontend/src/test/smoke/`
 | `AccountTypeBadge.test.tsx` | Renders each of the 5 account types; handles unknown type |
 | `useAccounts.test.ts` | Fetch success; fetch error; no-op when companyId is null; seedDefaults |
 
-Total: **2 test files, 11 tests**.
+Total (Phase 61): **2 test files, 11 tests**.
 
 Full-page component tests (AccountsPage, DashboardPage, etc.) are not included
 because they require complex provider setup (router, auth context, company
 context). These are documented as a future improvement. The smoke tests cover the
 entity-layer logic that is most critical to validate.
+
+## Phase 64 additions
+
+Added two more pure-logic/component smoke tests, staying within the same
+"pure helper / presentational component" strategy rather than attempting full-page
+tests (see rationale in `docs/frontend/ui-smoke-checklist.md`):
+
+| Test file | Coverage |
+|-----------|----------|
+| `auditActionLabels.test.ts` | `getActionLabel` i18n lookup + Title Case fallback (snake_case, hyphen/space separators, single word) |
+| `CompanyUserRoleBadge.test.tsx` | Renders capitalized label for every `CompanyUserRole` value |
+
+Total after Phase 64: **4 test files, 17 tests**, all passing
+(`npm run test:run --prefix frontend`).
 
 ---
 
