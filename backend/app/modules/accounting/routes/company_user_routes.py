@@ -4,10 +4,27 @@ from sqlalchemy.orm import Session
 # pyrefly: ignore [missing-import]
 from sqlalchemy import func, select
 
+from app.application.company_users.dto import CreateCompanyUserCommand, UpdateCompanyUserCommand
+from app.application.company_users.use_cases import (
+    CreateCompanyUser,
+    GetCompanyUser,
+    GetCompanyUserByCompanyAndUser,
+    ListCompanyUsers,
+    SetCompanyUserActive,
+    UpdateCompanyUser,
+)
+from app.application.users.dto import SetUserActiveCommand
+from app.application.users.use_cases import GetUser, SetUserActive
 from app.core.auth_dependencies import get_current_user, get_current_user_optional
 from app.core.company_access import ensure_company_access
-from app.core.database import flush_or_rollback, get_db
+from app.core.database import get_db
 from app.core.pagination import PaginatedResponse
+from app.infrastructure.database.sqlalchemy.repositories.company_user_repository import (
+    SqlAlchemyCompanyUserRepository,
+)
+from app.infrastructure.database.sqlalchemy.repositories.user_repository import (
+    SqlAlchemyUserRepository,
+)
 from app.modules.accounting.models.user import User
 from app.modules.accounting.models.company_user import CompanyUser
 from app.modules.accounting.models.company_user_invitation import CompanyUserInvitation
@@ -15,16 +32,6 @@ from app.modules.accounting.schemas.company_user import (
     CompanyUserCreate,
     CompanyUserRead,
     CompanyUserUpdate,
-)
-from app.modules.accounting.services.company_user_service import (
-    count_company_users,
-    create_company_user,
-    get_company,
-    get_company_user,
-    get_company_user_by_company_and_user,
-    get_user,
-    list_company_users,
-    update_company_user,
 )
 from app.modules.accounting.schemas.user import UserRead
 from app.modules.accounting.schemas.company_user_invitation import (
@@ -34,6 +41,22 @@ from app.modules.accounting.schemas.company_user_invitation import (
     CompanyUserInvitationAccept,
     CompanyUserInvitationRead,
 )
+from app.application.invitations.errors import (
+    ActiveInvitationExists,
+    CompanyNotFound,
+    EmailMismatch,
+    InactiveCompany,
+    InactiveMembershipExists,
+    InvitationAlreadyAccepted,
+    InvitationCancelled,
+    InvitationConflict,
+    InvitationExpired,
+    InvitationInvalidToken,
+    InvitationNotFound,
+    MissingNewUserDetails,
+    UserAlreadyMember,
+    UserExistsLoginRequired,
+)
 from app.modules.accounting.services.company_user_invitation_service import (
     create_invitation,
     validate_invitation,
@@ -41,7 +64,29 @@ from app.modules.accounting.services.company_user_invitation_service import (
     cancel_invitation,
     list_pending_invitations,
 )
-from app.modules.accounting.services.audit_service import create_atomic_audit_log
+from app.modules.accounting.services.audit_service import prepare_audit_log
+
+
+def _invitation_error_to_http(exc: Exception) -> HTTPException:
+    """Convert a domain invitation error to an appropriate HTTPException."""
+    if isinstance(exc, (InvitationInvalidToken,)):
+        return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    if isinstance(exc, InvitationAlreadyAccepted):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    if isinstance(exc, (InvitationCancelled, InvitationExpired, InactiveCompany)):
+        return HTTPException(status_code=status.HTTP_410_GONE, detail=str(exc))
+    if isinstance(exc, (ActiveInvitationExists, UserAlreadyMember, InactiveMembershipExists, InvitationConflict)):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    if isinstance(exc, (CompanyNotFound, InvitationNotFound)):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    if isinstance(exc, UserExistsLoginRequired):
+        return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
+    if isinstance(exc, EmailMismatch):
+        return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    if isinstance(exc, MissingNewUserDetails):
+        return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    # Fallback
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
 def _ensure_platform_superuser(current_user: User) -> None:
@@ -55,21 +100,23 @@ def _ensure_platform_superuser(current_user: User) -> None:
 def _ensure_safe_global_deactivation(
     db: Session,
     current_user: User,
-    target_user: User,
+    target_user_id: int,
+    target_is_superuser: bool,
+    target_is_active: bool,
 ) -> None:
-    if target_user.id == current_user.id:
+    if target_user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='A platform superuser cannot deactivate their own account',
         )
 
-    if not target_user.is_superuser or not target_user.is_active:
+    if not target_is_superuser or not target_is_active:
         return
 
     active_superuser_count = db.scalar(
         select(func.count()).select_from(User).where(
-            User.is_superuser.is_(True),
-            User.is_active.is_(True),
+            User.is_active == True,  # noqa: E712
+            User.is_superuser == True,  # noqa: E712
         )
     ) or 0
     if active_superuser_count <= 1:
@@ -77,6 +124,27 @@ def _ensure_safe_global_deactivation(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Cannot deactivate the final active platform superuser',
         )
+
+
+# ── Module-level seam functions (monkeypatchable in unit tests) ───────────────
+
+
+def get_user(db: Session, *, user_id: int):
+    """Fetch a User ORM object by primary key.
+
+    Defined at module level so unit tests can monkeypatch this symbol to inject
+    fixture objects without needing a database connection.
+    """
+    return db.get(User, user_id)
+
+
+def get_company_user(db: Session, *, company_user_id: int):
+    """Fetch a CompanyUser ORM object by primary key.
+
+    Defined at module level so unit tests can monkeypatch this symbol to inject
+    fixture objects without needing a database connection.
+    """
+    return db.scalar(select(CompanyUser).where(CompanyUser.id == company_user_id))
 
 
 router = APIRouter(
@@ -94,11 +162,19 @@ def create_invitation_endpoint(
     # Ensure current_user is an admin in the target company
     ensure_company_access(db, current_user, invitation_in.company_id, allowed_roles=["admin"])
 
-    return create_invitation(
-        db=db,
-        invitation_in=invitation_in,
-        current_user=current_user,
-    )
+    try:
+        result = create_invitation(
+            db=db,
+            invitation_in=invitation_in,
+            current_user=current_user,
+        )
+    except (
+        ActiveInvitationExists, CompanyNotFound, InactiveMembershipExists,
+        InvitationConflict, UserAlreadyMember,
+    ) as exc:
+        raise _invitation_error_to_http(exc) from exc
+    db.commit()
+    return result
 
 
 @router.get("/invitations", response_model=list[CompanyUserInvitationRead])
@@ -116,7 +192,10 @@ def validate_invitation_endpoint(
     token: str = Query(...),
     db: Session = Depends(get_db),
 ) -> CompanyUserInvitationValidateResponse:
-    return validate_invitation(db=db, token=token)
+    try:
+        return validate_invitation(db=db, token=token)
+    except (InvitationInvalidToken, InvitationAlreadyAccepted, InvitationCancelled, InvitationExpired) as exc:
+        raise _invitation_error_to_http(exc) from exc
 
 
 @router.post("/invitations/accept")
@@ -125,11 +204,20 @@ def accept_invitation_endpoint(
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> dict:
-    return accept_invitation(
-        db=db,
-        payload=payload,
-        current_user=current_user,
-    )
+    try:
+        result = accept_invitation(
+            db=db,
+            payload=payload,
+            current_user=current_user,
+        )
+    except (
+        InvitationInvalidToken, InvitationAlreadyAccepted, InvitationCancelled,
+        InvitationExpired, InactiveCompany, UserExistsLoginRequired, EmailMismatch,
+        MissingNewUserDetails, InactiveMembershipExists, InvitationConflict,
+    ) as exc:
+        raise _invitation_error_to_http(exc) from exc
+    db.commit()
+    return result
 
 
 @router.post(
@@ -149,40 +237,44 @@ def create_company_user_endpoint(
         allowed_roles={"admin"},
     )
 
-    company = get_company(db=db, company_id=payload.company_id)
-
-    if not company:
+    # Validate company exists
+    from app.modules.accounting.models.company import Company
+    from sqlalchemy import select as sa_select
+    if not db.scalar(sa_select(Company).where(Company.id == payload.company_id)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Company not found",
         )
 
-    user = get_user(db=db, user_id=payload.user_id)
-
-    if not user:
+    # Validate user exists
+    user_repo = SqlAlchemyUserRepository(db)
+    if user_repo.get(payload.user_id) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
 
-    existing_company_user = get_company_user_by_company_and_user(
-        db=db,
-        company_id=payload.company_id,
-        user_id=payload.user_id,
-    )
+    cu_repo = SqlAlchemyCompanyUserRepository(db)
 
-    if existing_company_user:
+    existing = GetCompanyUserByCompanyAndUser(cu_repo).execute(
+        company_id=payload.company_id, user_id=payload.user_id
+    )
+    if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="User is already assigned to this company",
         )
 
-    company_user = create_company_user(
-        db=db,
-        payload=payload,
+    company_user = CreateCompanyUser(cu_repo).execute(
+        CreateCompanyUserCommand(
+            company_id=payload.company_id,
+            user_id=payload.user_id,
+            role=payload.role,
+            is_active=payload.is_active,
+        )
     )
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=company_user.company_id,
         actor=current_user.email,
@@ -194,6 +286,7 @@ def create_company_user_endpoint(
         entity_id=company_user.id,
         description=f"Added user {payload.user_id} to company {payload.company_id} with role {company_user.role}",
     )
+    db.commit()
 
     return company_user
 
@@ -234,25 +327,16 @@ def list_company_users_endpoint(
         allowed_roles={"admin", "auditor"},
     )
 
-    company_users = list_company_users(
-        db=db,
-        company_id=company_id,
-        user_id=user_id,
-        skip=skip,
-        limit=limit,
-    )
-
-    total = count_company_users(
-        db=db,
-        company_id=company_id,
-        user_id=user_id,
+    cu_repo = SqlAlchemyCompanyUserRepository(db)
+    page = ListCompanyUsers(cu_repo).execute(
+        company_id=company_id, user_id=user_id, skip=skip, limit=limit
     )
 
     return PaginatedResponse[CompanyUserRead](
-        items=company_users,
-        total=total,
-        skip=skip,
-        limit=limit,
+        items=list(page.items),
+        total=page.total,
+        skip=page.skip,
+        limit=page.limit,
     )
 
 
@@ -265,10 +349,8 @@ def get_company_user_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    company_user = get_company_user(
-        db=db,
-        company_user_id=company_user_id,
-    )
+    cu_repo = SqlAlchemyCompanyUserRepository(db)
+    company_user = GetCompanyUser(cu_repo).execute(company_user_id)
 
     if not company_user:
         raise HTTPException(
@@ -296,10 +378,8 @@ def update_company_user_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    company_user = get_company_user(
-        db=db,
-        company_user_id=company_user_id,
-    )
+    cu_repo = SqlAlchemyCompanyUserRepository(db)
+    company_user = GetCompanyUser(cu_repo).execute(company_user_id)
 
     if not company_user:
         raise HTTPException(
@@ -336,13 +416,16 @@ def update_company_user_endpoint(
     old_role = company_user.role
     old_is_active = company_user.is_active
 
-    updated = update_company_user(
-        db=db,
-        company_user=company_user,
-        payload=payload,
+    update_data = payload.model_dump(exclude_unset=True)
+    updated = UpdateCompanyUser(cu_repo).execute(
+        UpdateCompanyUserCommand(
+            company_user_id=company_user_id,
+            fields=frozenset(update_data.keys()),
+            **update_data,
+        )
     )
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=updated.company_id,
         actor=current_user.email,
@@ -356,6 +439,7 @@ def update_company_user_endpoint(
         old_values={"role": old_role, "is_active": old_is_active},
         new_values={"role": updated.role, "is_active": updated.is_active},
     )
+    db.commit()
 
     return updated
 
@@ -384,7 +468,7 @@ def remove_company_access_endpoint(
         stmt = select(func.count()).select_from(CompanyUser).where(
             CompanyUser.company_id == company_user.company_id,
             CompanyUser.role == "admin",
-            CompanyUser.is_active == True,
+            CompanyUser.is_active == True,  # noqa: E712
         )
         admin_count = db.scalar(stmt) or 0
         if admin_count <= 1:
@@ -393,30 +477,32 @@ def remove_company_access_endpoint(
                 detail="Cannot demote or remove the last active admin in the company.",
             )
 
-    old_values = {"is_active": company_user.is_active}
-    company_user.is_active = False
-    db.add(company_user)
-    flush_or_rollback(db)
-
-    new_values = {"is_active": False}
-
     target_user = get_user(db=db, user_id=company_user.user_id)
-    target_email = target_user.email if target_user else "Unknown"
+    target_email = (target_user.email if target_user else None) or "Unknown"
 
-    create_atomic_audit_log(
-        db=db,
-        company_id=company_user.company_id,
-        actor=current_user.email,
-        actor_user_id=current_user.id,
-        actor_email=current_user.email,
-        actor_name=current_user.full_name,
-        action="remove_company_access",
-        entity_type="company_user",
-        entity_id=company_user.id,
-        description=f"Removed company access for user {target_email} in company {company_user.company_id}",
-        old_values=old_values,
-        new_values=new_values,
-    )
+    old_values = {"is_active": company_user.is_active}
+
+    try:
+        company_user.is_active = False
+        db.add(company_user)
+        prepare_audit_log(
+            db=db,
+            company_id=company_user.company_id,
+            actor=current_user.email,
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            actor_name=current_user.full_name,
+            action="remove_company_access",
+            entity_type="company_user",
+            entity_id=company_user.id,
+            description=f"Removed company access for user {target_email} in company {company_user.company_id}",
+            old_values=old_values,
+            new_values={"is_active": False},
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return company_user
 
@@ -431,8 +517,8 @@ def deactivate_user_account_endpoint(
     '''Globally deactivate a platform account; company_id is retained for API compatibility.'''
     _ensure_platform_superuser(current_user)
 
-    target_user = get_user(db=db, user_id=user_id)
-    if not target_user:
+    target = get_user(db=db, user_id=user_id)
+    if not target:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
@@ -441,44 +527,48 @@ def deactivate_user_account_endpoint(
     _ensure_safe_global_deactivation(
         db=db,
         current_user=current_user,
-        target_user=target_user,
+        target_user_id=target.id,
+        target_is_superuser=target.is_superuser,
+        target_is_active=target.is_active,
     )
 
     old_values = {
-        "is_active": target_user.is_active,
-        "target_user_id": target_user.id,
-        "target_email": target_user.email,
-        "target_name": target_user.full_name,
-        "scope": "global",
-    }
-    target_user.is_active = False
-    db.add(target_user)
-    flush_or_rollback(db)
-
-    new_values = {
-        "is_active": False,
-        "target_user_id": target_user.id,
-        "target_email": target_user.email,
-        "target_name": target_user.full_name,
+        "is_active": target.is_active,
+        "target_user_id": target.id,
+        "target_email": target.email,
+        "target_name": target.full_name,
         "scope": "global",
     }
 
-    create_atomic_audit_log(
-        db=db,
-        company_id=None,
-        actor=current_user.email,
-        actor_user_id=current_user.id,
-        actor_email=current_user.email,
-        actor_name=current_user.full_name,
-        action="deactivate_user_account",
-        entity_type="user",
-        entity_id=target_user.id,
-        description=f"Globally deactivated platform account for {target_user.email}",
-        old_values=old_values,
-        new_values=new_values,
-    )
+    try:
+        target.is_active = False
+        db.add(target)
+        prepare_audit_log(
+            db=db,
+            company_id=None,
+            actor=current_user.email,
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            actor_name=current_user.full_name,
+            action="deactivate_user_account",
+            entity_type="user",
+            entity_id=target.id,
+            description=f"Globally deactivated platform account for {target.email}",
+            old_values=old_values,
+            new_values={
+                "is_active": False,
+                "target_user_id": target.id,
+                "target_email": target.email,
+                "target_name": target.full_name,
+                "scope": "global",
+            },
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
-    return target_user
+    return target
 
 
 @router.delete("/invitations/{invitation_id}", status_code=status.HTTP_200_OK)
@@ -487,8 +577,9 @@ def cancel_invitation_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from sqlalchemy import select as sa_select
     invite = db.execute(
-        select(CompanyUserInvitation).where(CompanyUserInvitation.id == invitation_id)
+        sa_select(CompanyUserInvitation).where(CompanyUserInvitation.id == invitation_id)
     ).scalar_one_or_none()
 
     if not invite:
@@ -496,12 +587,15 @@ def cancel_invitation_endpoint(
 
     ensure_company_access(db, current_user, invite.company_id, allowed_roles=["admin"])
 
-    cancel_invitation(
-        db=db,
-        invitation_id=invitation_id,
-        current_user=current_user,
-    )
-
+    try:
+        cancel_invitation(
+            db=db,
+            invitation_id=invitation_id,
+            current_user=current_user,
+        )
+    except (InvitationNotFound, InvitationAlreadyAccepted, InvitationCancelled, InvitationExpired) as exc:
+        raise _invitation_error_to_http(exc) from exc
+    db.commit()
     return {"status": "success", "message": "Invitation cancelled successfully"}
 
 
@@ -533,26 +627,28 @@ def restore_company_access_endpoint(
         )
 
     old_values = {"is_active": company_user.is_active}
-    company_user.is_active = True
-    db.add(company_user)
-    flush_or_rollback(db)
 
-    new_values = {"is_active": True}
-
-    create_atomic_audit_log(
-        db=db,
-        company_id=company_user.company_id,
-        actor=current_user.email,
-        actor_user_id=current_user.id,
-        actor_email=current_user.email,
-        actor_name=current_user.full_name,
-        action="restore_company_access",
-        entity_type="company_user",
-        entity_id=company_user.id,
-        description=f"Restored company access for user {target_user.email} in company {company_user.company_id}",
-        old_values=old_values,
-        new_values=new_values,
-    )
+    try:
+        company_user.is_active = True
+        db.add(company_user)
+        prepare_audit_log(
+            db=db,
+            company_id=company_user.company_id,
+            actor=current_user.email,
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            actor_name=current_user.full_name,
+            action="restore_company_access",
+            entity_type="company_user",
+            entity_id=company_user.id,
+            description=f"Restored company access for user {target_user.email} in company {company_user.company_id}",
+            old_values=old_values,
+            new_values={"is_active": True},
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return company_user
 
@@ -567,45 +663,47 @@ def reactivate_user_account_endpoint(
     '''Globally reactivate a platform account; company_id is retained for API compatibility.'''
     _ensure_platform_superuser(current_user)
 
-    target_user = get_user(db=db, user_id=user_id)
-    if not target_user:
+    target = get_user(db=db, user_id=user_id)
+    if not target:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
 
     old_values = {
-        "is_active": target_user.is_active,
-        "target_user_id": target_user.id,
-        "target_email": target_user.email,
-        "target_name": target_user.full_name,
-        "scope": "global",
-    }
-    target_user.is_active = True
-    db.add(target_user)
-    flush_or_rollback(db)
-
-    new_values = {
-        "is_active": True,
-        "target_user_id": target_user.id,
-        "target_email": target_user.email,
-        "target_name": target_user.full_name,
+        "is_active": target.is_active,
+        "target_user_id": target.id,
+        "target_email": target.email,
+        "target_name": target.full_name,
         "scope": "global",
     }
 
-    create_atomic_audit_log(
-        db=db,
-        company_id=None,
-        actor=current_user.email,
-        actor_user_id=current_user.id,
-        actor_email=current_user.email,
-        actor_name=current_user.full_name,
-        action="reactivate_user_account",
-        entity_type="user",
-        entity_id=target_user.id,
-        description=f"Globally reactivated platform account for {target_user.email}",
-        old_values=old_values,
-        new_values=new_values,
-    )
+    try:
+        target.is_active = True
+        db.add(target)
+        prepare_audit_log(
+            db=db,
+            company_id=None,
+            actor=current_user.email,
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            actor_name=current_user.full_name,
+            action="reactivate_user_account",
+            entity_type="user",
+            entity_id=target.id,
+            description=f"Globally reactivated platform account for {target.email}",
+            old_values=old_values,
+            new_values={
+                "is_active": True,
+                "target_user_id": target.id,
+                "target_email": target.email,
+                "target_name": target.full_name,
+                "scope": "global",
+            },
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
-    return target_user
+    return target

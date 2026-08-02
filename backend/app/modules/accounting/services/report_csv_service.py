@@ -1,11 +1,10 @@
 """
 CSV formatting utilities for accounting reports.
 
-Converts report application DTOs into CSV strings.
-All accounting logic is delegated to the reports application seam; this module only
-handles column layout and string formatting.
-
-UTF-8 BOM is prepended for Excel and Arabic text compatibility.
+.. deprecated::
+    Superseded by ``infrastructure.exports.csv_renderer`` (Phase 32).
+    Routes now import from the infrastructure renderer directly.
+    This file will be deleted at Phase 45 once no callers remain.
 """
 
 import csv

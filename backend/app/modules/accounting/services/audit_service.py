@@ -19,7 +19,8 @@ def create_audit_log(
     ip_address: str | None = None,
     user_agent: str | None = None,
     description: str | None = None,
-    commit: bool = True,
+    *,
+    commit: bool,
 ) -> AuditLog:
     audit_log = AuditLog(
         company_id=company_id,
@@ -52,7 +53,14 @@ def create_audit_log(
 
 
 def create_atomic_audit_log(db: Session, **audit_values) -> AuditLog:
-    """Commit a pending mutation and its audit row as one transaction."""
+    """Commit a pending mutation and its audit row as one transaction.
+
+    .. deprecated::
+        Marked for deletion at Phase 45.  Routes should own the commit
+        explicitly instead of delegating it to this shim.  Each call site
+        should be migrated to: stage the audit row with ``prepare_audit_log``,
+        then call ``db.commit()`` in the route.
+    """
     try:
         audit_log = create_audit_log(db=db, commit=False, **audit_values)
         db.commit()

@@ -6,11 +6,16 @@ providing identical intent detection, account matching, and amount
 extraction logic on the backend.
 
 No external AI services, no API keys, no database access.
+
+.. deprecated::
+    Import ``AccountInfoDTO`` from ``app.application.ai.dto`` and use
+    ``app.application.ai.use_cases.SuggestJournalEntry`` for new code.
+    This module is scheduled for relocation to the application layer (Phase 41).
 """
 
 import re
 
-from app.modules.accounting.schemas.ai_suggestion_schemas import AccountInfo
+from app.application.ai.dto import AccountInfoDTO as AccountInfo  # noqa: N811
 
 
 def normalize_suggestion_confidence(result: dict) -> dict:

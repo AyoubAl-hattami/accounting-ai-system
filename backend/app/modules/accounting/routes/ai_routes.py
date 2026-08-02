@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.application.ai.dto import AccountInfoDTO
 from app.application.journals.dto import (
     CreateJournalEntryCommand,
     CreateJournalLineCommand,
@@ -40,7 +41,7 @@ from app.modules.accounting.services.ai_suggestion_service import (
 from app.modules.accounting.services.account_mapper import (
     map_journal_suggestion_accounts,
 )
-from app.modules.accounting.services.audit_service import create_atomic_audit_log
+from app.modules.accounting.services.audit_service import prepare_audit_log
 from app.modules.accounting.services.assistant_conversation_service import (
     get_owned_conversation,
     record_confirmation_event,
@@ -83,9 +84,20 @@ def suggest_journal_entry_endpoint(
 
     provider = get_journal_suggestion_provider()
 
+    account_dtos = [
+        AccountInfoDTO(
+            id=a.id,
+            code=a.code,
+            name=a.name,
+            account_type=a.account_type,
+            is_active=a.is_active,
+        )
+        for a in payload.accounts
+    ]
+
     result = provider.suggest_journal_entry(
         description=payload.description,
-        accounts=payload.accounts,
+        accounts=account_dtos,
         language=payload.language,
     )
 
@@ -354,7 +366,7 @@ def gemini_assistant_confirm_action_endpoint(
             commit=False,
         )
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=journal_entry.company_id,
         actor=current_user.email,
@@ -375,6 +387,7 @@ def gemini_assistant_confirm_action_endpoint(
             "total_debit": str(total_debit),
         },
     )
+    db.commit()
     return ConfirmActionReply(
         success=True,
         message=f"Draft journal entry {journal_entry.entry_no} created successfully.",

@@ -64,8 +64,8 @@ mutation confirmation remain application responsibilities.
 ### Database and repositories
 
 Repositories isolate persistence operations behind application-owned ports.
-Optimized report readers remain SQL-oriented adapters. A unit of work owns the
-transaction; repositories may flush but do not commit.
+Optimized report readers remain SQL-oriented adapters.  Routes own the final
+transaction commit; repositories may flush but do not commit.
 
 ### Reports
 

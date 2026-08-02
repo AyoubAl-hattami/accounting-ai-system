@@ -14,7 +14,7 @@ import logging
 from google import genai
 
 from app.core.config import settings
-from app.modules.accounting.schemas.ai_suggestion_schemas import AccountInfo
+from app.application.ai.dto import AccountInfoDTO as AccountInfo  # noqa: N811
 from app.modules.accounting.services.ai_providers.base import (
     BaseJournalSuggestionProvider,
 )

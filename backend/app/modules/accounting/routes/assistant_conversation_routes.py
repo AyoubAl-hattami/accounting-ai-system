@@ -25,7 +25,7 @@ from app.modules.accounting.services.assistant_conversation_service import (
     send_conversation_message,
     update_conversation,
 )
-from app.modules.accounting.services.audit_service import create_atomic_audit_log
+from app.modules.accounting.services.audit_service import prepare_audit_log
 
 router = APIRouter(prefix="/ai/conversations", tags=["AI Assistant"])
 
@@ -120,6 +120,8 @@ def create_assistant_conversation(
         title=payload.title,
         language=payload.language,
     )
+    db.commit()
+    db.refresh(conversation)
     return _conversation_read(conversation)
 
 
@@ -175,6 +177,8 @@ def patch_assistant_conversation(
         title=payload.title,
         status=payload.status,
     )
+    db.commit()
+    db.refresh(updated)
     return _conversation_read(updated)
 
 
@@ -193,7 +197,7 @@ def delete_assistant_conversation(
         current_user=current_user,
     )
     delete_conversation(db, conversation)
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=company_id,
         actor=current_user.email,
@@ -205,6 +209,7 @@ def delete_assistant_conversation(
         entity_id=conversation.id,
         description="Deleted an assistant conversation",
     )
+    db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

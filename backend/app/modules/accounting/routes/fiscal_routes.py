@@ -45,7 +45,6 @@ from app.modules.accounting.services.accounting_lookup_facade import (
     find_overlapping_fiscal_year,
 )
 from app.modules.accounting.services.audit_service import (
-    create_atomic_audit_log,
     prepare_audit_log,
 )
 
@@ -116,7 +115,7 @@ def create_fiscal_year_endpoint(
     repository = SqlAlchemyFiscalRepository(db)
     fiscal_year = CreateFiscalYear(repository).execute(command)
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=fiscal_year.company_id,
         actor=current_user.email,
@@ -128,6 +127,7 @@ def create_fiscal_year_endpoint(
         entity_id=fiscal_year.id,
         description=f"Created fiscal year {fiscal_year.name}",
     )
+    db.commit()
 
     return fiscal_year
 
@@ -290,7 +290,7 @@ def update_fiscal_year_endpoint(
     )
     updated = UpdateFiscalYear(repository).execute(command)
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=updated.company_id,
         actor=current_user.email,
@@ -309,6 +309,7 @@ def update_fiscal_year_endpoint(
             "end_date": str(updated.end_date),
         },
     )
+    db.commit()
 
     return updated
 
@@ -412,7 +413,7 @@ def create_fiscal_period_endpoint(
     repository = SqlAlchemyFiscalRepository(db)
     fiscal_period = CreateFiscalPeriod(repository).execute(command)
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=fiscal_period.company_id,
         actor=current_user.email,
@@ -424,6 +425,7 @@ def create_fiscal_period_endpoint(
         entity_id=fiscal_period.id,
         description=f"Created fiscal period {fiscal_period.name}",
     )
+    db.commit()
 
     return fiscal_period
 
@@ -601,7 +603,7 @@ def update_fiscal_period_endpoint(
     )
     updated = UpdateFiscalPeriod(repository).execute(command)
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=updated.company_id,
         actor=current_user.email,
@@ -620,6 +622,7 @@ def update_fiscal_period_endpoint(
             "end_date": str(updated.end_date),
         },
     )
+    db.commit()
 
     return updated
 

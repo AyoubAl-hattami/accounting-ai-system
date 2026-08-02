@@ -1,21 +1,21 @@
 # Dependency Rules
 
-These rules define intended dependency direction. They should be adopted
+These rules define intended dependency direction.  They should be adopted
 incrementally; existing violations are migration work, not justification for a
 single disruptive rewrite.
 
 ## Backend dependency direction
 
 ```text
-interfaces/api -> application -> domain
-                         ^
-                         |
-                  infrastructure
-                 implements ports
+interfaces/api (routes) -> application -> domain
+                                  ^
+                                  |
+                           infrastructure
+                          implements ports
 ```
 
-The composition root may instantiate infrastructure adapters and inject them
-into application use cases. Inner layers do not locate their own adapters.
+The composition root (routes) instantiates infrastructure adapters and injects
+them into application use cases.  Inner layers do not locate their own adapters.
 
 ## Domain rules
 
@@ -41,15 +41,19 @@ identity value normalization.
 The application layer:
 
 - May depend on the domain.
-- Defines ports for repositories, units of work, clocks, audit persistence,
-  exporters, and AI capabilities.
+- Defines ports for repositories, clocks, audit persistence, exporters, and AI
+  capabilities using `typing.Protocol` (never `ABC`).
 - Coordinates use cases, authorization inputs, domain policies, persistence, and
   required audit events.
 - Must not depend on concrete SQLAlchemy repositories or AI SDKs.
 - Must not raise `HTTPException` or choose HTTP status codes.
-- Should use command/query DTOs that do not expose provider SDK or API framework
-  types.
-- Owns the unit-of-work boundary for business mutations.
+- Should use command/query DTOs (`@dataclass(frozen=True, slots=True)`) that do
+  not expose provider SDK or API framework types.
+- Must not call `commit()`, `flush()`, `add()`, or `delete()` on a database
+  session.
+- Must not import `app.modules.accounting.services` modules.
+
+Application use cases return result DTOs.  The calling route owns the commit.
 
 ## Infrastructure rules
 
@@ -61,33 +65,39 @@ Infrastructure:
   calls, prompt transport, tokens, password hashing, and export libraries.
 - Must not contain endpoint authorization policy or decide which user action is
   allowed.
-- Must not commit independently when participating in an application-managed
-  unit of work.
+- Must not commit independently; the route owns the final transaction.
+- Must not import `app.modules.accounting.services` modules.
 
-## API/interface rules
+## API/interface rules (routes)
 
 FastAPI routes and dependencies:
 
 - Authenticate requests and obtain request-scoped context.
 - Parse and validate transport shapes with Pydantic.
 - Convert API schemas to application commands and queries.
+- Enforce company access (RBAC) before invoking use cases.
 - Call one primary application use case.
+- Write required audit records via `audit_service`.
+- Call `db.commit()` once after all work is staged (routes own the commit).
 - Translate domain/application errors into stable HTTP responses.
 - Serialize application results.
-- Must not implement journal balance rules, lifecycle transitions, report
-  formulas, or provider fallback logic.
-- Must not own commits once the application unit of work is introduced.
+- Must not import the deleted legacy accounting services.
+- Must not independently implement journal balance rules, lifecycle transitions,
+  report formulas, or provider fallback logic.
 
 Public API contracts remain stable during architectural migration.
 
 ## Database dependency rules
 
 - Domain and application code depend on repository interfaces, not SQLAlchemy.
-- SQLAlchemy models remain infrastructure persistence models.
+- SQLAlchemy models remain infrastructure persistence models under
+  `app/modules/accounting/models/` (no directory relocation planned).
 - Alembic depends on persistence metadata, never on domain entities.
 - Report readers may use optimized SQL behind an application-facing port.
 - Repository methods should be purposeful (`get_open_period`,
   `find_postable_entry`) rather than exposing unrestricted query builders.
+- Repositories may `flush()` for generated identifiers.  They must not
+  `commit()`.
 
 ## AI dependency rules
 
@@ -137,7 +147,7 @@ widgets, or app composition.
 - Normal text and surfaces should not select raw violet/gray/slate palette values
   independently in every component.
 - Brand purple is reserved for accents, primary actions, links, focus, and active
-  states—not ordinary body or table text.
+  states — not ordinary body or table text.
 - Success, warning, danger, debit, and credit colors must have named semantics.
 - Dark-mode choices should resolve centrally through tokens rather than repeated
   `dark:` palette pairs where practical.
@@ -145,12 +155,12 @@ widgets, or app composition.
 
 ## Enforcement approach
 
-Do not enforce all rules against the current code immediately. First:
+Do not enforce all rules against the current code immediately.  First:
 
 1. Document existing exceptions.
 2. Apply rules to new files.
 3. Migrate one bounded context.
-4. Add checks for that migrated context.
+4. Add checks for that migrated context (with allowlists for existing violations).
 5. Expand enforcement only as violations are removed.
 
 Architecture enforcement must never be used to justify changing API contracts,

@@ -211,8 +211,7 @@ def create_conversation(
         status="active",
     )
     db.add(conversation)
-    db.commit()
-    db.refresh(conversation)
+    flush_or_rollback(db)
     return conversation
 
 
@@ -233,8 +232,7 @@ def update_conversation(
         conversation.status = status
     conversation.updated_at = datetime.now(timezone.utc)
     db.add(conversation)
-    db.commit()
-    db.refresh(conversation)
+    flush_or_rollback(db)
     return conversation
 
 def delete_conversation(db: Session, conversation: AssistantConversation) -> None:
@@ -433,149 +431,21 @@ def send_conversation_message(
     language: str,
     page_context,
     client_message_id: str,
-) -> tuple[AssistantMessage, AssistantMessage, GeminiAssistantReply, bool]:
-    message_language = detect_message_language(message, language)
-    existing_user, existing_assistant = _find_idempotent_exchange(
+) -> "tuple[AssistantMessage, AssistantMessage, GeminiAssistantReply, bool]":
+    """Delegate to assistant_message_service (moved for Phase 42 clean boundary)."""
+    from app.modules.accounting.services.assistant_message_service import (
+        send_conversation_message as _send,
+    )
+    return _send(
         db,
-        conversation_id=conversation.id,
+        conversation=conversation,
+        user_role=user_role,
+        message=message,
+        language=language,
+        page_context=page_context,
         client_message_id=client_message_id,
     )
-    if existing_user and existing_assistant:
-        return (
-            existing_user,
-            existing_assistant,
-            _reply_from_message(existing_assistant),
-            True,
-        )
 
-    user_message = existing_user
-    if user_message is None:
-        now = datetime.now(timezone.utc)
-        user_message = AssistantMessage(
-            conversation_id=conversation.id,
-            role="user",
-            content=message.strip(),
-            language=message_language,
-            message_type="text",
-            client_message_id=client_message_id,
-        )
-
-        conversation.last_message_at = now
-        conversation.updated_at = now
-        db.add_all([conversation, user_message])
-        try:
-            db.commit()
-            db.refresh(user_message)
-        except IntegrityError:
-            db.rollback()
-            user_message, existing_assistant = _find_idempotent_exchange(
-                db,
-                conversation_id=conversation.id,
-                client_message_id=client_message_id,
-            )
-            if not user_message:
-                raise
-            if existing_assistant:
-                return (
-                    user_message,
-                    existing_assistant,
-                    _reply_from_message(existing_assistant),
-                    True,
-                )
-
-    history = _recent_history(
-        db,
-        conversation_id=conversation.id,
-        before_message_id=user_message.id,
-    )
-    pending = _latest_pending_transaction(
-        db,
-        conversation_id=conversation.id,
-        before_message_id=user_message.id,
-    )
-    pending_token = make_pending_context_token(pending) if pending else None
-    prior_grounding = _latest_profit_loss_grounding(
-        db,
-        conversation_id=conversation.id,
-        before_message_id=user_message.id,
-    )
-
-    try:
-        reply = dispatch_gemini_assistant(
-            db=db,
-            company_id=conversation.company_id,
-            user_role=user_role,
-            message=user_message.content,
-            page_context=page_context,
-            language=message_language,
-            history=history,
-            pending_transaction=pending,
-            pending_context_token=pending_token,
-            prior_grounding=prior_grounding,
-        )
-    except Exception as exc:
-        logger.warning(
-            "Persistent assistant response failed safely: %s", type(exc).__name__
-        )
-        db.rollback()
-        safe_message = (
-            "تعذر إكمال الرد الآن. يرجى المحاولة مرة أخرى."
-            if message_language == "ar"
-            else "The response could not be completed. Please try again."
-        )
-        reply = GeminiAssistantReply(
-            reply=safe_message,
-            intent="error",
-            confidence="low",
-            data_sources=[],
-        )
-
-    _update_automatic_title(
-        conversation,
-        message=user_message.content,
-        language=message_language,
-        reply=reply,
-    )
-
-    assistant_message = AssistantMessage(
-        conversation_id=conversation.id,
-        role="assistant",
-        content=reply.reply,
-        language=message_language,
-        message_type=_message_type_for_reply(reply),
-        message_metadata=_safe_reply_metadata(reply),
-        in_reply_to_id=user_message.id,
-    )
-    now = datetime.now(timezone.utc)
-    conversation = get_owned_conversation(
-        db,
-        conversation_id=conversation.id,
-        company_id=conversation.company_id,
-        user_id=conversation.user_id,
-    )
-    conversation.last_message_at = now
-    conversation.updated_at = now
-    db.add_all([conversation, assistant_message])
-    try:
-        db.commit()
-        db.refresh(assistant_message)
-    except IntegrityError:
-        db.rollback()
-        existing_assistant = db.scalar(
-            select(AssistantMessage).where(
-                AssistantMessage.in_reply_to_id == user_message.id
-            )
-        )
-        if not existing_assistant:
-            raise
-        return (
-            user_message,
-            existing_assistant,
-            _reply_from_message(existing_assistant),
-            True,
-        )
-
-    return user_message, assistant_message, reply, False
 
 def record_confirmation_event(
     db: Session,
@@ -585,52 +455,9 @@ def record_confirmation_event(
     language: str,
     commit: bool = True,
 ) -> AssistantMessage:
-    latest_preview = db.scalar(
-        select(AssistantMessage)
-        .where(
-            AssistantMessage.conversation_id == conversation.id,
-            AssistantMessage.role == "assistant",
-            AssistantMessage.message_type == "journal_preview",
-        )
-        .order_by(AssistantMessage.created_at.desc(), AssistantMessage.id.desc())
-        .limit(1)
+    """Delegate to assistant_message_service (moved for Phase 42 clean boundary)."""
+    from app.modules.accounting.services.assistant_message_service import (
+        record_confirmation_event as _record,
     )
-    if latest_preview and latest_preview.message_metadata:
-        metadata = dict(latest_preview.message_metadata)
-        metadata["suggested_action"] = None
-        metadata["pending_transaction"] = None
-        latest_preview.message_metadata = metadata
-        db.add(latest_preview)
+    return _record(db, conversation=conversation, entry_no=entry_no, language=language, commit=commit)
 
-    content = (
-        f"✅ تم إنشاء القيد المسودة بنجاح! رقم القيد: **{entry_no}**\n"
-        "ملاحظة: القيود المسودة لا تظهر في التقارير المالية حتى يتم ترحيلها."
-        if language == "ar"
-        else f"✅ Draft journal entry created! Entry No: **{entry_no}**\n"
-        "Note: draft entries do not affect financial reports until posted."
-    )
-    event = AssistantMessage(
-        conversation_id=conversation.id,
-        role="system_event",
-        content=content,
-        language=language,
-        message_type="system_notice",
-        message_metadata={"intent": "action_confirmed"},
-    )
-    now = datetime.now(timezone.utc)
-    conversation.last_message_at = now
-    conversation.updated_at = now
-    db.add_all([conversation, event])
-    if commit:
-        db.commit()
-        db.refresh(event)
-    else:
-        try:
-            db.flush()
-        except Exception:
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            raise
-    return event

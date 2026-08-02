@@ -12,19 +12,13 @@ from app.modules.accounting.schemas.company import (
     CompanyUpdate,
 )
 from app.modules.accounting.schemas.company_user import CompanyUserCreate
-from app.modules.accounting.services.company_service import (
-    count_companies,
-    count_companies_for_user,
-    create_company,
-    get_company,
-    list_companies,
-    list_companies_for_user,
-    update_company,
-)
+from app.application.companies.dto import CreateCompanyCommand, UpdateCompanyCommand
+from app.application.companies.use_cases import CreateCompany, GetCompany, ListCompanies, UpdateCompany
+from app.infrastructure.database.sqlalchemy.repositories.company_repository import SqlAlchemyCompanyRepository
 from app.modules.accounting.services.company_user_service import (
     create_company_user,
 )
-from app.modules.accounting.services.audit_service import create_atomic_audit_log
+from app.modules.accounting.services.audit_service import prepare_audit_log
 
 
 router = APIRouter(
@@ -43,7 +37,18 @@ def create_company_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    company = create_company(db=db, payload=payload)
+    repo = SqlAlchemyCompanyRepository(db)
+    company = CreateCompany(repo).execute(
+        CreateCompanyCommand(
+            name=payload.name,
+            base_currency=payload.base_currency,
+            legal_name=payload.legal_name,
+            registration_no=payload.registration_no,
+            tax_no=payload.tax_no,
+            address=payload.address,
+            is_active=payload.is_active,
+        )
+    )
 
     create_company_user(
         db=db,
@@ -55,7 +60,7 @@ def create_company_endpoint(
         ),
     )
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=company.id,
         actor=current_user.email,
@@ -67,6 +72,7 @@ def create_company_endpoint(
         entity_id=company.id,
         description=f"Created company {company.name}",
     )
+    db.commit()
 
     return company
 
@@ -81,39 +87,14 @@ def list_companies_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.is_superuser:
-        companies = list_companies(
-            db=db,
-            skip=skip,
-            limit=limit,
-        )
-
-        total = count_companies(db=db)
-
-        return PaginatedResponse[CompanyRead](
-            items=companies,
-            total=total,
-            skip=skip,
-            limit=limit,
-        )
-
-    companies = list_companies_for_user(
-        db=db,
-        user_id=current_user.id,
-        skip=skip,
-        limit=limit,
-    )
-
-    total = count_companies_for_user(
-        db=db,
-        user_id=current_user.id,
-    )
-
+    repo = SqlAlchemyCompanyRepository(db)
+    user_id = None if current_user.is_superuser else current_user.id
+    page = ListCompanies(repo).execute(user_id=user_id, skip=skip, limit=limit)
     return PaginatedResponse[CompanyRead](
-        items=companies,
-        total=total,
-        skip=skip,
-        limit=limit,
+        items=list(page.items),
+        total=page.total,
+        skip=page.skip,
+        limit=page.limit,
     )
 
 
@@ -126,7 +107,8 @@ def get_company_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    company = get_company(db=db, company_id=company_id)
+    repo = SqlAlchemyCompanyRepository(db)
+    company = GetCompany(repo).execute(company_id)
 
     if not company:
         raise HTTPException(
@@ -153,7 +135,8 @@ def update_company_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    company = get_company(db=db, company_id=company_id)
+    repo = SqlAlchemyCompanyRepository(db)
+    company = GetCompany(repo).execute(company_id)
 
     if not company:
         raise HTTPException(
@@ -168,13 +151,16 @@ def update_company_endpoint(
         allowed_roles={"admin"},
     )
 
-    updated = update_company(
-        db=db,
-        company=company,
-        payload=payload,
+    update_data = payload.model_dump(exclude_unset=True)
+    updated = UpdateCompany(repo).execute(
+        UpdateCompanyCommand(
+            company_id=company_id,
+            fields=frozenset(update_data.keys()),
+            **update_data,
+        )
     )
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=updated.id,
         actor=current_user.email,
@@ -186,5 +172,6 @@ def update_company_endpoint(
         entity_id=updated.id,
         description=f"Updated company {updated.name}",
     )
+    db.commit()
 
     return updated

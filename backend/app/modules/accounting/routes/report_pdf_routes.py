@@ -34,7 +34,7 @@ from app.infrastructure.database.sqlalchemy.repositories.report_repository impor
     SqlAlchemyReportRepository,
 )
 from app.modules.accounting.models.user import User
-from app.modules.accounting.services.report_pdf_service import (
+from app.infrastructure.exports.pdf_renderer import (
     trial_balance_to_pdf,
     profit_and_loss_to_pdf,
     balance_sheet_to_pdf,

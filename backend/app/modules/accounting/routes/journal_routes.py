@@ -40,7 +40,7 @@ from app.modules.accounting.schemas.journal import (
     OpeningBalanceCreate,
 )
 from app.modules.accounting.services.audit_service import (
-    create_atomic_audit_log,
+    prepare_audit_log,
 )
 from app.modules.accounting.services.accounting_lookup_facade import (
     find_fiscal_period_for_date,
@@ -194,7 +194,7 @@ def create_journal_entry_endpoint(
     repository = SqlAlchemyJournalRepository(db)
     journal_entry = CreateJournalEntry(repository).execute(command)
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=journal_entry.company_id,
         actor=current_user.email,
@@ -211,6 +211,7 @@ def create_journal_entry_endpoint(
             "entry_date": str(journal_entry.entry_date),
         },
     )
+    db.commit()
 
     return journal_entry
 
@@ -321,7 +322,7 @@ def create_opening_balance_endpoint(
     repository = SqlAlchemyJournalRepository(db)
     opening_entry = CreateOpeningBalance(repository).execute(command)
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=opening_entry.company_id,
         actor=current_user.email,
@@ -333,6 +334,7 @@ def create_opening_balance_endpoint(
         entity_id=opening_entry.id,
         description=f"Created opening balance entry {opening_entry.entry_no}",
     )
+    db.commit()
 
     return opening_entry
 
@@ -497,7 +499,7 @@ def update_journal_entry_endpoint(
     repository = SqlAlchemyJournalRepository(db)
     updated_entry = UpdateJournalEntry(repository).execute(command)
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=updated_entry.company_id,
         actor=current_user.email,
@@ -511,6 +513,7 @@ def update_journal_entry_endpoint(
         old_values={"status": "draft", "entry_no": updated_entry.entry_no},
         new_values={"status": "draft", "entry_no": updated_entry.entry_no},
     )
+    db.commit()
 
     return updated_entry
 
@@ -568,7 +571,7 @@ def review_journal_entry_endpoint(
     repository = SqlAlchemyJournalRepository(db)
     reviewed_entry = ReviewJournalEntry(repository).execute(command)
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=reviewed_entry.company_id,
         actor=current_user.email,
@@ -582,6 +585,7 @@ def review_journal_entry_endpoint(
         old_values={"status": "draft"},
         new_values={"status": "reviewed"},
     )
+    db.commit()
 
     return reviewed_entry
 
@@ -663,7 +667,7 @@ def post_journal_entry_endpoint(
     repository = SqlAlchemyJournalRepository(db)
     posted_entry = PostJournalEntry(repository).execute(command)
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=posted_entry.company_id,
         actor=current_user.email,
@@ -677,6 +681,7 @@ def post_journal_entry_endpoint(
         old_values={"status": "reviewed"},
         new_values={"status": "posted"},
     )
+    db.commit()
 
     return posted_entry
 
@@ -787,7 +792,7 @@ def reverse_journal_entry_endpoint(
     repository = SqlAlchemyJournalRepository(db)
     reversal_entry = ReverseJournalEntry(repository).execute(command)
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=reversal_entry.company_id,
         actor=current_user.email,
@@ -804,6 +809,7 @@ def reverse_journal_entry_endpoint(
         old_values={"original_entry_no": original_entry.entry_no, "status": "posted"},
         new_values={"reversal_entry_no": reversal_entry.entry_no, "status": "posted"},
     )
+    db.commit()
 
     return reversal_entry
 
@@ -847,7 +853,7 @@ def void_journal_entry_endpoint(
     repository = SqlAlchemyJournalRepository(db)
     voided_entry = VoidJournalEntry(repository).execute(command)
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=voided_entry.company_id,
         actor=current_user.email,
@@ -861,5 +867,6 @@ def void_journal_entry_endpoint(
         old_values={"status": "draft"},
         new_values={"status": "void"},
     )
+    db.commit()
 
     return voided_entry

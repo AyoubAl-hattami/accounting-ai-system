@@ -350,12 +350,16 @@ def test_audit_failure_rolls_back_creation_acceptance_and_cancellation(
             CompanyUserInvitationCreate(company_id=bs.company_id, email=accept_email, role='viewer'),
             db.merge(admin),
         )
+        # Route-owned transaction: commit setup invitation so it is visible in later sessions.
+        db.commit()
     with SessionLocal() as db:
         cancel_response = create_invitation(
             db,
             CompanyUserInvitationCreate(company_id=bs.company_id, email=cancel_email, role='viewer'),
             db.merge(admin),
         )
+        # Route-owned transaction: commit setup invitation so it is visible in later sessions.
+        db.commit()
     cancel_id = int(cancel_response.token.split(':', 1)[0])
 
     def fail(**_kwargs):

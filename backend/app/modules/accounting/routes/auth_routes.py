@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.application.users.dto import AuthenticateUserCommand, CreateUserCommand
+from app.application.users.use_cases import AuthenticateUser, CreateUser, LookupUserByEmail
+from app.core.auth_dependencies import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.rate_limit import (
@@ -9,24 +12,21 @@ from app.core.rate_limit import (
     record_attempt,
     reset_attempts,
 )
+from app.infrastructure.auth.token_service import generate_user_token
+from app.infrastructure.database.sqlalchemy.repositories.user_repository import (
+    SqlAlchemyUserRepository,
+)
+from app.modules.accounting.models.user import User
 from app.modules.accounting.schemas.user import (
     TokenRead,
     UserCreate,
     UserLogin,
     UserRead,
 )
-from app.modules.accounting.services.auth_service import (
-    authenticate_user,
-    create_user,
-    create_user_token,
-    get_user_by_email,
-)
 from app.modules.accounting.services.audit_service import (
-    create_atomic_audit_log,
+    prepare_audit_log,
     create_audit_log,
 )
-from app.core.auth_dependencies import get_current_user
-from app.modules.accounting.models.user import User
 
 
 router = APIRouter(
@@ -59,23 +59,24 @@ def register_endpoint(
 
     record_attempt(register_key, settings.AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS)
 
-    existing_user = get_user_by_email(
-        db=db,
-        email=payload.email,
-    )
+    user_repo = SqlAlchemyUserRepository(db)
 
+    existing_user = LookupUserByEmail(user_repo).execute(str(payload.email))
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered",
         )
 
-    new_user = create_user(
-        db=db,
-        payload=payload,
+    new_user = CreateUser(user_repo).execute(
+        CreateUserCommand(
+            email=str(payload.email),
+            password=payload.password,
+            full_name=payload.full_name,
+        )
     )
 
-    create_atomic_audit_log(
+    prepare_audit_log(
         db=db,
         company_id=None,
         actor=new_user.email,
@@ -87,6 +88,7 @@ def register_endpoint(
         entity_id=new_user.id,
         description=f"Registered user {new_user.email}",
     )
+    db.commit()
 
     return new_user
 
@@ -114,10 +116,9 @@ def login_endpoint(
             detail="Too many failed login attempts. Please try again later.",
         )
 
-    user = authenticate_user(
-        db=db,
-        email=payload.email,
-        password=payload.password,
+    user_repo = SqlAlchemyUserRepository(db)
+    user = AuthenticateUser(user_repo).execute(
+        AuthenticateUserCommand(email=str(payload.email), password=payload.password)
     )
 
     if not user:
@@ -126,14 +127,15 @@ def login_endpoint(
         create_audit_log(
             db=db,
             company_id=None,
-            actor=payload.email,
+            actor=str(payload.email),
             actor_user_id=None,
-            actor_email=payload.email,
+            actor_email=str(payload.email),
             actor_name=None,
             action="login_failure",
             entity_type="user",
             entity_id=None,
             description=f"Failed login attempt for {payload.email}",
+            commit=True,
         )
 
         raise HTTPException(
@@ -143,7 +145,7 @@ def login_endpoint(
 
     reset_attempts(login_key)
 
-    token = create_user_token(user)
+    token = generate_user_token(user)
 
     create_audit_log(
         db=db,
@@ -156,6 +158,7 @@ def login_endpoint(
         entity_type="user",
         entity_id=user.id,
         description=f"User {user.email} logged in successfully",
+        commit=True,
     )
 
     return TokenRead(
