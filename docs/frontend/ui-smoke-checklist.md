@@ -136,13 +136,29 @@ Rollback point: `stable-clean-architecture-2026-08-02`
 
 ---
 
-## Phase 57 automation note
+## Automated coverage (Phase 64)
 
-Vitest and React Testing Library are not yet installed.  When they are added:
-- Replace this checklist with automated `*.test.tsx` files in `frontend/src/**/__tests__/`.
-- Keep the manual checklist for visual/interactive behaviours that cannot be
-  meaningfully asserted in unit tests (layout, animations, keyboard navigation).
+Vitest + React Testing Library are installed (`npm run test:run --prefix frontend`).
+As of Phase 64 the automated suite covers the following, deliberately narrow, slice:
+
+- `entities/account/useAccounts` — fetch success/error/empty-companyId states, seed-defaults call
+  (`frontend/src/test/smoke/useAccounts.test.ts`)
+- `entities/account/AccountTypeBadge` — renders per account type
+  (`frontend/src/test/smoke/AccountTypeBadge.test.tsx`)
+- `features/audit/auditActionLabels.getActionLabel` — i18n lookup + Title Case fallback
+  (`frontend/src/test/smoke/auditActionLabels.test.ts`)
+- `features/company-users/CompanyUserRoleBadge` — renders label per role
+  (`frontend/src/test/smoke/CompanyUserRoleBadge.test.tsx`)
+
+Everything else on this checklist (Dashboard/Reports/Journal Entries full pages, Settings,
+AI Assistant, cross-cutting auth/tenant/i18n behaviour) remains **manual-only** coverage.
+Full-page tests for Dashboard/Reports/Journals were evaluated and deferred because they
+require router + auth-context + company-context providers plus API mocking at a scale that
+risks brittle, low-value tests; the pure hooks/helpers/badges above were chosen instead as
+higher-value, stable targets. Expanding page-level automated coverage remains future work —
+see `docs/frontend/e2e-readiness-plan.md` for the recommended path (Playwright E2E) rather
+than deeper unit-test mocking of full pages.
 
 ---
 
-*Last updated: Phase 58, 2026-08-02*
+*Last updated: Phase 64, 2026-08-02*

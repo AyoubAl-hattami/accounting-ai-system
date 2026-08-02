@@ -42,6 +42,40 @@ Fix deferred to Phase 57 (requires UI refactor or Vitest dependency addition).
 **Phase 59 (backend review): no changes** — backend is stable; further cleanup documented as future work.
 **Phase 60 (docs): complete** — `frontend-clean-architecture-status.md` created.
 
+**Phase 61 (real component migration): complete (2026-08-02)** — Vitest + RTL
+installed; `useAccounts` promoted to `entities/account`; architecture guard
+allowlist emptied to 0 entries. See "Phase 61" section of
+`docs/architecture/frontend-clean-architecture-status.md`.
+
+**Phase 62 (features-clean cleanup): complete (2026-08-02)** — `frontend/src/features-clean/`
+and `frontend/src/pages-clean/` deleted after grep-proven zero usage; all staged
+hooks were already superseded by live `entities/`/`features/` code. Directories
+no longer exist in the tree.
+
+**Phase 63 (remaining live feature audit): complete (2026-08-02)** — Reviewed
+dashboard, reports, audit, company-users, journals, ai/assistant, entities, shared.
+No cross-feature imports or misplaced entity-level code found; no changes required.
+Guard test (`node --test frontend/tests/architecture_guard.test.mjs`) passes 4/4.
+
+**Phase 64 (test expansion): complete (2026-08-02)** — Added `auditActionLabels`
+and `CompanyUserRoleBadge` smoke tests. Vitest suite: 4 test files, 17 tests, all
+passing.
+
+**Phase 65 (E2E readiness): documented, not implemented** — Playwright was not
+installed (not already a dependency, and installing it was out of scope per the
+conservative mandate). See `docs/frontend/e2e-readiness-plan.md`.
+
+**Phase 66 (backend final cleanup): docs-only, no runtime changes** — Backend
+architecture guard suite (`test_architecture_guards.py`, `test_fixture_readiness.py`,
+21 tests) re-run and confirmed passing. No backend source files were modified;
+remaining backend tech debt (Track C slices) remains documented as future work,
+not claimed complete.
+
+**Phase 67 (final release docs): complete (2026-08-02)** — Added
+`docs/architecture/final-clean-architecture-release-status.md`; updated this file,
+`frontend-clean-architecture-status.md`, `docs/frontend/ui-smoke-checklist.md`,
+and added `docs/frontend/e2e-readiness-plan.md`.
+
 ## Completed backend slices (Phases 1–18 of the original roadmap)
 
 The accounting backend migration is complete for the Accounts, Fiscal,
