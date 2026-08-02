@@ -46,3 +46,6 @@ jobs:
 
       - name: Node built-in unit tests
         run: node --test tests/architecture_guard.test.mjs
+
+      - name: Vitest component/unit tests
+        run: npm run test:run
