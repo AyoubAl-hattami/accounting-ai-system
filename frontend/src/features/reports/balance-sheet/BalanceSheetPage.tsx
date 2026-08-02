@@ -15,7 +15,7 @@ import ChartCard from '../../../components/charts/ChartCard';
 import LoadingState from '../../../components/feedback/LoadingState';
 import ErrorState from '../../../components/feedback/ErrorState';
 import EmptyState from '../../../components/feedback/EmptyState';
-import AccountTypeBadge from '../../accounts/AccountTypeBadge';
+import { AccountTypeBadge } from '../../../entities/account';
 import { useBalanceSheet } from './useBalanceSheet';
 import { useI18n } from '../../../i18n';
 import { formatCurrency } from '../../../lib/format';
