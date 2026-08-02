@@ -22,7 +22,7 @@ jobs:
         working-directory: backend
     env:
       APP_ENV: test
-      DATABASE_URL: sqlite+pysqlite:///:memory:
+      DATABASE_URL: "sqlite+pysqlite:///:memory:"
       SECRET_KEY: ci-static-validation-secret-key-not-for-production
       AI_JOURNAL_PROVIDER: rules
       OPENAI_API_KEY: ""
