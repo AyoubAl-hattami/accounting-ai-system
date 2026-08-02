@@ -1,12 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageLayout from '../../components/layout/PageLayout';
-import AccountTypeBadge from './AccountTypeBadge';
+import { AccountTypeBadge, useAccounts } from '../../entities/account';
 import PaginationControls from '../../components/ui/PaginationControls';
 import LoadingState from '../../components/feedback/LoadingState';
 import ErrorState from '../../components/feedback/ErrorState';
 import EmptyState from '../../components/feedback/EmptyState';
-import { useAccounts } from './useAccounts';
 import { useI18n } from '../../i18n';
 import { canManageAccounts } from '../../auth/permissions';
 import type { CompanyUserRole } from '../../api/types';
