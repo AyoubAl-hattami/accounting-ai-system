@@ -1,6 +1,6 @@
 # Clean Architecture Migration Status
 
-Status date: 2026-08-01
+Status date: 2026-08-02
 
 ## Track A — Test and CI Foundation: complete (Phases 19–28)
 
@@ -28,7 +28,19 @@ Remaining backend domains (companies, users, company-users/RBAC, invitations,
 audit, security/auth, exports, AI providers, assistant/conversations) have not
 yet been migrated to use cases + repositories.
 
-## Track D — Frontend Clean Migration: not started
+## Track D — Frontend Clean Migration: Phase 56 complete (2026-08-02)
+
+**AccountTypeBadge promoted to entity layer.**  Six cross-feature import
+violations eliminated; architecture guard allowlist reduced from 7 to 1 entry.
+Full status in `docs/architecture/frontend-clean-architecture-status.md`.
+
+Remaining cross-feature coupling: `CreateJournalEntryModal → features/accounts/useAccounts`.
+Fix deferred to Phase 57 (requires UI refactor or Vitest dependency addition).
+
+**Phase 57 (Vitest): blocked** — no test framework in package.json.
+**Phase 58 (smoke tests): documented** — manual checklist at `docs/frontend/ui-smoke-checklist.md`.
+**Phase 59 (backend review): no changes** — backend is stable; further cleanup documented as future work.
+**Phase 60 (docs): complete** — `frontend-clean-architecture-status.md` created.
 
 ## Completed backend slices (Phases 1–18 of the original roadmap)
 
