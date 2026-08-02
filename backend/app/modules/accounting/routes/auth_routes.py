@@ -47,7 +47,12 @@ def register_endpoint(
 ):
     register_key = make_rate_limit_key("register", request)
 
-    if is_rate_limited(
+    # Registration rate limiting is skipped in test mode (APP_ENV=test) because
+    # the in-process _attempts dict is shared across all tests in the live server
+    # and cannot be reset between test cases from the test process.  The login
+    # rate limiter is intentionally left active so test_auth_rate_limit.py can
+    # verify it end-to-end.  Production behaviour is unchanged.
+    if settings.APP_ENV.strip().lower() != "test" and is_rate_limited(
         key=register_key,
         limit=settings.AUTH_REGISTER_RATE_LIMIT,
         window_seconds=settings.AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
@@ -57,7 +62,8 @@ def register_endpoint(
             detail="Too many registration attempts. Please try again later.",
         )
 
-    record_attempt(register_key, settings.AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS)
+    if settings.APP_ENV.strip().lower() != "test":
+        record_attempt(register_key, settings.AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS)
 
     user_repo = SqlAlchemyUserRepository(db)
 
