@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, Trash2, CheckCircle2, AlertCircle, Search, Save, Check } from 'lucide-react';
-import { useAccounts } from '../accounts/useAccounts';
+import { useAccounts } from '../../entities/account';
 import { useCreateJournalEntry } from './useCreateJournalEntry';
 import { formatCurrency as fmtCurrency } from '../../lib/format';
 import { useI18n } from '../../i18n';

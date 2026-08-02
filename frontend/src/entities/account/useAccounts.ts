@@ -4,11 +4,11 @@ import type { Account, PaginatedResponse, AccountSeedResult } from '../../api/ty
 
 interface UseAccountsOptions {
   companyId: number | null;
-  skip: number;
-  limit: number;
+  skip?: number;
+  limit?: number;
 }
 
-export function useAccounts({ companyId, skip, limit }: UseAccountsOptions) {
+export function useAccounts({ companyId, skip = 0, limit = 500 }: UseAccountsOptions) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(false);

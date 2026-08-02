@@ -80,23 +80,11 @@ function slice(relPath) {
 const LAYER_ORDER = ['shared', 'entities', 'features', 'widgets', 'pages', 'app', 'routes', 'auth'];
 
 /**
- * Phase 49 introduced this allowlist for legacy feature cross-imports.
- * Phase 56 promoted AccountTypeBadge to entities/account/ and updated the six
- * report pages and CreateJournalEntryModal to import from there, reducing the
- * allowlist from 7 entries to 1.
- *
- * Remaining coupling: CreateJournalEntryModal loads accounts via useAccounts
- * from features/accounts because the hook owns local React state and cannot
- * safely be moved to the entity layer.  The correct long-term fix is to lift
- * account selection out of the modal or extract a shared hook; that requires a
- * UI refactor deferred to a future phase.
- *
- * Phase 57+ must empty this list.  Any new cross-feature import not present
- * here will fail the test immediately.
+ * Phase 61-E emptied this allowlist by promoting useAccounts to the
+ * entities/account layer. Cross-feature imports are now fully prohibited.
+ * Any new cross-feature import will fail this test immediately.
  */
-const LEGACY_FEATURE_CROSS_IMPORT_ALLOWLIST = new Set([
-  'features/journals/CreateJournalEntryModal.tsx → features/accounts/useAccounts',
-]);
+const LEGACY_FEATURE_CROSS_IMPORT_ALLOWLIST = new Set();
 
 test('features must not cross-import sibling features', () => {
   const featuresDir = path.join(SRC, 'features');

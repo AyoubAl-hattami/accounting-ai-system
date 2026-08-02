@@ -9,3 +9,4 @@
 export type { Account } from '../../api/types';
 export type { AccountSeedResult } from '../../api/types';
 export { AccountTypeBadge } from './AccountTypeBadge';
+export { useAccounts } from './useAccounts';
