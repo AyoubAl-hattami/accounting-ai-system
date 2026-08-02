@@ -80,21 +80,22 @@ function slice(relPath) {
 const LAYER_ORDER = ['shared', 'entities', 'features', 'widgets', 'pages', 'app', 'routes', 'auth'];
 
 /**
- * Phase 49 allows existing legacy feature cross-imports by explicit allowlist.
- * Phase 56 must empty this list after legacy features are deleted.
+ * Phase 49 introduced this allowlist for legacy feature cross-imports.
+ * Phase 56 promoted AccountTypeBadge to entities/account/ and updated the six
+ * report pages and CreateJournalEntryModal to import from there, reducing the
+ * allowlist from 7 entries to 1.
  *
- * Each entry is the canonical string "fromRel → resolvedRel" as emitted by the
- * violation collector below.  Only these seven imports are grandfathered; any
- * new cross-feature import not present here will fail the test.
+ * Remaining coupling: CreateJournalEntryModal loads accounts via useAccounts
+ * from features/accounts because the hook owns local React state and cannot
+ * safely be moved to the entity layer.  The correct long-term fix is to lift
+ * account selection out of the modal or extract a shared hook; that requires a
+ * UI refactor deferred to a future phase.
+ *
+ * Phase 57+ must empty this list.  Any new cross-feature import not present
+ * here will fail the test immediately.
  */
 const LEGACY_FEATURE_CROSS_IMPORT_ALLOWLIST = new Set([
   'features/journals/CreateJournalEntryModal.tsx → features/accounts/useAccounts',
-  'features/journals/CreateJournalEntryModal.tsx → features/accounts/AccountTypeBadge',
-  'features/reports/account-ledger/AccountLedgerPage.tsx → features/accounts/AccountTypeBadge',
-  'features/reports/balance-sheet/BalanceSheetPage.tsx → features/accounts/AccountTypeBadge',
-  'features/reports/general-ledger/GeneralLedgerPage.tsx → features/accounts/AccountTypeBadge',
-  'features/reports/profit-and-loss/ProfitAndLossPage.tsx → features/accounts/AccountTypeBadge',
-  'features/reports/trial-balance/TrialBalancePage.tsx → features/accounts/AccountTypeBadge',
 ]);
 
 test('features must not cross-import sibling features', () => {

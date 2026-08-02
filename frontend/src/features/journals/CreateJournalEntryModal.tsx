@@ -5,7 +5,7 @@ import { useAccounts } from '../accounts/useAccounts';
 import { useCreateJournalEntry } from './useCreateJournalEntry';
 import { formatCurrency as fmtCurrency } from '../../lib/format';
 import { useI18n } from '../../i18n';
-import AccountTypeBadge from '../accounts/AccountTypeBadge';
+import { AccountTypeBadge } from '../../entities/account';
 import type { Account } from '../../api/types';
 import { useToast } from '../../components/feedback/useToast';
 import JournalAssistantPanel from './assistant/JournalAssistantPanel';
