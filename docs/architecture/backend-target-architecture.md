@@ -260,3 +260,19 @@ confirmed mutations remain in application.
 
 These areas require focused compatibility and atomicity verification before
 future changes.
+
+---
+
+## Phase 68 update — domain/interfaces scaffolding removed
+
+`backend/app/domain/` and `backend/app/interfaces/` (and their subfolders)
+existed only as `README.md` scaffolding describing target layers that were
+never populated with code. They have been deleted as part of the Phase 68
+whole-repo placeholder cleanup (see
+`docs/architecture/final-clean-architecture-release-status.md`). The target
+architecture described above remains the long-term direction; the domain and
+interfaces layers should only be reintroduced once there is real code to put
+in them, not in advance as empty skeletons. `backend/app/infrastructure/ai/`,
+`infrastructure/security/`, and `infrastructure/database/sqlalchemy/mappers/`
+were removed for the same reason — they held no code and nothing imported
+them.
