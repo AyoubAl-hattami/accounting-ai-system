@@ -23,16 +23,25 @@ membership to administer a subscription — the platform endpoints authorise on
 
 ## Onboarding a client
 
-1. The platform operator creates the company.
-2. Creating a company materialises its subscription row as `active` with no
-   expiry (`company_routes.create_company_endpoint`), so a freshly handed-over
-   tenant is never locked out by accident.
-3. The operator creates the client's first user with `role = 'admin'` and hands
-   over those credentials.
-4. From then on the client manages its own users; the operator only touches the
-   subscription, from **Platform → Subscriptions**.
-5. The operator sets a term — Extend 1 month, Extend 1 year, or an exact expiry
-   date — when the commercial agreement says so.
+Use **Platform → Onboard Client**. One page creates the company, the client's
+first administrator, and the subscription in a single transaction, and hands
+back a ready-to-send credentials message. See
+[client-onboarding-wizard.md](client-onboarding-wizard.md) for the full flow.
+
+The subscription term is chosen during onboarding — `active` with an expiry
+date, or `trial` with a trial end date. From then on the client manages its own
+users, and the operator only touches the subscription, from **Platform →
+Subscriptions**: Extend 1 month, Extend 1 year, or an exact expiry date, when
+the commercial agreement says so.
+
+### The older manual path
+
+`POST /companies` still exists and still materialises an `active` subscription
+row with no expiry, so a company created that way is never locked out by
+accident. It makes its **caller** an admin member, which is right for a company
+an operator creates for itself and wrong for a client handover — that is
+precisely why the onboarding endpoint exists and why it never adds the platform
+owner to the tenant it creates.
 
 ## Statuses
 
@@ -217,6 +226,10 @@ python scripts/manage_company_subscription.py extend --company-id 3 --years 1
 python scripts/manage_company_subscription.py set-expiry --company-id 3 --date 2026-12-31
 python scripts/manage_company_subscription.py suspend --company-id 3 --reason "non-payment"
 ```
+
+`backend/scripts/onboard_client.py` does the same for creating a tenant in the
+first place — see
+[client-onboarding-wizard.md](client-onboarding-wizard.md#command-line-helper).
 
 ## Limitations
 

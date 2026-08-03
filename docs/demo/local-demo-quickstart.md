@@ -120,21 +120,28 @@ the documented value:
 .\scripts\dev-seed-demo.ps1 --reset-demo-password
 ```
 
-### Demoing the platform subscriptions page
+### Demoing the platform pages
 
-The demo admin is a *company* administrator, so **Platform → Subscriptions** is
-hidden from it by design — that page belongs to the SaaS operator, not to a
-tenant. To demo it, promote a user to platform administrator:
+The demo admin is a *company* administrator, so the whole **Platform** group is
+hidden from it by design — those pages belong to the SaaS operator, not to a
+tenant. To demo them, promote a user to platform administrator:
 
 ```powershell
 & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d accounting_ai `
   -c "UPDATE users SET is_superuser = true WHERE email = 'admin@example.com';"
 ```
 
-Sign out and back in, and the Platform group appears in the sidebar. See
-[SaaS Subscription Model](../product/saas-subscription-model.md) for what the
-page does. Prefer a separate account for this in any shared environment, so the
+Sign out and back in, and the Platform group appears in the sidebar with
+**Subscriptions** and **Onboard Client**. See
+[SaaS Subscription Model](../product/saas-subscription-model.md) and
+[Client Onboarding Wizard](../product/client-onboarding-wizard.md) for what the
+pages do. Prefer a separate account for this in any shared environment, so the
 tenant walkthrough still shows what a real client sees.
+
+**Onboard Client** creates a real tenant. In a demo database that is the point —
+walk the five steps, create a throwaway company, and show the handover message
+on the success screen. Note that the temporary password is shown once and is
+dropped as soon as you leave that screen.
 
 ---
 
@@ -157,6 +164,7 @@ Walk these in order. Select **Demo Company Ltd** in the company switcher first.
 | 11 | Settings | Company profile, base currency, light/dark mode |
 | 12 | AI Assistant | Works offline with the rules provider (see below) |
 | 13 | Platform → Subscriptions | Platform admins only — tenant list, expiry, activate/suspend/extend |
+| 14 | Platform → Onboard Client | Platform admins only — five-step tenant setup and handover message |
 
 ### AI Assistant during a demo
 
