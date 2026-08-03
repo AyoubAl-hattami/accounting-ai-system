@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.subscription_access import ensure_active_subscription
 from app.modules.accounting.models.company_user import CompanyUser
 from app.modules.accounting.models.user import User
 
@@ -27,7 +28,16 @@ def ensure_company_access(
     current_user: User,
     company_id: int,
     allowed_roles: Iterable[str] | None = None,
+    *,
+    require_active_subscription: bool = True,
 ) -> CompanyUser:
+    """Authorise a company-scoped request.
+
+    Subscription enforcement defaults to on, so every business endpoint that
+    already calls this is gated without touching its code.  Endpoints the client
+    still needs while locked out — reading its own membership or company profile
+    — opt out with ``require_active_subscription=False``.
+    """
     if not current_user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -59,6 +69,11 @@ def ensure_company_access(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to perform this action",
         )
+
+    # Checked after membership so a non-member learns nothing about the tenant's
+    # subscription state. A company admin has no bypass here by design.
+    if require_active_subscription:
+        ensure_active_subscription(db=db, company_id=company_id)
 
     return company_user
     

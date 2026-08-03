@@ -14,7 +14,14 @@ from app.modules.accounting.schemas.company import (
 from app.modules.accounting.schemas.company_user import CompanyUserCreate
 from app.application.companies.dto import CreateCompanyCommand, UpdateCompanyCommand
 from app.application.companies.use_cases import CreateCompany, GetCompany, ListCompanies, UpdateCompany
+from app.application.subscriptions.policy import days_remaining, effective_status, grants_access
 from app.infrastructure.database.sqlalchemy.repositories.company_repository import SqlAlchemyCompanyRepository
+from app.infrastructure.database.sqlalchemy.repositories.subscription_repository import (
+    SqlAlchemySubscriptionRepository,
+)
+from app.modules.accounting.schemas.company_subscription import (
+    CompanySubscriptionStatusRead,
+)
 from app.modules.accounting.services.company_user_service import (
     create_company_user,
 )
@@ -59,6 +66,10 @@ def create_company_endpoint(
             is_active=True,
         ),
     )
+
+    # A new tenant starts active with no expiry; the platform owner sets the
+    # term explicitly rather than the client stumbling into a surprise lockout.
+    SqlAlchemySubscriptionRepository(db).get_or_create(company.id)
 
     prepare_audit_log(
         db=db,
@@ -116,13 +127,58 @@ def get_company_endpoint(
             detail="Company not found",
         )
 
+    # Exempt from the subscription gate: reading the company profile carries no
+    # accounting data and the shell needs it to explain why access is blocked.
     ensure_company_access(
         db=db,
         current_user=current_user,
         company_id=company.id,
+        require_active_subscription=False,
     )
 
     return company
+
+
+@router.get(
+    "/{company_id}/subscription",
+    response_model=CompanySubscriptionStatusRead,
+)
+def get_company_subscription_status_endpoint(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Let a member see whether its own company may transact.
+
+    Exempt from the subscription gate on purpose: a locked-out client needs this
+    to render the inactive screen instead of a wall of failed requests.  It
+    exposes no other company's data and no accounting figures.
+    """
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_id,
+        require_active_subscription=False,
+    )
+
+    subscription = SqlAlchemySubscriptionRepository(db).get(company_id)
+
+    if subscription is None:
+        return CompanySubscriptionStatusRead(
+            company_id=company_id,
+            effective_status="active",
+            expires_at=None,
+            days_remaining=None,
+            is_active=True,
+        )
+
+    return CompanySubscriptionStatusRead(
+        company_id=company_id,
+        effective_status=effective_status(subscription.status, subscription.expires_at),
+        expires_at=subscription.expires_at,
+        days_remaining=days_remaining(subscription.expires_at),
+        is_active=grants_access(subscription.status, subscription.expires_at),
+    )
 
 
 @router.patch(
