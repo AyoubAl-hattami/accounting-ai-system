@@ -65,6 +65,9 @@ export interface Translations {
     through: string;
     noDescription: string;
     clearFilters: string;
+    pagination: string;
+    by: string;
+    notAvailable: string;
     noActivity: string;
     withActivity: string;
     debitTotal: string;
@@ -96,6 +99,17 @@ export interface Translations {
     exportingPdf: string;
     pdfExportFailed: string;
     pdfExportSucceeded: string;
+  };
+
+  // ── Theme ──
+  theme: {
+    appearance: string;
+    appearanceDescription: string;
+    light: string;
+    dark: string;
+    system: string;
+    switchToLight: string;
+    switchToDark: string;
   };
 
   // ── Charts ──
@@ -141,6 +155,8 @@ export interface Translations {
     networkError: string;
     invalidCredentials: string;
     footer: string;
+    showPassword: string;
+    hidePassword: string;
   };
 
   // ── Sidebar / Navigation ──
@@ -159,6 +175,14 @@ export interface Translations {
     generalLedger: string;
     settings: string;
     signOut: string;
+    groupOverview: string;
+    groupBookkeeping: string;
+    groupReports: string;
+    groupAdministration: string;
+    collapseSidebar: string;
+    expandSidebar: string;
+    openMenu: string;
+    closeMenu: string;
   };
 
   // ── Dashboard ──
@@ -204,6 +228,15 @@ export interface Translations {
     noAccountsTitle: string;
     noAccountsDescription: string;
     showingAccounts: string;
+    origin: string;
+    systemAccount: string;
+    manualAccount: string;
+    parent: string;
+    created: string;
+    skipped: string;
+    seedFailed: string;
+    noMatchTitle: string;
+    noMatchDescription: string;
   };
 
   // ── Journal Entries ──
@@ -221,7 +254,14 @@ export interface Translations {
     balanced: string;
     noEntriesTitle: string;
     noEntriesDescription: string;
+    noMatchTitle: string;
+    noMatchDescription: string;
+    noLines: string;
     showingEntries: string;
+    sourceManual: string;
+    sourceAssistant: string;
+    sourceReversal: string;
+    sourceOpeningBalance: string;
     review: string;
     post: string;
     void: string;
@@ -302,15 +342,32 @@ export interface Translations {
     validationError: string;
     successMessage: string;
     lineDescription: string;
+    lineDescriptionPlaceholder: string;
     chooseAccountForLine: string;
     newJournalEntry: string;
     newJournalEntryDesc: string;
+    searchAccountsPlaceholder: string;
+    noAccountsMatched: string;
+    accountsAvailable: string;
+    /** Reminder shown above the lines table. */
+    lineRule: string;
+    balanced: string;
+    unbalanced: string;
+    errMinLines: string;
+    errAccountRequired: string;
+    errBothSides: string;
+    errNoSide: string;
+    errDebitPositive: string;
+    /** Followed by the formatted difference amount. */
+    errUnbalanced: string;
   };
 
   // ── Review Journal Entry Modal ──
   reviewJournal: {
     title: string;
     confirmMessage: string;
+    /** What the entry becomes once the action succeeds. */
+    consequence: string;
     reviewing: string;
     reviewBtn: string;
   };
@@ -319,6 +376,7 @@ export interface Translations {
   postJournal: {
     title: string;
     confirmMessage: string;
+    consequence: string;
     posting: string;
     postBtn: string;
   };
@@ -327,6 +385,7 @@ export interface Translations {
   voidJournal: {
     title: string;
     confirmMessage: string;
+    consequence: string;
     voiding: string;
     voidBtn: string;
   };
@@ -334,15 +393,31 @@ export interface Translations {
   // ── Reverse Journal Entry Modal ──
   reverseJournal: {
     title: string;
+    confirmMessage: string;
+    consequence: string;
     entryNoLabel: string;
+    entryNoPlaceholder: string;
     dateLabel: string;
     descriptionLabel: string;
+    descriptionPlaceholder: string;
     reversing: string;
     reverseBtn: string;
   };
 
   // ── Reports ──
   reports: {
+    /** Labels reused by every report toolbar and detail table. */
+    shared: {
+      filters: string;
+      accountsShown: string;
+      linesShown: string;
+      noMatchTitle: string;
+      noMatchDescription: string;
+      noEntryMatchTitle: string;
+      noEntryMatchDescription: string;
+      noDataTitle: string;
+      noDataDescription: string;
+    };
     trialBalance: {
       pageTitle: string;
       pageSubtitle: string;
@@ -357,6 +432,8 @@ export interface Translations {
       debitBalance: string;
       creditBalance: string;
       totals: string;
+      /** Debit total less credit total — only shown when the report is out of balance. */
+      difference: string;
     };
     profitAndLoss: {
       pageTitle: string;
@@ -440,6 +517,12 @@ export interface Translations {
     entityId: string;
     noLogsTitle: string;
     noLogsDescription: string;
+    /** Plural noun used by the pagination summary. */
+    logEntries: string;
+    showDetails: string;
+    hideDetails: string;
+    accessDeniedDescription: string;
+    accessDeniedHint: string;
     // Details panel
     auditDetails: string;
     before: string;
@@ -537,6 +620,48 @@ export interface Translations {
     confirmCancelInvite: string;
     confirmRestoreAccess: string;
     confirmReactivateAccount: string;
+    emailRequired: string;
+    emailPlaceholder: string;
+    sendingInvite: string;
+    inviteShareHint: string;
+    inviteLink: string;
+    copy: string;
+    copied: string;
+    done: string;
+    editUserDesc: string;
+    activeStatusHint: string;
+    onlyAdminWarning: string;
+    saveChanges: string;
+    savingChanges: string;
+    pendingStatus: string;
+    userAdded: string;
+    userUpdated: string;
+    inviteLinkOnceOnly: string;
+    mustTypeDelete: string;
+    accessDeniedDescription: string;
+    accessDeniedHint: string;
+    usersEntity: string;
+    memberFilters: string;
+    memberGroups: string;
+    invitedDescription: string;
+    companyLabel: string;
+    fullName: string;
+    accountExists: string;
+    logInToAccept: string;
+    readyToAccept: string;
+    joinedSuccessfully: string;
+    accepting: string;
+    acceptFailed: string;
+    validatingInvite: string;
+    /** Display names for the company roles, keyed by the backend enum value. */
+    roles: {
+      admin: string;
+      accountant: string;
+      reviewer: string;
+      approver: string;
+      auditor: string;
+      viewer: string;
+    };
   };
 
   // ── Settings ──

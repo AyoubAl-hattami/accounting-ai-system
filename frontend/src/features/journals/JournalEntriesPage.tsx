@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo, Fragment } from 'react';
+import { useState, useEffect, useMemo, useId, Fragment } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { dataEvents } from '../../lib/dataEvents';
 import { motion, AnimatePresence } from 'framer-motion';
+import { BookOpen, Search, ChevronDown, CheckCircle2, Plus } from 'lucide-react';
+import { dataEvents } from '../../lib/dataEvents';
 import PageLayout from '../../components/layout/PageLayout';
 import { useI18n } from '../../i18n';
 import {
@@ -22,14 +23,7 @@ import EmptyState from '../../components/feedback/EmptyState';
 import { useJournalEntries } from './useJournalEntries';
 import { formatCurrency as fmtCurrency } from '../../lib/format';
 import type { JournalEntry, JournalEntryStatus } from '../../api/types';
-import {
-  BookOpen,
-  Search,
-  Filter,
-  ChevronDown,
-  CheckCircle2,
-  Plus,
-} from 'lucide-react';
+import type { Translations } from '../../i18n/types';
 import CreateJournalEntryModal from './CreateJournalEntryModal';
 import { useReviewJournalEntry } from './useReviewJournalEntry';
 import ReviewJournalEntryModal from './ReviewJournalEntryModal';
@@ -51,15 +45,17 @@ function calcTotals(entry: JournalEntry) {
   }
   return { debit, credit, balanced: Math.abs(debit - credit) < 0.005 };
 }
-function journalSourceLabel(sourceType: string | null, language: 'en' | 'ar') {
-  const labels: Record<string, { en: string; ar: string }> = {
-    manual: { en: 'Manual', ar: 'يدوي' },
-    gemini_assistant: { en: 'Gemini AI', ar: 'مساعد Gemini' },
-    reversal: { en: 'Reversal', ar: 'عكس القيد' },
-    opening_balance: { en: 'Opening balance', ar: 'رصيد افتتاحي' },
+
+/** Unknown source types fall back to a readable form of the raw backend value. */
+function journalSourceLabel(sourceType: string | null, t: Translations): string {
+  const labels: Record<string, string> = {
+    manual: t.journals.sourceManual,
+    gemini_assistant: t.journals.sourceAssistant,
+    reversal: t.journals.sourceReversal,
+    opening_balance: t.journals.sourceOpeningBalance,
   };
   const key = sourceType || 'manual';
-  return labels[key]?.[language] || key.replace(/_/g, ' ');
+  return labels[key] || key.replace(/_/g, ' ');
 }
 
 export default function JournalEntriesPage() {
@@ -87,9 +83,16 @@ interface JournalEntriesContentProps {
   userRole: CompanyUserRole | null;
 }
 
-function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }: JournalEntriesContentProps) {
-  const { t, language } = useI18n();
+function JournalEntriesContent({
+  selectedCompanyId,
+  companiesLoading,
+  userRole,
+}: JournalEntriesContentProps) {
+  const { t } = useI18n();
   const toast = useToast();
+  const searchId = useId();
+  const statusId = useId();
+
   const [skip, setSkip] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -197,7 +200,11 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
     setReverseSubmitError(null);
   };
 
-  const handleConfirmReverse = async (payload: { entry_no: string; entry_date: string; description: string }) => {
+  const handleConfirmReverse = async (payload: {
+    entry_no: string;
+    entry_date: string;
+    description: string;
+  }) => {
     if (!selectedReverseEntry) return;
     const updated = await reverseJournalEntry(selectedReverseEntry.id, payload);
     if (updated) {
@@ -208,7 +215,6 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
     }
   };
 
-  // Reset on company change
   useEffect(() => {
     setSkip(0);
     setSearchQuery('');
@@ -221,12 +227,11 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
     setSelectedReverseEntry(null);
   }, [selectedCompanyId]);
 
-  // Fetch on mount, company, or skip change
   useEffect(() => {
     fetchEntries();
   }, [fetchEntries]);
 
-  // Client-side filtering (within loaded page)
+  // Client-side filtering within the loaded page
   const filteredEntries = useMemo(() => {
     let result = entries;
 
@@ -247,438 +252,519 @@ function JournalEntriesContent({ selectedCompanyId, companiesLoading, userRole }
     return result;
   }, [entries, searchQuery, statusFilter]);
 
-  const isLoading = companiesLoading || entriesLoading;
+  const clearFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('');
+  };
 
-  return (
-    <>
-      {isLoading && <LoadingState />}
+  const statusLabel = (status: JournalEntryStatus): string =>
+    ({
+      draft: t.journals.draft,
+      reviewed: t.journals.reviewed,
+      posted: t.journals.posted,
+      void: t.journals.voided,
+      reversed: t.journals.reversed,
+    })[status];
 
-      {!isLoading && error && <ErrorState message={error} onRetry={fetchEntries} />}
-
-      {!isLoading && !error && (
+  /**
+   * The one action that moves an entry forward, plus the destructive escape
+   * hatch. Rendering only the legal transitions keeps the row uncluttered and
+   * makes the next step obvious.
+   */
+  const renderActions = (entry: JournalEntry) => (
+    <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+      {entry.status === 'draft' && (
         <>
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
-          >
-            <div>
-              <h1 className="text-2xl font-bold text-white mb-1">{t.journals.pageTitle}</h1>
-              <p className="text-sm text-gray-400">
-                {t.journals.pageSubtitle}
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <span className="text-xs text-gray-500 font-medium">
-                {total} entr{total !== 1 ? 'ies' : 'y'} total
-              </span>
-              {selectedCompanyId && canCreateJournal(userRole) && (
-                <button
-                  onClick={() => setIsCreateModalOpen(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white text-sm font-semibold rounded-xl shadow-lg shadow-brand-500/25 active:scale-[0.98] transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>{t.journals.newEntry}</span>
-                </button>
-              )}
-            </div>
-          </motion.div>
-
-          {/* Search & filter */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-            className="flex flex-col sm:flex-row gap-3 mb-6"
-          >
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.journals.searchPlaceholder}
-                className="input-field pl-10 text-sm"
-              />
-            </div>
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="input-field pl-10 pr-8 text-sm appearance-none cursor-pointer min-w-[160px]"
-              >
-                <option value="">{t.journals.allStatuses}</option>
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s.charAt(0).toUpperCase() + s.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </motion.div>
-
-          {/* Empty state */}
-          {entries.length === 0 && (
-            <EmptyState
-              icon={<BookOpen className="w-7 h-7 text-brand-400" />}
-              title={t.journals.noEntriesTitle}
-              description={t.journals.noEntriesDescription}
-            />
-          )}
-
-          {/* Filter-empty state */}
-          {entries.length > 0 && filteredEntries.length === 0 && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16">
-              <Search className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400 text-sm">No entries match your search or filter.</p>
-              <button
-                onClick={() => { setSearchQuery(''); setStatusFilter(''); }}
-                className="mt-3 text-brand-400 text-xs font-medium hover:text-brand-300 transition-colors"
-              >
-                Clear filters
-              </button>
-            </motion.div>
-          )}
-
-          {/* Entries list */}
-          {filteredEntries.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.15 }}
+          {canReviewJournal(userRole) && (
+            <button
+              type="button"
+              onClick={() => handleOpenReviewModal(entry)}
+              className="btn btn-tone tone-primary btn-sm"
             >
-              {/* Desktop table */}
-              <div className="hidden lg:block glass-panel overflow-hidden">
-                <div>
-                  <table className="w-full table-fixed">
-                    <colgroup>
-                      <col className="w-8" />
-                      <col className="w-[130px]" />
-                      <col className="w-[90px]" />
-                      <col />
-                      <col className="w-[88px]" />
-                      <col className="w-[130px]" />
-                      <col className="hidden w-[50px] 2xl:table-column" />
-                      <col className="w-[90px]" />
-                      <col className="w-[90px]" />
-                      <col className="hidden w-[90px] 2xl:table-column" />
-                      <col className="w-[110px]" />
-                    </colgroup>
-                    <thead>
-                      <tr className="border-b border-white/[0.06]">
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5 w-8" />
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5">{t.journals.entryNo}</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5">{t.journals.entryDate}</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5">{t.common.description}</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5">{t.common.status}</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5">{t.common.source}</th>
-                        <th className="hidden text-center text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5 2xl:table-cell">{t.journals.lines}</th>
-                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5">{t.journals.debit}</th>
-                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5">{t.journals.credit}</th>
-                        <th className="hidden text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5 2xl:table-cell">{t.journals.posted}</th>
-                        <th className="text-right text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2.5">{t.common.actions}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredEntries.map((entry, i) => {
-                        const totals = calcTotals(entry);
-                        const isExpanded = expandedId === entry.id;
-
-                        return (
-                          <Fragment key={entry.id}>
-                            <motion.tr
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              transition={{ delay: i * 0.03 }}
-                              className={`border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors cursor-pointer ${isExpanded ? 'bg-white/[0.02]' : ''}`}
-                              onClick={() => setExpandedId(isExpanded ? null : entry.id)}
-                            >
-                              <td className="px-2 py-2.5">
-                                <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                              </td>
-                              <td className="px-2 py-2.5">
-                                <span className="block max-w-full truncate text-xs font-mono font-semibold text-brand-400" title={entry.entry_no}>{entry.entry_no}</span>
-                              </td>
-                              <td className="px-2 py-2.5">
-                                <span className="text-sm text-gray-300">{new Date(entry.entry_date).toLocaleDateString()}</span>
-                              </td>
-                              <td className="px-2 py-2.5">
-                                <span className="block max-w-full truncate text-sm text-gray-200" title={entry.description || undefined}>{entry.description || '—'}</span>
-                              </td>
-                              <td className="px-2 py-2.5">
-                                <JournalStatusBadge status={entry.status} />
-                              </td>
-                              <td className="px-2 py-2.5">
-                                <div className="min-w-0 leading-tight" title={`${journalSourceLabel(entry.source_type, language)} — ${entry.creator_name || (language === 'ar' ? 'غير متوفر' : 'Not available')}`}>
-                                  <span className="block truncate text-xs font-medium text-gray-300">{journalSourceLabel(entry.source_type, language)}</span>
-                                  <span className="block truncate text-[10px] text-gray-500">{language === 'ar' ? 'بواسطة:' : 'By:'} {entry.creator_name || (language === 'ar' ? 'غير متوفر' : 'Not available')}</span>
-                                </div>
-                              </td>
-                              <td className="hidden px-2 py-2.5 text-center 2xl:table-cell">
-                                <span className="text-xs text-gray-400">{entry.lines.length}</span>
-                              </td>
-                              <td className="px-2 py-2.5 text-right">
-                                <span className="text-sm font-mono text-emerald-400">{fmtCurrency(totals.debit)}</span>
-                              </td>
-                              <td className="px-2 py-2.5 text-right">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <span className="text-sm font-mono text-red-400">{fmtCurrency(totals.credit)}</span>
-                                  {totals.balanced && (
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                                  )}
-                                </div>
-                              </td>
-                              <td className="hidden px-2 py-2.5 2xl:table-cell">
-                                <span className="text-xs text-gray-500">
-                                  {entry.posted_at ? new Date(entry.posted_at).toLocaleDateString() : '—'}
-                                </span>
-                              </td>
-                              <td className="px-2 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex flex-wrap items-center justify-end gap-1">
-                                  {entry.status === 'draft' && (
-                                    <>
-                                      {canReviewJournal(userRole) && (
-                                        <button
-                                          onClick={() => handleOpenReviewModal(entry)}
-                                          className="inline-flex items-center gap-1 px-2 py-1 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
-                                        >
-                                          Review
-                                        </button>
-                                      )}
-                                      {canVoidJournal(userRole) && (
-                                        <button
-                                          onClick={() => handleOpenVoidModal(entry)}
-                                          className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
-                                        >
-                                          {t.journals.void}
-                                        </button>
-                                      )}
-                                    </>
-                                  )}
-                                  {entry.status === 'reviewed' && canPostJournal(userRole) && (
-                                    <button
-                                      onClick={() => handleOpenPostModal(entry)}
-                                      className="inline-flex items-center gap-1 px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/30 text-amber-400 hover:text-amber-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
-                                    >
-                                      Post
-                                    </button>
-                                  )}
-                                  {entry.status === 'posted' && canReverseJournal(userRole) && (
-                                    <button
-                                      onClick={() => handleOpenReverseModal(entry)}
-                                      className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/30 text-purple-400 hover:text-purple-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
-                                    >
-                                      {t.journals.reverse}
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                            </motion.tr>
-                            {/* Expanded lines */}
-                            <AnimatePresence>
-                              {isExpanded && (
-                                <tr key={`${entry.id}-lines`}>
-                                  <td colSpan={11} className="p-0 border-b border-white/[0.05]">
-                                    <div className="flex flex-wrap gap-x-5 gap-y-1 border-b border-white/[0.04] px-4 py-2 text-[11px] text-gray-500">
-                                      <span>{t.journals.lines}: {entry.lines.length}</span>
-                                      <span>{t.journals.posted}: {entry.posted_at ? new Date(entry.posted_at).toLocaleDateString() : '—'}</span>
-                                      <span>{t.common.source}: {journalSourceLabel(entry.source_type, language)} · {language === 'ar' ? 'بواسطة:' : 'By:'} {entry.creator_name || (language === 'ar' ? 'غير متوفر' : 'Not available')}</span>
-                                    </div>
-                                    <JournalEntryLines lines={entry.lines} />
-                                  </td>
-                                </tr>
-                              )}
-                            </AnimatePresence>
-                          </Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Pagination */}
-                <div className="px-4 py-3 border-t border-white/[0.04]">
-                  <PaginationControls
-                    skip={skip}
-                    limit={pageSize}
-                    total={total}
-                    onPrev={() => setSkip(Math.max(0, skip - pageSize))}
-                    onNext={() => setSkip(skip + pageSize)}
-                    entityName="entries"
-                  />
-                </div>
-              </div>
-
-              {/* Mobile cards */}
-              <div className="lg:hidden space-y-3">
-                {filteredEntries.map((entry, i) => {
-                  const totals = calcTotals(entry);
-                  const isExpanded = expandedId === entry.id;
-
-                  return (
-                    <motion.div
-                      key={entry.id}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.04 }}
-                      className="glass-panel overflow-hidden"
-                    >
-                      <div
-                        className="p-4 cursor-pointer"
-                        onClick={() => setExpandedId(isExpanded ? null : entry.id)}
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <div>
-                            <span className="text-xs font-mono font-semibold text-brand-400">{entry.entry_no}</span>
-                            <p className="text-sm font-medium text-white mt-0.5">{entry.description || 'No description'}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <JournalStatusBadge status={entry.status} />
-                            <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4 text-xs text-gray-500 mb-2">
-                          <span>{new Date(entry.entry_date).toLocaleDateString()}</span>
-                          <span>{entry.lines.length} line{entry.lines.length !== 1 ? 's' : ''}</span>
-                          <span>{journalSourceLabel(entry.source_type, language)} · {language === 'ar' ? 'بواسطة:' : 'By:'} {entry.creator_name || (language === 'ar' ? 'غير متوفر' : 'Not available')}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs font-mono text-emerald-400">Dr {fmtCurrency(totals.debit)}</span>
-                            <span className="text-xs font-mono text-red-400">Cr {fmtCurrency(totals.credit)}</span>
-                          </div>
-                          {totals.balanced && (
-                            <div className="flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                              <span className="text-[10px] text-emerald-400 font-medium">{t.reports.trialBalance.balanced}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {(entry.status === 'draft' || entry.status === 'reviewed' || entry.status === 'posted') && (
-                        <div
-                          className="px-4 py-2.5 flex items-center justify-between border-t border-white/[0.04] bg-white/[0.01]"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">{t.common.actions}</span>
-                          <div className="flex items-center gap-2">
-                            {entry.status === 'draft' && (
-                              <>
-                                {canReviewJournal(userRole) && (
-                                  <button
-                                    onClick={() => handleOpenReviewModal(entry)}
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 hover:border-brand-500/30 text-brand-400 hover:text-brand-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
-                                  >
-                                    Review
-                                  </button>
-                                )}
-                                {canVoidJournal(userRole) && (
-                                  <button
-                                    onClick={() => handleOpenVoidModal(entry)}
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
-                                  >
-                                    Void
-                                  </button>
-                                )}
-                              </>
-                            )}
-                            {entry.status === 'reviewed' && canPostJournal(userRole) && (
-                              <button
-                                onClick={() => handleOpenPostModal(entry)}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/30 text-amber-400 hover:text-amber-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
-                              >
-                                Post
-                              </button>
-                            )}
-                            {entry.status === 'posted' && canReverseJournal(userRole) && (
-                              <button
-                                onClick={() => handleOpenReverseModal(entry)}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/30 text-purple-400 hover:text-purple-300 text-xs font-semibold rounded-lg transition-all active:scale-[0.97]"
-                              >
-                                Reverse
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      <AnimatePresence>
-                        {isExpanded && <JournalEntryLines lines={entry.lines} />}
-                      </AnimatePresence>
-                    </motion.div>
-                  );
-                })}
-
-                {/* Mobile pagination */}
-                <PaginationControls
-                  skip={skip}
-                  limit={pageSize}
-                  total={total}
-                  onPrev={() => setSkip(Math.max(0, skip - pageSize))}
-                  onNext={() => setSkip(skip + pageSize)}
-                  entityName="entries"
-                />
-              </div>
-            </motion.div>
+              {t.journals.review}
+            </button>
           )}
-
-          <CreateJournalEntryModal
-            isOpen={isCreateModalOpen}
-            onClose={() => setIsCreateModalOpen(false)}
-            onSuccess={() => {
-              setIsCreateModalOpen(false);
-              toast.success(t.journals.successCreatedDraft);
-              fetchEntries();
-              dataEvents.emit('journal:created');
-            }}
-            companyId={selectedCompanyId}
-          />
-
-          <ReviewJournalEntryModal
-            isOpen={!!selectedReviewEntry}
-            onClose={() => setSelectedReviewEntry(null)}
-            onConfirm={handleConfirmReview}
-            isSubmitting={isReviewSubmitting}
-            error={reviewSubmitError}
-            entryNo={selectedReviewEntry?.entry_no || ''}
-          />
-
-          <PostJournalEntryModal
-            isOpen={!!selectedPostEntry}
-            onClose={() => setSelectedPostEntry(null)}
-            onConfirm={handleConfirmPost}
-            isSubmitting={isPostSubmitting}
-            error={postSubmitError}
-            entryNo={selectedPostEntry?.entry_no || ''}
-            entryDate={selectedPostEntry?.entry_date}
-            entryDescription={selectedPostEntry?.description || undefined}
-          />
-
-          <VoidJournalEntryModal
-            isOpen={!!selectedVoidEntry}
-            onClose={() => setSelectedVoidEntry(null)}
-            onConfirm={handleConfirmVoid}
-            isSubmitting={isVoidSubmitting}
-            error={voidSubmitError}
-            entryNo={selectedVoidEntry?.entry_no || ''}
-            entryDate={selectedVoidEntry?.entry_date}
-            entryDescription={selectedVoidEntry?.description || undefined}
-          />
-
-          <ReverseJournalEntryModal
-            isOpen={!!selectedReverseEntry}
-            onClose={() => setSelectedReverseEntry(null)}
-            onConfirm={handleConfirmReverse}
-            isSubmitting={isReverseSubmitting}
-            error={reverseSubmitError}
-            originalEntry={selectedReverseEntry}
-          />
+          {canVoidJournal(userRole) && (
+            <button
+              type="button"
+              onClick={() => handleOpenVoidModal(entry)}
+              className="btn btn-danger-ghost btn-sm"
+            >
+              {t.journals.void}
+            </button>
+          )}
         </>
       )}
+      {entry.status === 'reviewed' && canPostJournal(userRole) && (
+        <button
+          type="button"
+          onClick={() => handleOpenPostModal(entry)}
+          className="btn btn-tone tone-warning btn-sm"
+        >
+          {t.journals.post}
+        </button>
+      )}
+      {entry.status === 'posted' && canReverseJournal(userRole) && (
+        <button
+          type="button"
+          onClick={() => handleOpenReverseModal(entry)}
+          className="btn btn-tone tone-violet btn-sm"
+        >
+          {t.journals.reverse}
+        </button>
+      )}
+    </div>
+  );
+
+  const hasActions = (entry: JournalEntry) =>
+    (entry.status === 'draft' && (canReviewJournal(userRole) || canVoidJournal(userRole))) ||
+    (entry.status === 'reviewed' && canPostJournal(userRole)) ||
+    (entry.status === 'posted' && canReverseJournal(userRole));
+
+  const modals = (
+    <>
+      <CreateJournalEntryModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={() => {
+          setIsCreateModalOpen(false);
+          toast.success(t.journals.successCreatedDraft);
+          fetchEntries();
+          dataEvents.emit('journal:created');
+        }}
+        companyId={selectedCompanyId}
+      />
+
+      <ReviewJournalEntryModal
+        isOpen={!!selectedReviewEntry}
+        onClose={() => setSelectedReviewEntry(null)}
+        onConfirm={handleConfirmReview}
+        isSubmitting={isReviewSubmitting}
+        error={reviewSubmitError}
+        entryNo={selectedReviewEntry?.entry_no || ''}
+      />
+
+      <PostJournalEntryModal
+        isOpen={!!selectedPostEntry}
+        onClose={() => setSelectedPostEntry(null)}
+        onConfirm={handleConfirmPost}
+        isSubmitting={isPostSubmitting}
+        error={postSubmitError}
+        entryNo={selectedPostEntry?.entry_no || ''}
+        entryDate={selectedPostEntry?.entry_date}
+        entryDescription={selectedPostEntry?.description || undefined}
+      />
+
+      <VoidJournalEntryModal
+        isOpen={!!selectedVoidEntry}
+        onClose={() => setSelectedVoidEntry(null)}
+        onConfirm={handleConfirmVoid}
+        isSubmitting={isVoidSubmitting}
+        error={voidSubmitError}
+        entryNo={selectedVoidEntry?.entry_no || ''}
+        entryDate={selectedVoidEntry?.entry_date}
+        entryDescription={selectedVoidEntry?.description || undefined}
+      />
+
+      <ReverseJournalEntryModal
+        isOpen={!!selectedReverseEntry}
+        onClose={() => setSelectedReverseEntry(null)}
+        onConfirm={handleConfirmReverse}
+        isSubmitting={isReverseSubmitting}
+        error={reverseSubmitError}
+        originalEntry={selectedReverseEntry}
+      />
     </>
+  );
+
+  const isLoading = companiesLoading || entriesLoading;
+  if (isLoading) return <LoadingState />;
+  if (error) return <ErrorState message={error} onRetry={fetchEntries} />;
+
+  return (
+    <div className="space-y-5">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+        className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
+      >
+        <div>
+          <h2 className="page-title">{t.journals.pageTitle}</h2>
+          <p className="page-description">{t.journals.pageSubtitle}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="numeric text-xs text-subtle-foreground">
+            {total} {t.journals.showingEntries}
+          </span>
+          {selectedCompanyId && canCreateJournal(userRole) && (
+            <button
+              type="button"
+              onClick={() => setIsCreateModalOpen(true)}
+              className="btn btn-primary"
+            >
+              <Plus aria-hidden className="h-4 w-4" />
+              {t.journals.newEntry}
+            </button>
+          )}
+        </div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.05 }}
+        className="filter-bar"
+      >
+        <div className="min-w-[16rem] flex-1">
+          <label htmlFor={searchId} className="field-label">
+            {t.common.search}
+          </label>
+          <div className="relative">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle-foreground"
+            />
+            <input
+              id={searchId}
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t.journals.searchPlaceholder}
+              className="input ps-10"
+            />
+          </div>
+        </div>
+
+        <div className="min-w-[11rem]">
+          <label htmlFor={statusId} className="field-label">
+            {t.common.status}
+          </label>
+          <select
+            id={statusId}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="select"
+          >
+            <option value="">{t.journals.allStatuses}</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {statusLabel(s)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {(searchQuery || statusFilter) && (
+          <button type="button" onClick={clearFilters} className="btn btn-ghost btn-sm mb-0.5">
+            {t.common.clearFilters}
+          </button>
+        )}
+
+        <p className="numeric ms-auto pb-2.5 text-xs text-subtle-foreground">
+          {filteredEntries.length} {t.common.of} {entries.length} {t.journals.showingEntries}
+        </p>
+      </motion.div>
+
+      {entries.length === 0 && (
+        <EmptyState
+          icon={<BookOpen className="h-7 w-7 text-primary" />}
+          title={t.journals.noEntriesTitle}
+          description={t.journals.noEntriesDescription}
+          action={
+            selectedCompanyId && canCreateJournal(userRole) ? (
+              <button
+                type="button"
+                onClick={() => setIsCreateModalOpen(true)}
+                className="btn btn-primary"
+              >
+                <Plus aria-hidden className="h-4 w-4" />
+                {t.journals.newEntry}
+              </button>
+            ) : undefined
+          }
+        />
+      )}
+
+      {entries.length > 0 && filteredEntries.length === 0 && (
+        <EmptyState
+          icon={<Search className="h-7 w-7 text-primary" />}
+          title={t.journals.noMatchTitle}
+          description={t.journals.noMatchDescription}
+          action={
+            <button type="button" onClick={clearFilters} className="btn btn-secondary btn-sm">
+              {t.common.clearFilters}
+            </button>
+          }
+        />
+      )}
+
+      {filteredEntries.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+        >
+          {/* Desktop table */}
+          <div className="card hidden overflow-hidden lg:block">
+            <div className="table-wrap">
+              <table className="data-table">
+                <caption className="sr-only">{t.journals.pageTitle}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col" className="w-8" />
+                    <th scope="col">{t.journals.entryNo}</th>
+                    <th scope="col">{t.journals.entryDate}</th>
+                    <th scope="col" className="w-[260px]">
+                      {t.common.description}
+                    </th>
+                    <th scope="col">{t.common.status}</th>
+                    {/* Provenance is context, not a decision input — it yields
+                        width to the money and the actions until the viewport is
+                        wide enough for all three, and stays available in the
+                        expanded row regardless. */}
+                    <th scope="col" className="hidden 2xl:table-cell">
+                      {t.common.source}
+                    </th>
+                    <th scope="col" className="cell-numeric">
+                      {t.journals.debit}
+                    </th>
+                    <th scope="col" className="cell-numeric">
+                      {t.journals.credit}
+                    </th>
+                    <th scope="col" className="cell-sticky-end text-end">
+                      {t.common.actions}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEntries.map((entry) => {
+                    const totals = calcTotals(entry);
+                    const isExpanded = expandedId === entry.id;
+                    const panelId = `journal-lines-${entry.id}`;
+
+                    return (
+                      <Fragment key={entry.id}>
+                        <tr
+                          onClick={() => setExpandedId(isExpanded ? null : entry.id)}
+                          className={`cursor-pointer ${isExpanded ? 'bg-surface-muted' : ''}`}
+                        >
+                          <td>
+                            <button
+                              type="button"
+                              aria-expanded={isExpanded}
+                              aria-controls={panelId}
+                              aria-label={entry.entry_no}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedId(isExpanded ? null : entry.id);
+                              }}
+                              className="text-subtle-foreground transition-colors hover:text-foreground"
+                            >
+                              <ChevronDown
+                                aria-hidden
+                                className={`h-4 w-4 transition-transform duration-normal ease-emphasized ${
+                                  isExpanded ? 'rotate-180' : ''
+                                }`}
+                              />
+                            </button>
+                          </td>
+                          <td>
+                            <span
+                              className="numeric block max-w-[120px] truncate text-sm font-semibold text-primary"
+                              title={entry.entry_no}
+                            >
+                              {entry.entry_no}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap text-muted-foreground">
+                            {new Date(entry.entry_date).toLocaleDateString()}
+                          </td>
+                          {/* Capped and clamped to two lines: a long description
+                              grows downward, never sideways into the money. */}
+                          <td>
+                            <span
+                              className="line-clamp-2 max-w-[240px] break-words"
+                              title={entry.description || undefined}
+                            >
+                              {entry.description || '—'}
+                            </span>
+                          </td>
+                          <td>
+                            <JournalStatusBadge status={entry.status} />
+                          </td>
+                          <td className="hidden 2xl:table-cell">
+                            <span className="block text-xs font-medium text-muted-foreground">
+                              {journalSourceLabel(entry.source_type, t)}
+                            </span>
+                            <span className="block max-w-[140px] truncate text-[11px] text-subtle-foreground">
+                              {t.common.by}: {entry.creator_name || t.common.notAvailable}
+                            </span>
+                          </td>
+                          <td className="cell-numeric font-semibold text-debit">
+                            {fmtCurrency(totals.debit)}
+                          </td>
+                          <td className="cell-numeric">
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="font-semibold text-credit">
+                                {fmtCurrency(totals.credit)}
+                              </span>
+                              {totals.balanced && (
+                                <CheckCircle2
+                                  aria-label={t.journals.balanced}
+                                  className="h-3.5 w-3.5 flex-shrink-0 text-success"
+                                />
+                              )}
+                            </span>
+                          </td>
+                          <td
+                            className="cell-sticky-end"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {renderActions(entry)}
+                          </td>
+                        </tr>
+
+                        {isExpanded && (
+                          <tr id={panelId}>
+                            <td colSpan={9} className="p-0">
+                              <div className="flex flex-wrap gap-x-5 gap-y-1 border-b border-border-subtle bg-surface-muted px-4 py-2 text-[11px] text-subtle-foreground">
+                                <span>
+                                  {t.journals.lines}: {entry.lines.length}
+                                </span>
+                                <span>
+                                  {t.journals.posted}:{' '}
+                                  {entry.posted_at
+                                    ? new Date(entry.posted_at).toLocaleDateString()
+                                    : '—'}
+                                </span>
+                                <span>
+                                  {t.common.source}: {journalSourceLabel(entry.source_type, t)} ·{' '}
+                                  {t.common.by}: {entry.creator_name || t.common.notAvailable}
+                                </span>
+                              </div>
+                              <JournalEntryLines lines={entry.lines} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="border-t border-border-subtle px-4 py-3">
+              <PaginationControls
+                skip={skip}
+                limit={pageSize}
+                total={total}
+                onPrev={() => setSkip(Math.max(0, skip - pageSize))}
+                onNext={() => setSkip(skip + pageSize)}
+                entityName={t.journals.showingEntries}
+              />
+            </div>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="space-y-3 lg:hidden">
+            {filteredEntries.map((entry) => {
+              const totals = calcTotals(entry);
+              const isExpanded = expandedId === entry.id;
+              const panelId = `journal-lines-mobile-${entry.id}`;
+
+              return (
+                <div key={entry.id} className="card overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(isExpanded ? null : entry.id)}
+                    aria-expanded={isExpanded}
+                    aria-controls={panelId}
+                    className="w-full p-4 text-start"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="numeric text-xs font-semibold text-primary">
+                          {entry.entry_no}
+                        </span>
+                        <p
+                          className="mt-0.5 line-clamp-2 text-sm font-medium text-foreground"
+                          title={entry.description || undefined}
+                        >
+                          {entry.description || t.common.noDescription}
+                        </p>
+                      </div>
+                      <div className="flex flex-shrink-0 items-center gap-2">
+                        <JournalStatusBadge status={entry.status} />
+                        <ChevronDown
+                          aria-hidden
+                          className={`h-4 w-4 text-subtle-foreground transition-transform duration-normal ease-emphasized ${
+                            isExpanded ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-subtle-foreground">
+                      <span>{new Date(entry.entry_date).toLocaleDateString()}</span>
+                      <span>
+                        {entry.lines.length} {t.journals.lines.toLowerCase()}
+                      </span>
+                      <span>
+                        {journalSourceLabel(entry.source_type, t)} · {t.common.by}:{' '}
+                        {entry.creator_name || t.common.notAvailable}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="numeric text-xs text-debit">
+                          {t.journals.debit} {fmtCurrency(totals.debit)}
+                        </span>
+                        <span className="numeric text-xs text-credit">
+                          {t.journals.credit} {fmtCurrency(totals.credit)}
+                        </span>
+                      </div>
+                      {totals.balanced && (
+                        <span className="badge tone-success">
+                          <CheckCircle2 aria-hidden className="h-3 w-3" />
+                          {t.journals.balanced}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+
+                  {hasActions(entry) && (
+                    <div className="flex items-center justify-between border-t border-border-subtle bg-surface-muted px-4 py-2.5">
+                      <span className="overline">{t.common.actions}</span>
+                      {renderActions(entry)}
+                    </div>
+                  )}
+
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <div id={panelId} className="border-t border-border-subtle">
+                        <JournalEntryLines lines={entry.lines} />
+                      </div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+
+            <PaginationControls
+              skip={skip}
+              limit={pageSize}
+              total={total}
+              onPrev={() => setSkip(Math.max(0, skip - pageSize))}
+              onNext={() => setSkip(skip + pageSize)}
+              entityName={t.journals.showingEntries}
+            />
+          </div>
+        </motion.div>
+      )}
+
+      {modals}
+    </div>
   );
 }

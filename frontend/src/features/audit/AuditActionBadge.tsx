@@ -1,4 +1,3 @@
-
 import { useI18n } from '../../i18n';
 import { getActionLabel } from './auditActionLabels';
 
@@ -6,42 +5,35 @@ interface AuditActionBadgeProps {
   action: string;
 }
 
-// ── Action → colour class map ─────────────────────────────────────────────────
-function getColorClass(action: string): string {
+/**
+ * Audit actions are free-form strings from the backend, so the tone is derived
+ * from the verb rather than an exhaustive map. Order matters: the more specific
+ * checks (login_failure) must run before their prefixes (login).
+ */
+function getTone(action: string): string {
   const a = action.toLowerCase();
 
-  if (a.includes('post')) return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-  if (a.includes('void'))  return 'bg-red-500/10 text-red-400 border-red-500/20';
-  if (a.includes('delete') || a.includes('remove') || a.includes('deactivate'))
-    return 'bg-red-500/10 text-red-400 border-red-500/20';
-  if (a.includes('reverse')) return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-  if (a.includes('create') || a.includes('accept')) return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+  if (a.includes('login_failure') || a.includes('login_failed')) return 'tone-danger';
+  if (a.includes('login_success')) return 'tone-success';
+  if (a.includes('login')) return 'tone-info';
+  if (a.includes('post')) return 'tone-success';
+  if (a.includes('void') || a.includes('delete') || a.includes('remove') || a.includes('deactivate'))
+    return 'tone-danger';
+  if (a.includes('reverse') || a.includes('cancel')) return 'tone-warning';
+  if (a.includes('create') || a.includes('accept')) return 'tone-info';
   if (a.includes('update') || a.includes('edit') || a.includes('restore') || a.includes('reactivate'))
-    return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20';
-  if (a.includes('review') || a.includes('approve'))
-    return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
-  if (a.includes('cancel')) return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-  if (a.includes('login_success')) return 'bg-green-500/10 text-green-400 border-green-500/20';
-  if (a.includes('login_failure') || a.includes('login_failed'))
-    return 'bg-red-500/10 text-red-400 border-red-500/20';
-  if (a.includes('login')) return 'bg-sky-500/10 text-sky-400 border-sky-500/20';
+    return 'tone-primary';
+  if (a.includes('review') || a.includes('approve')) return 'tone-violet';
 
-  return 'bg-white/[0.04] text-gray-400 border-white/[0.06]';
+  return 'tone-neutral';
 }
 
 export default function AuditActionBadge({ action }: AuditActionBadgeProps) {
   const { t } = useI18n();
-  const colorClass = getColorClass(action);
 
   // Cast so we can do an index lookup
   const auditT = t.auditLogs as unknown as Record<string, string>;
   const label = getActionLabel(action, auditT);
 
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${colorClass}`}
-    >
-      {label}
-    </span>
-  );
+  return <span className={`badge ${getTone(action)}`}>{label}</span>;
 }

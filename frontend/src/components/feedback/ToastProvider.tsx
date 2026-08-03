@@ -6,7 +6,7 @@ import { ToastContext, type Toast, type ToastType } from './useToast';
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const { dir } = useI18n();
+  const { dir, t } = useI18n();
 
   const dismiss = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -38,26 +38,30 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     dismiss
   }), [show, success, error, warning, info, dismiss]);
 
-  const icons = {
-    success: <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />,
-    error: <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />,
-    warning: <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />,
-    info: <Info className="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" />
+  // A neutral raised surface keeps the message text at full contrast; the tone
+  // is carried by the leading rule and the icon instead of the whole panel.
+  const icons: Record<ToastType, React.ReactNode> = {
+    success: <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-success" />,
+    error: <AlertCircle className="h-5 w-5 flex-shrink-0 text-danger" />,
+    warning: <AlertTriangle className="h-5 w-5 flex-shrink-0 text-warning" />,
+    info: <Info className="h-5 w-5 flex-shrink-0 text-info" />,
   };
 
-  const toastStyles = {
-    success: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-emerald-500/5',
-    error: 'bg-red-500/10 border-red-500/20 text-red-400 shadow-red-500/5',
-    warning: 'bg-amber-500/10 border-amber-500/20 text-amber-400 shadow-amber-500/5',
-    info: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400 shadow-indigo-500/5'
+  const accents: Record<ToastType, string> = {
+    success: 'bg-success',
+    error: 'bg-danger',
+    warning: 'bg-warning',
+    info: 'bg-info',
   };
 
   return (
     <ToastContext.Provider value={contextValue}>
       {children}
       <div
-        className={`fixed z-[100] flex flex-col gap-2.5 max-w-sm w-full p-4 pointer-events-none ${
-          dir === 'rtl' ? 'left-4 bottom-4' : 'right-4 bottom-4'
+        aria-live="polite"
+        aria-atomic="false"
+        className={`pointer-events-none fixed bottom-4 z-[100] flex w-full max-w-sm flex-col gap-2.5 p-4 ${
+          dir === 'rtl' ? 'left-4' : 'right-4'
         }`}
       >
         <AnimatePresence>
@@ -65,20 +69,28 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             <motion.div
               key={toast.id}
               layout
-              initial={{ opacity: 0, y: 30, scale: 0.9 }}
+              role={toast.type === 'error' ? 'alert' : 'status'}
+              initial={{ opacity: 0, y: 24, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.15 } }}
-              className={`flex items-start gap-3 p-4 rounded-xl border backdrop-blur-md shadow-xl pointer-events-auto w-full select-none ${toastStyles[toast.type]}`}
+              exit={{ opacity: 0, scale: 0.92, transition: { duration: 0.15 } }}
+              transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+              className="glass pointer-events-auto flex w-full select-none items-start gap-3 overflow-hidden rounded-xl border p-3.5 shadow-floating"
             >
+              <span
+                aria-hidden
+                className={`-my-3.5 -ms-3.5 w-1 self-stretch ${accents[toast.type]}`}
+              />
               {icons[toast.type]}
-              <div className="flex-1 text-sm font-medium leading-5 text-gray-200">
+              <div className="flex-1 pt-px text-sm font-medium leading-5 text-foreground">
                 {toast.message}
               </div>
               <button
+                type="button"
                 onClick={() => dismiss(toast.id)}
-                className="text-gray-400 hover:text-white transition-colors p-0.5 rounded-lg hover:bg-white/[0.04] flex-shrink-0 mt-0.5"
+                aria-label={t.common.close}
+                className="-m-1 flex-shrink-0 rounded-md p-1 text-subtle-foreground transition-[color,background-color,transform] duration-fast ease-standard hover:bg-surface-overlay hover:text-foreground active:scale-90"
               >
-                <X className="w-4 h-4" />
+                <X className="h-4 w-4" />
               </button>
             </motion.div>
           ))}

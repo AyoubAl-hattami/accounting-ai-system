@@ -7,29 +7,29 @@ interface ErrorStateProps {
   onRetry?: () => void;
 }
 
-export default function ErrorState({
-  message,
-  onRetry,
-}: ErrorStateProps) {
+export default function ErrorState({ message, onRetry }: ErrorStateProps) {
   const { t } = useI18n();
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       className="flex items-center justify-center py-20"
+      role="alert"
     >
-      <div className="glass-panel p-8 max-w-sm text-center">
-        <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
-          <AlertTriangle className="w-7 h-7 text-red-400" />
+      <div className="card max-w-sm p-8 text-center">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-danger-border bg-danger-soft text-danger shadow-[0_10px_28px_-14px_var(--danger-glow)]">
+          <AlertTriangle className="h-6 w-6" />
         </div>
-        <h3 className="text-white font-semibold text-lg mb-2">{t.common.connectionError}</h3>
-        <p className="text-gray-400 text-sm leading-relaxed mb-5">{message || t.common.somethingWentWrong}</p>
+        <h3 className="mb-1.5 text-base font-semibold text-foreground">
+          {t.common.connectionError}
+        </h3>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {message || t.common.somethingWentWrong}
+        </p>
         {onRetry && (
-          <button
-            onClick={onRetry}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-gray-200 text-sm font-medium hover:bg-white/[0.1] hover:border-white/[0.12] transition-all duration-200"
-          >
-            <RefreshCw className="w-4 h-4" />
+          <button type="button" onClick={onRetry} className="btn btn-secondary mt-6">
+            <RefreshCw className="h-4 w-4" />
             {t.common.tryAgain}
           </button>
         )}

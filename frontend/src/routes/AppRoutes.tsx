@@ -1,7 +1,9 @@
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from '../components/layout/ProtectedRoute';
+import AppLayout from '../components/layout/AppLayout';
 import LoadingState from '../components/feedback/LoadingState';
+import { CompaniesProvider } from '../features/companies/CompaniesProvider';
 
 const LoginPage = lazy(() => import('../features/auth/LoginPage'));
 const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage'));
@@ -19,7 +21,7 @@ const SettingsPage = lazy(() => import('../features/settings/SettingsPage'));
 
 function RouteLoader() {
   return (
-    <div className="min-h-screen bg-surface-900 p-8">
+    <div className="min-h-screen bg-background p-8">
       <LoadingState />
     </div>
   );
@@ -28,102 +30,125 @@ function RouteLoader() {
 export default function AppRoutes() {
   return (
     <BrowserRouter>
-      <Suspense fallback={<RouteLoader />}>
+      <CompaniesProvider>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/accept-invite" element={<AcceptInvitePage />} />
+          {/* Public routes carry their own chrome, so they keep a full-page
+              fallback and stay outside the shell. */}
           <Route
-            path="/dashboard"
+            path="/login"
             element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
+              <Suspense fallback={<RouteLoader />}>
+                <LoginPage />
+              </Suspense>
             }
           />
           <Route
-            path="/accounts"
+            path="/accept-invite"
             element={
-              <ProtectedRoute>
-                <AccountsPage />
-              </ProtectedRoute>
+              <Suspense fallback={<RouteLoader />}>
+                <AcceptInvitePage />
+              </Suspense>
             }
           />
-          <Route
-            path="/journal-entries"
-            element={
-              <ProtectedRoute>
-                <JournalEntriesPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/reports/trial-balance"
-            element={
-              <ProtectedRoute>
-                <TrialBalancePage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/reports/profit-and-loss"
-            element={
-              <ProtectedRoute>
-                <ProfitAndLossPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/reports/balance-sheet"
-            element={
-              <ProtectedRoute>
-                <BalanceSheetPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/reports/account-ledger"
-            element={
-              <ProtectedRoute>
-                <AccountLedgerPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/reports/general-ledger"
-            element={
-              <ProtectedRoute>
-                <GeneralLedgerPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/audit-logs"
-            element={
-              <ProtectedRoute requiredPagePath="/audit-logs">
-                <AuditLogsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/company-users"
-            element={
-              <ProtectedRoute requiredPagePath="/company-users">
-                <CompanyUsersPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute requiredPagePath="/settings">
-                <SettingsPage />
-              </ProtectedRoute>
-            }
-          />
+
+          {/* Everything below shares one AppLayout instance. Because the layout
+              element is the same component across these routes, React keeps the
+              shell mounted and swaps only what the Outlet renders. */}
+          <Route element={<AppLayout />}>
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/accounts"
+              element={
+                <ProtectedRoute>
+                  <AccountsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/journal-entries"
+              element={
+                <ProtectedRoute>
+                  <JournalEntriesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports/trial-balance"
+              element={
+                <ProtectedRoute>
+                  <TrialBalancePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports/profit-and-loss"
+              element={
+                <ProtectedRoute>
+                  <ProfitAndLossPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports/balance-sheet"
+              element={
+                <ProtectedRoute>
+                  <BalanceSheetPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports/account-ledger"
+              element={
+                <ProtectedRoute>
+                  <AccountLedgerPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports/general-ledger"
+              element={
+                <ProtectedRoute>
+                  <GeneralLedgerPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/audit-logs"
+              element={
+                <ProtectedRoute requiredPagePath="/audit-logs">
+                  <AuditLogsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/company-users"
+              element={
+                <ProtectedRoute requiredPagePath="/company-users">
+                  <CompanyUsersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute requiredPagePath="/settings">
+                  <SettingsPage />
+                </ProtectedRoute>
+              }
+            />
+          </Route>
+
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
-      </Suspense>
+      </CompaniesProvider>
     </BrowserRouter>
   );
 }

@@ -1,57 +1,338 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Semantic token definitions ─────────────────────────────────────────────
-   These variables reproduce the current dark-mode appearance unchanged.
-   Light-mode overrides can be added inside `html.light { }` when needed.
-   Components should use semantic utilities (bg-page, text-content, etc.)
-   rather than raw palette utilities (bg-surface-900, text-gray-100, etc.).
-   ──────────────────────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS
+
+   `:root` holds the light palette; `html.dark` overrides it with a
+   hand-tuned dark palette (not a mechanical inversion). Every colour, shadow,
+   gradient and motion timing used by the app resolves through one of these
+   variables, so both themes stay coherent and a single edit here propagates
+   everywhere.
+
+   Naming:
+     background / surface-*   → elevation ladder, page → card → raised → overlay
+     foreground / *-foreground → text ladder, primary → muted → subtle
+     border-*                 → hairline ladder, subtle → default → strong
+     <tone> / <tone>-soft /   → readable text colour, tinted fill, tinted
+       <tone>-border            hairline, and solid fill for buttons
+     gradient-* / glass-*     → the depth layer: app wash, card sheen, glass
+     duration-* / ease-*      → the motion scale
+   ════════════════════════════════════════════════════════════════════════════ */
+
 :root {
-  /* Surfaces */
-  --color-page:             #0a0a0f; /* surface-900 */
-  --color-surface:          #0f0f17; /* surface-800 */
-  --color-surface-subtle:   #14141f; /* surface-700 */
-  --color-surface-elevated: #1a1a28; /* surface-600 */
-  --color-surface-overlay:  #22222f; /* surface-500 */
+  color-scheme: light;
 
-  /* Content */
-  --color-content:           #f3f4f6; /* gray-100 */
-  --color-content-secondary: #9ca3af; /* gray-400 */
-  --color-content-muted:     #6b7280; /* gray-500 */
-  --color-content-inverse:   #0a0a0f; /* dark surface — for text on accent */
+  /* ── Elevation ─────────────────────────────────────────────────────────── */
+  --background:       #f3f6fc;
+  --surface:          #ffffff;
+  --surface-muted:    #f4f7fd;
+  --surface-raised:   #ffffff;
+  --surface-overlay:  #e8eff9;
+  --surface-sunken:   #eaf0f9;
+  --backdrop:         rgba(9, 15, 32, 0.38);
 
-  /* Borders */
-  --color-border:        rgba(255, 255, 255, 0.08);
-  --color-border-subtle: rgba(255, 255, 255, 0.04);
-  --color-focus:         #6366f1; /* brand-500 */
+  /* ── Text ──────────────────────────────────────────────────────────────── */
+  --foreground:        #0a1020;
+  --muted-foreground:  #4b5a75;
+  --subtle-foreground: #6a7a94;
+  --inverse:           #ffffff;
 
-  /* Accent (brand violet) */
-  --color-accent:       #4f46e5; /* brand-600 */
-  --color-accent-hover: #4338ca; /* brand-700 */
-  --color-accent-subtle: rgba(99, 102, 241, 0.12); /* brand-500 @ low opacity */
-  --color-on-accent:    #ffffff;
+  /* ── Hairlines & focus ─────────────────────────────────────────────────── */
+  --border:        #dfe7f4;
+  --border-subtle: #edf1f9;
+  --border-strong: #c2cfe4;
+  --ring:          #2a5fe8;
+  --ring-soft:     rgba(42, 95, 232, 0.20);
+  --ring-danger:   rgba(225, 29, 72, 0.20);
 
-  /* Status */
-  --color-success: #22c55e; /* green-500 */
-  --color-warning: #f59e0b; /* amber-500 */
-  --color-danger:  #ef4444; /* red-500 */
-  --color-info:    #3b82f6; /* blue-500 */
+  /* ── Primary (electric blue — brand, navigation, primary actions) ──────── */
+  --primary:            #1f4fd8;
+  --primary-solid:      #2a5fe8;
+  --primary-solid-hover:#1f4fd8;
+  --primary-foreground: #ffffff;
+  --primary-soft:       #eaf0ff;
+  --primary-soft-hover: #dbe5ff;
+  --primary-border:     #c3d4ff;
+  --primary-glow:       rgba(42, 95, 232, 0.28);
+  --danger-glow:        rgba(225, 29, 72, 0.28);
 
-  /* Accounting */
-  --color-debit:   #60a5fa; /* blue-400 */
-  --color-credit:  #34d399; /* emerald-400 */
-  --color-balance: #a78bfa; /* violet-400 */
+  /* ── Secondary (neutral action surface) ────────────────────────────────── */
+  --secondary:            #eef3fb;
+  --secondary-hover:      #e3eaf6;
+  --secondary-foreground: #2c3b54;
 
-  /* Radius */
+  /* ── Status tones ──────────────────────────────────────────────────────── */
+  --success:        #047857;
+  --success-solid:  #059669;
+  --success-soft:   #e7fbf3;
+  --success-border: #a6ecd3;
+
+  --warning:        #a15c07;
+  --warning-solid:  #d97706;
+  --warning-soft:   #fff7e8;
+  --warning-border: #fbd88f;
+
+  --danger:            #c01c3f;
+  --danger-solid:      #e11d48;
+  --danger-solid-hover:#be123c;
+  --danger-soft:       #fff0f3;
+  --danger-border:     #fbc9d5;
+
+  --info:        #0369a1;
+  --info-solid:  #0284c7;
+  --info-soft:   #e6f6fe;
+  --info-border: #a5e0f7;
+
+  --violet:        #6d28d9;
+  --violet-soft:   #f2edff;
+  --violet-border: #d9c9ff;
+
+  --rose:        #be123c;
+  --rose-soft:   #fff0f3;
+  --rose-border: #fbc9d5;
+
+  --teal:        #0d7368;
+  --teal-soft:   #e6faf6;
+  --teal-border: #9de8d9;
+
+  --neutral:        #4f5f79;
+  --neutral-soft:   #eef2f8;
+  --neutral-border: #dde5f0;
+
+  /* ── Accounting semantics ──────────────────────────────────────────────── */
+  /* Debit and credit are a matched cool pair, deliberately NOT the success /
+     danger colours: a credit is not "good" and a debit is not "bad". Only
+     positive/negative carry that judgement. */
+  --debit:    #1f4fd8;
+  --credit:   #0d7368;
+  --positive: #047857;
+  --negative: #be123c;
+
+  /* ── Report / chart series — a controlled cool ramp, not a rainbow ─────── */
+  --chart-1: #2a5fe8;
+  --chart-2: #7a4dff;
+  --chart-3: #0891b2;
+  --chart-4: #0d9488;
+  --chart-5: #f59e0b;
+  --chart-grid: #e4ebf6;
+
+  /* ── Depth: gradients, glass, sheen ────────────────────────────────────── */
+  --gradient-app:
+    radial-gradient(1200px 620px at 12% -12%, rgba(42, 95, 232, 0.10), transparent 62%),
+    radial-gradient(1000px 540px at 96% -8%, rgba(122, 77, 255, 0.09), transparent 58%);
+  --gradient-primary:   linear-gradient(135deg, #2a5fe8 0%, #6d43f5 100%);
+  --gradient-brand:     linear-gradient(135deg, #2a5fe8 0%, #6d43f5 55%, #06b6d4 100%);
+  --gradient-card:      linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0));
+  --gradient-nav-active:linear-gradient(90deg, rgba(42, 95, 232, 0.14), rgba(109, 67, 245, 0.05));
+
+  --glass:        rgba(255, 255, 255, 0.74);
+  --glass-border: rgba(255, 255, 255, 0.65);
+  --shimmer:      rgba(255, 255, 255, 0.85);
+  --row-hover:    rgba(42, 95, 232, 0.045);
+
+  /* ── Shape ─────────────────────────────────────────────────────────────── */
   --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* ── Shadow scale ──────────────────────────────────────────────────────── */
+  --shadow-xs: 0 1px 2px rgba(10, 16, 32, 0.05);
+  --shadow-sm: 0 1px 3px rgba(10, 16, 32, 0.07), 0 1px 2px rgba(10, 16, 32, 0.04);
+  --shadow-md: 0 4px 14px -4px rgba(10, 16, 32, 0.10), 0 2px 6px -3px rgba(10, 16, 32, 0.05);
+  --shadow-lg: 0 14px 34px -10px rgba(10, 16, 32, 0.14), 0 4px 12px -6px rgba(10, 16, 32, 0.07);
+  --shadow-xl: 0 28px 64px -16px rgba(10, 16, 32, 0.22);
+
+  --shadow-card:     0 1px 2px rgba(10, 16, 32, 0.04), 0 10px 26px -14px rgba(10, 16, 32, 0.16);
+  --shadow-floating: 0 24px 54px -18px rgba(10, 16, 32, 0.24), 0 6px 16px -8px rgba(10, 16, 32, 0.10);
+  --shadow-glow:     0 0 0 1px var(--primary-border), 0 12px 32px -12px var(--primary-glow);
+
+  /* ── Motion scale ──────────────────────────────────────────────────────── */
+  --duration-fast:   140ms;
+  --duration-normal: 220ms;
+  --duration-slow:   320ms;
+  /* Route changes sit at the short end deliberately: the shell no longer moves,
+     so the content only needs to acknowledge the change, not perform it. */
+  --duration-page:   160ms;
+  --ease-standard:   cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out:        cubic-bezier(0, 0, 0.2, 1);
+
+  /* Launcher height + its offset + a gap, so page content clears the corner. */
+  --fab-safe-area: 6.5rem;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   DARK PALETTE
+
+   Deep navy rather than near-black. The previous palette bottomed out at
+   #060a14 — dark enough that surfaces had nowhere left to sit below them, so
+   cards, the sidebar and the page all collapsed into one flat sheet. Raising
+   the floor to #0b1020 buys room for a real elevation ladder above it.
+
+   Every step below is the same hue (~222°) at a rising lightness, so the app
+   reads as one material lit from above rather than as several greys that
+   happen to be near each other:
+
+     sunken  6%  ·  page  8%  ·  card 12%  ·  muted 14%  ·  raised 18%  ·
+     overlay 21%
+
+   Accents were pulled back from neon. Mint (#2ee6c5) and cyan (#56cdf8) glow
+   against a dark ground and tire the eye over a working day; the replacements
+   are the calmer emerald / sky / amber / rose family. Purple is now a single
+   restrained indigo instead of a second brand colour.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+html.dark {
+  color-scheme: dark;
+
+  /* ── Elevation ─────────────────────────────────────────────────────────── */
+  --background:       #0b1020;
+  --surface:          #111a2c;
+  --surface-muted:    #151e33;
+  --surface-raised:   #1a2440;
+  --surface-overlay:  #1f2b4a;
+  --surface-sunken:   #080d1a;
+  --backdrop:         rgba(3, 6, 15, 0.70);
+
+  /* ── Text ──────────────────────────────────────────────────────────────── */
+  /* Soft white, not #fff: pure white on a dark ground haloes and reads harsh.
+     Muted and subtle are both a step brighter than before — the old subtle
+     (#7286a3) sat at 4.5:1, exactly on the AA line and visibly faint in table
+     headers and hint text. */
+  --foreground:        #e6edf7;
+  --muted-foreground:  #9aabc8;
+  --subtle-foreground: #7f92b2;
+  --inverse:           #0b1020;
+
+  /* ── Hairlines & focus ─────────────────────────────────────────────────── */
+  /* Translucent rather than fixed hex, so a hairline strengthens naturally as
+     the surface beneath it rises. A card border reads slightly brighter than
+     the same token on the page, which is what edges do in real light. */
+  --border:        rgba(148, 163, 184, 0.16);
+  --border-subtle: rgba(148, 163, 184, 0.08);
+  --border-strong: rgba(148, 163, 184, 0.30);
+  --ring:          #60a5fa;
+  --ring-soft:     rgba(96, 165, 250, 0.28);
+  --ring-danger:   rgba(251, 113, 133, 0.28);
+
+  /* ── Primary (refined blue — brand, navigation, primary actions) ───────── */
+  /* `--primary` is the accent *text* colour and `--primary-solid` the button
+     fill, so they are tuned against different backgrounds: the first for
+     legibility on a card, the second to carry white text at AA. */
+  --primary:            #60a5fa;
+  --primary-solid:      #2f5fe0;
+  --primary-solid-hover:#3d70f0;
+  --primary-foreground: #ffffff;
+  --primary-soft:       rgba(96, 165, 250, 0.13);
+  --primary-soft-hover: rgba(96, 165, 250, 0.20);
+  --primary-border:     rgba(96, 165, 250, 0.30);
+  --primary-glow:       rgba(47, 95, 224, 0.40);
+  --danger-glow:        rgba(251, 113, 133, 0.38);
+
+  /* ── Secondary (neutral action surface) ────────────────────────────────── */
+  --secondary:            #18223a;
+  --secondary-hover:      #202c49;
+  --secondary-foreground: #d3dff2;
+
+  /* ── Status tones ──────────────────────────────────────────────────────── */
+  --success:        #34d399;
+  --success-solid:  #10b981;
+  --success-soft:   rgba(52, 211, 153, 0.13);
+  --success-border: rgba(52, 211, 153, 0.28);
+
+  --warning:        #fbbf24;
+  --warning-solid:  #f59e0b;
+  --warning-soft:   rgba(251, 191, 36, 0.13);
+  --warning-border: rgba(251, 191, 36, 0.28);
+
+  --danger:            #fb7185;
+  --danger-solid:      #e11d48;
+  --danger-solid-hover:#f43f5e;
+  --danger-soft:       rgba(251, 113, 133, 0.13);
+  --danger-border:     rgba(251, 113, 133, 0.28);
+
+  --info:        #38bdf8;
+  --info-solid:  #0ea5e9;
+  --info-soft:   rgba(56, 189, 248, 0.13);
+  --info-border: rgba(56, 189, 248, 0.28);
+
+  /* Indigo, not lavender. The old #b9a5ff was the second-loudest colour on
+     screen and made the theme read purple. */
+  --violet:        #a5b4fc;
+  --violet-soft:   rgba(165, 180, 252, 0.13);
+  --violet-border: rgba(165, 180, 252, 0.28);
+
+  --rose:        #fb7185;
+  --rose-soft:   rgba(251, 113, 133, 0.13);
+  --rose-border: rgba(251, 113, 133, 0.28);
+
+  --teal:        #2dd4bf;
+  --teal-soft:   rgba(45, 212, 191, 0.13);
+  --teal-border: rgba(45, 212, 191, 0.28);
+
+  --neutral:        #94a3b8;
+  --neutral-soft:   rgba(148, 163, 184, 0.12);
+  --neutral-border: rgba(148, 163, 184, 0.24);
+
+  /* ── Accounting semantics ──────────────────────────────────────────────── */
+  /* Positive matches success and negative matches rose, exactly as they do in
+     light mode — the two pairs are the same judgement, so they are the same
+     colour.
+
+     Debit and credit stay a matched cool pair carrying no judgement. In dark
+     they are sky and indigo: a teal credit would land within a few degrees of
+     the positive emerald, and a trial balance shows a credit column and a
+     signed balance side by side, where that ambiguity is expensive. */
+  --debit:    #7dd3fc;
+  --credit:   #c4b5fd;
+  --positive: #34d399;
+  --negative: #fb7185;
+
+  /* ── Report / chart series — calm cool ramp, one warm accent ───────────── */
+  --chart-1: #60a5fa;
+  --chart-2: #a5b4fc;
+  --chart-3: #38bdf8;
+  --chart-4: #2dd4bf;
+  --chart-5: #fbbf24;
+  --chart-grid: #1c2740;
+
+  /* ── Depth: gradients, glass, sheen ────────────────────────────────────── */
+  --gradient-app:
+    radial-gradient(1100px 580px at 10% -14%, rgba(47, 95, 224, 0.16), transparent 62%),
+    radial-gradient(900px 520px at 94% -6%, rgba(99, 102, 241, 0.10), transparent 58%),
+    radial-gradient(800px 460px at 60% 110%, rgba(45, 212, 191, 0.05), transparent 60%);
+  --gradient-primary:   linear-gradient(135deg, #2f5fe0 0%, #4338ca 100%);
+  --gradient-brand:     linear-gradient(135deg, #60a5fa 0%, #a5b4fc 55%, #38bdf8 100%);
+  --gradient-card:      linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0));
+  --gradient-nav-active:linear-gradient(90deg, rgba(96, 165, 250, 0.18), rgba(96, 165, 250, 0.04));
+
+  /* The sidebar and topbar both use `.glass`. Sitting it *below* the page
+     colour is what gives the shell its frame: chrome recedes, content comes
+     forward. Raised opacity keeps text on it crisp through the blur. */
+  --glass:        rgba(8, 12, 24, 0.80);
+  --glass-border: rgba(148, 163, 184, 0.14);
+  --shimmer:      rgba(255, 255, 255, 0.06);
+  --row-hover:    rgba(96, 165, 250, 0.06);
+
+  /* Navy-tinted rather than pure black. A black shadow over a navy surface
+     desaturates the edge it falls on and is what made cards look smudged. */
+  --shadow-xs: 0 1px 2px rgba(2, 5, 14, 0.36);
+  --shadow-sm: 0 1px 3px rgba(2, 5, 14, 0.46), 0 1px 2px rgba(2, 5, 14, 0.28);
+  --shadow-md: 0 4px 14px -4px rgba(2, 5, 14, 0.52), 0 2px 6px -3px rgba(2, 5, 14, 0.34);
+  --shadow-lg: 0 14px 34px -10px rgba(2, 5, 14, 0.62), 0 4px 12px -6px rgba(2, 5, 14, 0.40);
+  --shadow-xl: 0 28px 64px -16px rgba(2, 5, 14, 0.76);
+
+  --shadow-card:     0 1px 2px rgba(2, 5, 14, 0.42), 0 12px 30px -16px rgba(2, 5, 14, 0.70);
+  --shadow-floating: 0 26px 62px -20px rgba(2, 5, 14, 0.84), 0 6px 18px -8px rgba(2, 5, 14, 0.52);
+  --shadow-glow:     0 0 0 1px var(--primary-border), 0 14px 38px -12px var(--primary-glow);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   BASE
+   ════════════════════════════════════════════════════════════════════════════ */
 
 @layer base {
   * {
@@ -60,127 +341,766 @@
     box-sizing: border-box;
   }
 
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
-    @apply bg-page text-content font-sans antialiased;
+    @apply bg-background text-foreground font-sans antialiased;
     min-height: 100vh;
+    font-feature-settings: 'cv05' 1, 'ss03' 1;
+    /* The app wash sits behind everything and does not scroll away, which is
+       what keeps large empty pages from reading as flat grey. */
+    background-image: var(--gradient-app);
+    background-attachment: fixed;
+  }
+
+  /* Financial figures must align digit-for-digit down a column. */
+  th,
+  td,
+  input[type='number'] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1, h2, h3, h4 {
+    @apply text-foreground;
+    letter-spacing: -0.014em;
+  }
+
+  h1 { @apply text-2xl font-semibold; letter-spacing: -0.024em; }
+  h2 { @apply text-lg font-semibold; letter-spacing: -0.019em; }
+  h3 { @apply text-sm font-semibold; }
+
+  hr { @apply border-border; }
+
+  /* Native controls render with the correct theme via `color-scheme`; this
+     keeps dropdown popups legible without per-option colour classes. */
+  option {
+    @apply bg-surface text-foreground;
+  }
+
+  /* The ring settles in from slightly outside, so keyboard focus is felt as a
+     movement rather than appearing as a static box. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    animation: focus-ring var(--duration-fast) var(--ease-emphasized);
+  }
+
+  ::selection {
+    background: var(--primary-soft-hover);
+    color: var(--foreground);
   }
 
   ::-webkit-scrollbar {
-    width: 6px;
+    width: 10px;
+    height: 10px;
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-surface;
+    background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-surface-overlay rounded-full;
+    background: var(--border-strong);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-accent;
+    background: var(--subtle-foreground);
+    background-clip: content-box;
   }
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   MOTION KEYFRAMES
+
+   Kept here next to the duration/easing tokens so the whole motion system is
+   readable in one place. Tailwind exposes these as `animate-*` utilities.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes page-enter {
+  from { opacity: 0; transform: translate3d(0, 4px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes shimmer {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+
+@keyframes focus-ring {
+  from { outline-color: transparent; outline-offset: 7px; }
+}
+
+@keyframes marker-in {
+  from { opacity: 0; transform: scaleY(0.2); }
+  to   { opacity: 1; transform: scaleY(1); }
+}
+
+@keyframes aurora {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(3%, -4%, 0) scale(1.12); }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   COMPONENT PRIMITIVES
+   ════════════════════════════════════════════════════════════════════════════ */
+
 @layer components {
-  .glass-panel {
-    @apply bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-2xl;
+  /* ── Surfaces ────────────────────────────────────────────────────────── */
+
+  /* A card is a solid surface plus a top-edge sheen. The sheen is what stops
+     a flat fill from reading as a 2015 admin panel; it is deliberately faint.
+
+     Everything here is expressed as a utility rather than raw CSS because
+     `.card-interactive` and `.filter-bar` pull this rule in with `@apply`,
+     which only carries utilities across. */
+  .card {
+    @apply relative rounded-xl border border-border bg-surface bg-gradient-card shadow-card;
   }
 
-  .glass-panel-hover {
-    @apply glass-panel transition-all duration-300 hover:bg-white/[0.07] hover:border-white/[0.1] hover:shadow-lg hover:shadow-brand-500/5;
+  .card-interactive {
+    @apply card cursor-pointer transition-[transform,box-shadow,border-color]
+           duration-normal ease-emphasized
+           hover:-translate-y-0.5 hover:border-primary-border hover:shadow-glow
+           active:translate-y-0;
   }
 
-  .gradient-text {
-    @apply bg-gradient-to-r from-brand-400 via-brand-300 to-indigo-300 bg-clip-text text-transparent;
+  /* Opt-in hover lift for cards that are not themselves clickable. */
+  .card-lift {
+    @apply transition-[transform,box-shadow,border-color] duration-normal ease-emphasized
+           hover:-translate-y-0.5 hover:border-primary-border hover:shadow-glow;
   }
 
-  .input-field {
-    @apply w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/50 transition-all duration-200;
+  .panel {
+    @apply rounded-lg border border-border-subtle bg-surface-muted;
+  }
+
+  /* Frosted layer for chrome that floats over scrolling content. */
+  .glass {
+    background-color: var(--glass);
+    border-color: var(--glass-border);
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+  }
+
+  /* ── Typography helpers ──────────────────────────────────────────────── */
+
+  .page-title {
+    @apply text-xl font-semibold tracking-tight text-foreground;
+  }
+
+  .page-description {
+    @apply text-sm text-muted-foreground;
+  }
+
+  .section-title {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-xs font-medium text-muted-foreground;
+  }
+
+  .overline {
+    @apply text-[10px] font-semibold uppercase tracking-[0.09em] text-subtle-foreground;
+  }
+
+  .numeric {
+    font-variant-numeric: tabular-nums;
+    @apply tracking-tight;
+  }
+
+  .text-gradient {
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* ── Form controls ───────────────────────────────────────────────────── */
+
+  /* The focus treatment is a soft outward glow rather than a hard ring, and it
+     is written as a `focus:` utility so `.select` inherits it through @apply. */
+  .input {
+    @apply w-full rounded-lg border border-border bg-surface px-3 py-2
+           text-sm text-foreground placeholder:text-subtle-foreground
+           transition-[border-color,box-shadow,background-color]
+           duration-fast ease-standard
+           hover:border-border-strong
+           focus:border-primary-solid focus:outline-none
+           focus:shadow-[0_0_0_3px_var(--ring-soft)]
+           disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-subtle-foreground;
+  }
+
+  .input-invalid {
+    @apply border-danger-border focus:border-danger
+           focus:shadow-[0_0_0_3px_var(--ring-danger)];
+  }
+
+  .select {
+    @apply input cursor-pointer appearance-none bg-no-repeat pr-9;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%236a7a94' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+    background-position: right 0.65rem center;
+    background-size: 1rem;
+  }
+
+  /* The chevron is a data-URI, so it cannot read a CSS variable — this is the
+     one colour in the system that has to be repeated by hand. It tracks
+     `--subtle-foreground` for the active theme; if that token moves, move
+     these two with it. */
+  html.dark .select {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%237f92b2' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+  }
+
+  html[dir='rtl'] .select {
+    @apply pl-9 pr-3;
+    background-position: left 0.65rem center;
+  }
+
+  .field-error {
+    @apply mt-1.5 flex items-start gap-1.5 text-xs text-danger;
+    animation: slide-up var(--duration-fast) var(--ease-emphasized);
+  }
+
+  .field-hint {
+    @apply mt-1.5 text-xs text-subtle-foreground;
+  }
+
+  /* ── Buttons ─────────────────────────────────────────────────────────── */
+
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-2 whitespace-nowrap
+           rounded-lg px-3.5 py-2 text-sm font-medium
+           transition-[color,background-color,border-color,box-shadow,transform]
+           duration-fast ease-standard
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+           focus-visible:ring-offset-2 focus-visible:ring-offset-background
+           disabled:pointer-events-none disabled:opacity-50;
   }
 
   .btn-primary {
-    @apply w-full py-3.5 bg-gradient-to-r from-brand-600 to-brand-500 text-white font-semibold rounded-xl transition-all duration-300 hover:from-brand-500 hover:to-brand-400 hover:shadow-lg hover:shadow-brand-500/25 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none;
+    @apply btn bg-primary-solid bg-gradient-primary text-primary-foreground
+           shadow-[0_1px_2px_rgba(10,16,32,0.12),0_6px_16px_-8px_var(--primary-glow)]
+           hover:brightness-110
+           hover:shadow-[0_1px_2px_rgba(10,16,32,0.14),0_10px_24px_-8px_var(--primary-glow)];
+  }
+
+  .btn-secondary {
+    @apply btn border border-border bg-secondary text-secondary-foreground
+           hover:border-border-strong hover:bg-secondary-hover;
+  }
+
+  .btn-ghost {
+    @apply btn text-muted-foreground hover:bg-surface-overlay hover:text-foreground;
+  }
+
+  .btn-danger {
+    @apply btn bg-danger-solid text-primary-foreground shadow-xs
+           hover:bg-danger-solid-hover;
+  }
+
+  .btn-danger-ghost {
+    @apply btn border border-danger-border bg-danger-soft text-danger
+           hover:border-danger;
+  }
+
+  /* Workflow action button whose colour comes from a `tone-*` class, so a
+     status-driven action (review / post / void / reverse) keeps its meaning
+     without introducing another hardcoded palette. */
+  .btn-tone {
+    @apply btn border;
+    color: var(--tone-fg, var(--primary));
+    background-color: var(--tone-soft, var(--primary-soft));
+    border-color: var(--tone-border, var(--primary-border));
+  }
+
+  .btn-tone:hover:not(:disabled) {
+    border-color: var(--tone-fg, var(--primary));
+  }
+
+  .btn-sm {
+    @apply gap-1.5 rounded-md px-2.5 py-1.5 text-xs;
+  }
+
+  .btn-lg {
+    @apply px-5 py-2.5 text-sm;
+  }
+
+  .btn-block {
+    @apply w-full;
+  }
+
+  /* Compact square button used for icon-only affordances. */
+  .btn-icon {
+    @apply btn h-9 w-9 p-0 text-muted-foreground
+           hover:bg-surface-overlay hover:text-foreground;
+  }
+
+  /* Press is a physical cue, so every variant gets it. Listed explicitly
+     because some call sites use a variant class on its own rather than
+     alongside `.btn`. */
+  :is(
+    .btn,
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .btn-danger,
+    .btn-danger-ghost,
+    .btn-tone,
+    .btn-icon
+  ):active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  /* ── Badges / status chips ───────────────────────────────────────────── */
+
+  .badge {
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full border
+           px-2 py-0.5 text-[11px] font-semibold leading-5;
+    color: var(--tone-fg, var(--neutral));
+    background-color: var(--tone-soft, var(--neutral-soft));
+    border-color: var(--tone-border, var(--neutral-border));
+  }
+
+  .badge-uppercase {
+    @apply text-[10px] uppercase tracking-[0.06em];
+  }
+
+  .tone-neutral { --tone-fg: var(--neutral); --tone-soft: var(--neutral-soft); --tone-border: var(--neutral-border); }
+  .tone-primary { --tone-fg: var(--primary); --tone-soft: var(--primary-soft); --tone-border: var(--primary-border); }
+  .tone-success { --tone-fg: var(--success); --tone-soft: var(--success-soft); --tone-border: var(--success-border); }
+  .tone-warning { --tone-fg: var(--warning); --tone-soft: var(--warning-soft); --tone-border: var(--warning-border); }
+  .tone-danger  { --tone-fg: var(--danger);  --tone-soft: var(--danger-soft);  --tone-border: var(--danger-border); }
+  .tone-info    { --tone-fg: var(--info);    --tone-soft: var(--info-soft);    --tone-border: var(--info-border); }
+  .tone-violet  { --tone-fg: var(--violet);  --tone-soft: var(--violet-soft);  --tone-border: var(--violet-border); }
+  .tone-rose    { --tone-fg: var(--rose);    --tone-soft: var(--rose-soft);    --tone-border: var(--rose-border); }
+  .tone-teal    { --tone-fg: var(--teal);    --tone-soft: var(--teal-soft);    --tone-border: var(--teal-border); }
+
+  /* Callout blocks reuse the same tone variables as badges. */
+  .callout {
+    @apply flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-sm;
+    color: var(--tone-fg, var(--neutral));
+    background-color: var(--tone-soft, var(--neutral-soft));
+    border-color: var(--tone-border, var(--neutral-border));
+  }
+
+  /* ── Tables ──────────────────────────────────────────────────────────── */
+
+  .table-wrap {
+    @apply w-full overflow-x-auto;
+  }
+
+  .data-table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  .data-table thead th {
+    @apply sticky top-0 z-10 whitespace-nowrap border-b border-border
+           bg-surface-muted px-4 py-2.5 text-left text-[11px] font-semibold
+           uppercase tracking-[0.07em] text-subtle-foreground;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  /* Row headers are included deliberately. A `<th scope="row">` is the correct
+     markup for the cell that names the row, but without this it was the one
+     cell in the system receiving no padding — so its text ran flush into the
+     next column and looked clipped. */
+  .data-table tbody td,
+  .data-table tbody th {
+    @apply border-b border-border-subtle px-4 py-3 align-middle text-foreground;
+  }
+
+  .data-table tbody tr {
+    transition:
+      background-color var(--duration-fast) var(--ease-standard),
+      box-shadow var(--duration-fast) var(--ease-standard);
+  }
+
+  /* Hover paints a tinted row and lights an accent bar on the leading edge,
+     so the eye can track across a wide financial table. The bar uses
+     `--primary` rather than `--primary-solid`: the solid tone is a button
+     fill chosen to carry white text, which on a dark row is barely lighter
+     than the row itself. `--primary` is the tone picked to be legible
+     *against* a surface, which is exactly what this marker has to do. */
+  .data-table tbody tr:hover {
+    background-color: var(--row-hover);
+    box-shadow: inset 3px 0 0 0 var(--primary);
+  }
+
+  html[dir='rtl'] .data-table tbody tr:hover {
+    box-shadow: inset -3px 0 0 0 var(--primary);
+  }
+
+  .data-table tbody tr:last-child td,
+  .data-table tbody tr:last-child th {
+    @apply border-b-0;
+  }
+
+  /* Totals carry the answer the report exists to give, so they are set a step
+     larger and heavier than the data above and separated by a hard rule. */
+  .data-table tfoot td,
+  .data-table .row-total td,
+  .data-table td.cell-total {
+    @apply border-t-2 border-border-strong bg-surface-sunken px-4 py-4
+           text-[15px] font-bold text-foreground;
+  }
+
+  .data-table tfoot tr:hover {
+    background-color: transparent;
+    box-shadow: none;
+  }
+
+  /* Grand totals sit below the section subtotals and must win the comparison. */
+  .data-table tfoot tr.row-grand td {
+    @apply text-base;
+    background-color: var(--surface-overlay);
+  }
+
+  .cell-numeric {
+    @apply whitespace-nowrap text-right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Signed amounts ─────────────────────────────────────────────────────
+     A figure only earns one of these colours when its sign is real: balances,
+     movements, differences, bottom lines. Debit and credit columns keep the
+     cool --debit / --credit pair, because a credit is not a gain. */
+  .amount-positive,
+  .amount-negative,
+  .amount-zero {
+    @apply whitespace-nowrap tracking-tight;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .amount-positive {
+    @apply text-positive;
+  }
+
+  .amount-negative {
+    @apply text-negative;
+  }
+
+  .amount-zero {
+    @apply text-subtle-foreground;
+  }
+
+  /* Keeps a wide financial table's primary actions reachable without a
+     horizontal scroll: the last column rides along the trailing edge. It needs
+     its own opaque fill because the row underneath scrolls past it. */
+  .data-table .cell-sticky-end {
+    position: sticky;
+    inset-inline-end: 0;
+    z-index: 1;
+    background-color: var(--surface);
+  }
+
+  .data-table thead th.cell-sticky-end {
+    z-index: 11;
+    background-color: var(--surface-muted);
+  }
+
+  .data-table tbody tr:hover .cell-sticky-end {
+    /* Layered over the opaque fill so the translucent row tint still reads. */
+    background-image: linear-gradient(var(--row-hover), var(--row-hover));
+  }
+
+  .data-table .cell-sticky-end::before {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 1px;
+    background-color: var(--border);
+  }
+
+  html[dir='rtl'] .data-table thead th,
+  html[dir='rtl'] .data-table tbody td {
+    @apply text-right;
+  }
+
+  html[dir='rtl'] .cell-numeric {
+    @apply text-left;
+  }
+
+  /* ── Layout chrome ───────────────────────────────────────────────────── */
+
+  .filter-bar {
+    @apply card flex flex-wrap items-end gap-3 p-4;
+  }
+
+  .modal-backdrop {
+    @apply fixed inset-0 z-50;
+    background-color: var(--backdrop);
+    backdrop-filter: blur(6px) saturate(120%);
+    -webkit-backdrop-filter: blur(6px) saturate(120%);
+  }
+
+  .modal-panel {
+    @apply relative z-50 w-full overflow-hidden rounded-xl border border-border bg-surface;
+    background-image: var(--gradient-card);
+    box-shadow: var(--shadow-floating);
+  }
+
+  .modal-header {
+    @apply flex items-start justify-between gap-4 border-b border-border px-6 py-4;
+  }
+
+  .modal-footer {
+    @apply flex items-center justify-end gap-2.5 border-t border-border
+           bg-surface-muted px-6 py-4;
+  }
+
+  /* ── Navigation ──────────────────────────────────────────────────────── */
+
+  .nav-item {
+    @apply relative flex w-full items-center gap-3 overflow-hidden rounded-lg
+           px-3 py-2 text-sm font-medium text-muted-foreground
+           hover:text-foreground;
+    transition:
+      color var(--duration-fast) var(--ease-standard),
+      background-color var(--duration-fast) var(--ease-standard),
+      transform var(--duration-fast) var(--ease-emphasized);
+  }
+
+  .nav-item:hover {
+    background-color: var(--surface-overlay);
+  }
+
+  /* The single source of truth for shell icon size. Lucide ships width/height
+     attributes of 24px on every SVG, so any icon that reaches the shell without
+     an explicit size renders a third too large. Declaring it once here — rather
+     than repeating a utility pair at each call site — means active, hover,
+     collapsed, expanded, light and dark all resolve to the same box, and a new
+     nav entry cannot drift. */
+  .nav-icon {
+    @apply h-[18px] w-[18px] flex-shrink-0;
+  }
+
+  /* Nudging on hover makes the sidebar feel responsive without moving layout. */
+  .nav-item:hover :where(svg) {
+    transform: scale(1.08);
+  }
+
+  .nav-item :where(svg) {
+    transition: transform var(--duration-fast) var(--ease-emphasized);
+    /* Belt and braces: even an icon that forgets `.nav-icon` cannot blow the
+       row open, because scale is a paint-time transform and this is the box. */
+    @apply h-[18px] w-[18px] flex-shrink-0;
+  }
+
+  .nav-item-active {
+    @apply text-primary;
+    background-image: var(--gradient-nav-active);
+  }
+
+  .nav-item-active:hover {
+    @apply text-primary;
+    background-color: transparent;
+  }
+
+  /* The marker is the single strongest "you are here" signal in the shell. */
+  .nav-item-active::before {
+    content: '';
+    position: absolute;
+    inset-inline-start: 0;
+    top: 20%;
+    bottom: 20%;
+    width: 3px;
+    border-radius: 999px;
+    background: var(--gradient-brand);
+    animation: marker-in var(--duration-normal) var(--ease-emphasized);
+  }
+
+  /* ── Loading ─────────────────────────────────────────────────────────── */
+
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-surface-overlay;
+  }
+
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(90deg, transparent, var(--shimmer), transparent);
+    animation: shimmer 1.5s var(--ease-standard) infinite;
   }
 }
 
-/* ── RTL / Arabic Language Support ── */
-html.lang-ar {
-  font-family: 'Thabit', 'Noto Sans Arabic', 'Segoe UI', 'Arial', system-ui, sans-serif;
+/* ════════════════════════════════════════════════════════════════════════════
+   ANIMATION UTILITIES
+
+   Declared outside `@layer components` so they always win over a component
+   class that also sets `animation`, and so `motion-safe:` / `motion-reduce:`
+   variants compose with them.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fade-in var(--duration-normal) var(--ease-standard) both;
+  }
+
+  .animate-slide-up {
+    animation: slide-up var(--duration-normal) var(--ease-emphasized) both;
+  }
+
+  .animate-scale-in {
+    animation: scale-in var(--duration-fast) var(--ease-emphasized) both;
+  }
+
+  .animate-shimmer {
+    animation: shimmer 1.5s var(--ease-standard) infinite;
+  }
+
+  .animate-aurora {
+    animation: aurora 14s var(--ease-standard) infinite;
+  }
+
+  /* Every page mounts through this. It used to reuse slide-up — 320ms and a
+     10px lift — which was legible as movement back when the whole window was
+     being replaced anyway. Now that the shell holds still, that same travel
+     reads as the content jumping. A 4px settle over 160ms acknowledges the
+     change without performing it. */
+  .page-enter {
+    animation: page-enter var(--duration-page) var(--ease-out) both;
+  }
+
+  /* Reserves the corner the assistant launcher occupies, so a report's closing
+     totals and a table's pagination are never parked underneath it. */
+  .pb-safe-fab {
+    padding-bottom: var(--fab-safe-area);
+  }
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   PRINT — financial reports are routinely printed or saved as PDF.
+   Force a light, ink-efficient rendering and drop app chrome, gradients,
+   glass and shadows.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+@media print {
+  html.dark {
+    color-scheme: light;
+    --background: #ffffff;
+    --surface: #ffffff;
+    --surface-muted: #f5f5f5;
+    --surface-raised: #ffffff;
+    --surface-overlay: #eeeeee;
+    --foreground: #111111;
+    --muted-foreground: #333333;
+    --subtle-foreground: #555555;
+    --border: #cccccc;
+    --border-subtle: #dddddd;
+    --border-strong: #999999;
+  }
+
+  body {
+    background: #ffffff;
+    background-image: none;
+  }
+
+  aside,
+  header,
+  .no-print {
+    display: none !important;
+  }
+
+  .card,
+  .modal-panel,
+  .filter-bar {
+    background-image: none !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  .glass {
+    backdrop-filter: none !important;
+    background: #ffffff !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   RTL / ARABIC SUPPORT
+   ════════════════════════════════════════════════════════════════════════════ */
+
+html.lang-ar,
 html.lang-ar body {
   font-family: 'Thabit', 'Noto Sans Arabic', 'Segoe UI', 'Arial', system-ui, sans-serif;
 }
 
-/* RTL sidebar position */
-html[dir="rtl"] aside {
-  left: auto;
-  right: 0;
-}
+html[dir='rtl'] .text-left { text-align: right; }
+html[dir='rtl'] .text-right { text-align: left; }
 
-/* RTL sidebar slide on mobile */
-html[dir="rtl"] aside {
-  transform: translateX(100%);
-}
-
-html[dir="rtl"] aside.translate-x-0,
-html[dir="rtl"] aside[style*="translate"] {
-  transform: translateX(0);
-}
-
-@media (min-width: 1024px) {
-  html[dir="rtl"] aside {
-    transform: translateX(0);
-  }
-}
-
-/* RTL border adjustments for sidebar */
-html[dir="rtl"] aside {
-  border-right: none;
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-/* RTL collapse button position */
-html[dir="rtl"] aside button[class*="-right-3"] {
-  right: auto;
-  left: -0.75rem;
-}
-
-/* RTL text alignment fixes */
-html[dir="rtl"] .text-left {
+html[dir='rtl'] input,
+html[dir='rtl'] textarea {
   text-align: right;
 }
 
-html[dir="rtl"] .text-right {
-  text-align: left;
-}
-
-/* RTL flex row reverse for specific patterns */
-html[dir="rtl"] input,
-html[dir="rtl"] textarea {
-  text-align: right;
-}
-
-html[dir="rtl"] input[type="email"],
-html[dir="rtl"] input[type="number"] {
+html[dir='rtl'] input[type='email'],
+html[dir='rtl'] input[type='number'],
+html[dir='rtl'] input[type='date'] {
   text-align: left;
   direction: ltr;
 }
 
-/* RTL scrollbar position */
-html[dir="rtl"] ::-webkit-scrollbar {
-  direction: rtl;
-}
+html[dir='rtl'] .ml-auto { margin-left: 0; margin-right: auto; }
+html[dir='rtl'] .mr-auto { margin-right: 0; margin-left: auto; }
 
-/* RTL margin/padding logical adjustments */
-html[dir="rtl"] .ml-auto {
-  margin-left: 0;
-  margin-right: auto;
-}
+/* ════════════════════════════════════════════════════════════════════════════
+   REDUCED MOTION
 
-html[dir="rtl"] .mr-auto {
-  margin-right: 0;
-  margin-left: auto;
-}
+   Everything above is decorative. When the OS asks for less motion we collapse
+   durations to a hair rather than deleting the styles, so nothing that depends
+   on an animation's end state (opacity, transform) is left mid-flight.
+   ════════════════════════════════════════════════════════════════════════════ */
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .card-interactive:hover,
+  .card-lift:hover,
+  .nav-item:hover :where(svg),
+  :is(.btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger, .btn-danger-ghost,
+      .btn-tone, .btn-icon):active:not(:disabled) {
+    transform: none !important;
+  }
+
+  .skeleton::after {
+    display: none;
+  }
+
+  /* The route transition is decorative by definition — the content is already
+     correct without it. Tailwind's `motion-safe:` prefix means the class is
+     never applied under this preference, but the rule is stated outright so the
+     guarantee does not depend on the call site remembering the prefix. */
+  .page-enter {
+    animation: none !important;
+  }
+}

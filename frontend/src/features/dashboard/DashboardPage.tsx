@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import PageLayout from '../../components/layout/PageLayout';
 import DashboardMetricCard from '../../components/ui/DashboardMetricCard';
+import MoneyAmount from '../../components/ui/MoneyAmount';
 import ChartCard from '../../components/charts/ChartCard';
 import LoadingState from '../../components/feedback/LoadingState';
 import ErrorState from '../../components/feedback/ErrorState';
@@ -90,188 +91,149 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
 
       {/* Dashboard content */}
       {!isLoading && !error && (
-        <>
-          {/* Hero financial panel */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="glass-panel relative overflow-hidden mb-6"
-          >
-            <div className="absolute top-0 right-0 w-72 h-72 bg-brand-500/[0.04] rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
-            <div className="relative p-6 lg:p-8">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-                <div>
-                  <h1 className="text-2xl font-bold text-white mb-1">{t.dashboard.financialOverview}</h1>
-                  <p className="text-sm text-gray-400">
-                    {t.dashboard.realtimePosition} {selectedCompany?.name || ''}
-                  </p>
-                  <p className="text-[10px] text-gray-600 mt-0.5 italic">
-                    {t.geminiAssistant.postedEntriesOnly}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {isBalanced ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      {t.dashboard.balanced}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold">
-                      <XCircle className="w-3.5 h-3.5" />
-                      {t.dashboard.unbalanced}
-                    </span>
-                  )}
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
-                    netIncome >= 0
-                      ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-                      : 'bg-red-500/10 border border-red-500/20 text-red-400'
-                  }`}>
-                    {netIncome >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                    {netIncome >= 0 ? t.dashboard.profit : t.dashboard.loss}
-                  </span>
-                </div>
+        <div className="space-y-8">
+          <section>
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="page-title">{t.dashboard.financialOverview}</h2>
+                <p className="page-description">
+                  {t.dashboard.realtimePosition} {selectedCompany?.name || ''}
+                </p>
+                <p className="mt-1 text-xs text-subtle-foreground">
+                  {t.geminiAssistant.postedEntriesOnly}
+                </p>
               </div>
-
-              {/* Key figures row */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-                  <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">{t.dashboard.netIncome}</p>
-                  <p className={`text-2xl font-bold tracking-tight ${netIncome >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {formatCurrency(netIncome)}
-                  </p>
-                </div>
-                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-                  <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">{t.dashboard.totalAssets}</p>
-                  <p className="text-2xl font-bold text-white tracking-tight">{formatCurrency(totalAssets)}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-                  <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">{t.dashboard.totalLiabilities}</p>
-                  <p className="text-2xl font-bold text-white tracking-tight">{formatCurrency(totalLiabilities)}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-                  <p className="text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">{t.dashboard.totalEquity}</p>
-                  <p className="text-2xl font-bold text-white tracking-tight">{formatCurrency(totalEquityAndEarnings)}</p>
-                </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`badge ${isBalanced ? 'tone-success' : 'tone-warning'}`}>
+                  {isBalanced ? (
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  ) : (
+                    <XCircle className="h-3.5 w-3.5" />
+                  )}
+                  {isBalanced ? t.dashboard.balanced : t.dashboard.unbalanced}
+                </span>
+                <span className={`badge ${netIncome >= 0 ? 'tone-success' : 'tone-danger'}`}>
+                  {netIncome >= 0 ? (
+                    <TrendingUp className="h-3.5 w-3.5" />
+                  ) : (
+                    <TrendingDown className="h-3.5 w-3.5" />
+                  )}
+                  {netIncome >= 0 ? t.dashboard.profit : t.dashboard.loss}
+                </span>
               </div>
             </div>
-          </motion.div>
 
-          {/* Metric cards grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <DashboardMetricCard
-              label={t.dashboard.totalAssets}
-              value={formatCurrency(totalAssets)}
-              icon={Landmark}
-              index={0}
-              trend="neutral"
-              iconColor="text-blue-400"
-            />
-            <DashboardMetricCard
-              label={t.dashboard.totalLiabilities}
-              value={formatCurrency(totalLiabilities)}
-              icon={HandCoins}
-              index={1}
-              trend="neutral"
-              iconColor="text-amber-400"
-            />
-            <DashboardMetricCard
-              label={t.dashboard.totalEquity}
-              value={formatCurrency(totalEquityAndEarnings)}
-              icon={Scale}
-              index={2}
-              trend="neutral"
-              iconColor="text-violet-400"
-            />
-            <DashboardMetricCard
-              label={t.dashboard.netIncome}
-              value={formatCurrency(netIncome)}
-              icon={netIncome >= 0 ? TrendingUp : TrendingDown}
-              index={3}
-              trend={netIncome >= 0 ? 'up' : 'down'}
-              chip={netIncome >= 0 ? t.dashboard.profit : t.dashboard.loss}
-              chipColor={netIncome >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}
-              iconColor={netIncome >= 0 ? 'text-emerald-400' : 'text-red-400'}
-            />
-          </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <DashboardMetricCard
+                label={t.dashboard.totalAssets}
+                value={formatCurrency(totalAssets)}
+                icon={Landmark}
+                index={0}
+                tone="info"
+              />
+              <DashboardMetricCard
+                label={t.dashboard.totalLiabilities}
+                value={formatCurrency(totalLiabilities)}
+                icon={HandCoins}
+                index={1}
+                tone="warning"
+              />
+              <DashboardMetricCard
+                label={t.dashboard.totalEquity}
+                value={formatCurrency(totalEquityAndEarnings)}
+                icon={Scale}
+                index={2}
+                tone="violet"
+              />
+              <DashboardMetricCard
+                label={t.dashboard.netIncome}
+                value={<MoneyAmount value={netIncome} showPlus compact />}
+                icon={netIncome >= 0 ? TrendingUp : TrendingDown}
+                index={3}
+                tone={netIncome >= 0 ? 'success' : 'danger'}
+                chip={netIncome >= 0 ? t.dashboard.profit : t.dashboard.loss}
+              />
+            </div>
+          </section>
 
-          {/* Secondary metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-            <DashboardMetricCard
-              label={t.dashboard.trialBalance}
-              value={isBalanced ? t.dashboard.balanced : t.dashboard.unbalanced}
-              icon={BarChart3}
-              index={4}
-              chip={isBalanced ? t.dashboard.ok : t.dashboard.warning}
-              chipColor={isBalanced ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}
-              iconColor="text-blue-400"
-            />
-            <DashboardMetricCard
-              label={t.dashboard.journalEntries}
-              value={journalCount.toLocaleString()}
-              icon={BookOpen}
-              index={5}
-              iconColor="text-amber-400"
-            />
-            <DashboardMetricCard
-              label={t.dashboard.accounts}
-              value={accountCount.toLocaleString()}
-              icon={Receipt}
-              index={6}
-              iconColor="text-rose-400"
-            />
-          </div>
+          <section>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <DashboardMetricCard
+                label={t.dashboard.trialBalance}
+                value={isBalanced ? t.dashboard.balanced : t.dashboard.unbalanced}
+                icon={BarChart3}
+                index={0}
+                tone="info"
+                chip={isBalanced ? t.dashboard.ok : t.dashboard.warning}
+                chipTone={isBalanced ? 'success' : 'warning'}
+              />
+              <DashboardMetricCard
+                label={t.dashboard.journalEntries}
+                value={journalCount.toLocaleString()}
+                icon={BookOpen}
+                index={1}
+                tone="teal"
+              />
+              <DashboardMetricCard
+                label={t.dashboard.accounts}
+                value={accountCount.toLocaleString()}
+                icon={Receipt}
+                index={2}
+                tone="primary"
+              />
+            </div>
+          </section>
 
-          {/* Charts section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Revenue vs Expenses chart */}
+          <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <RevenueExpensesChart pl={pl} t={t} />
-
-            {/* Financial Composition chart */}
             <FinancialCompositionChart bs={bs} t={t} />
 
-            {/* Recent journal entries */}
             <motion.div
-              initial={{ opacity: 0, y: 15 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.6 }}
-              className="glass-panel p-6"
+              transition={{ duration: 0.4, delay: 0.2 }}
+              className="card p-5"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-amber-400" />
-                  <h3 className="text-sm font-semibold text-white">{t.dashboard.recentJournalEntries}</h3>
-                </div>
-                <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="section-title">{t.dashboard.recentJournalEntries}</h3>
+                <span className="overline">
                   {journalCount} {t.common.total}
                 </span>
               </div>
               {data.journalEntries && data.journalEntries.items.length > 0 ? (
-                <div className="space-y-2">
+                <ul className="divide-y divide-border-subtle">
                   {data.journalEntries.items.map((je) => (
-                    <div key={je.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                    <li key={je.id} className="flex items-center justify-between gap-3 py-2.5">
                       <div className="min-w-0">
-                        <p className="text-sm text-gray-200 truncate">{je.description || je.entry_no || `Entry #${je.id}`}</p>
-                        <p className="text-[11px] text-gray-500">{new Date(je.entry_date).toLocaleDateString()}</p>
+                        <p className="truncate text-sm text-foreground">
+                          {je.description || je.entry_no || `Entry #${je.id}`}
+                        </p>
+                        <p className="numeric text-xs text-subtle-foreground">
+                          {new Date(je.entry_date).toLocaleDateString()}
+                        </p>
                       </div>
-                      <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${
-                        je.status === 'posted'
-                          ? 'bg-emerald-500/10 text-emerald-400'
-                          : je.status === 'draft'
-                            ? 'bg-gray-500/10 text-gray-400'
-                            : 'bg-amber-500/10 text-amber-400'
-                      }`}>
+                      <span
+                        className={`badge badge-uppercase flex-shrink-0 ${
+                          je.status === 'posted'
+                            ? 'tone-success'
+                            : je.status === 'draft'
+                              ? 'tone-neutral'
+                              : 'tone-warning'
+                        }`}
+                      >
                         {je.status}
                       </span>
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ul>
               ) : (
-                <p className="text-sm text-gray-500 text-center py-6">{t.dashboard.noJournalEntriesYet}</p>
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  {t.dashboard.noJournalEntriesYet}
+                </p>
               )}
             </motion.div>
-          </div>
-        </>
+          </section>
+        </div>
       )}
     </>
   );
@@ -281,10 +243,10 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
 function ChartTooltipContent({ active, payload, label }: { active?: boolean; payload?: { value: number; fill: string; name: string }[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-gray-900/95 border border-white/10 rounded-lg px-3 py-2 shadow-xl">
-      <p className="text-xs text-gray-400 mb-1">{label}</p>
+    <div className="glass rounded-xl border px-3 py-2 shadow-floating">
+      <p className="text-xs text-muted-foreground mb-1">{label}</p>
       {payload.map((p, i) => (
-        <p key={i} className="text-sm font-semibold" style={{ color: p.fill }}>
+        <p key={i} className="text-sm font-semibold numeric" style={{ color: p.fill }}>
           {p.name}: {p.value?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </p>
       ))}
@@ -300,9 +262,9 @@ function RevenueExpensesChart({ pl, t }: { pl: DashboardContentProps['selectedCo
     const expenses = parseFloat(String(pl.total_expenses)) || 0;
     const net = parseFloat(String(pl.net_profit)) || 0;
     return [
-      { name: t.charts.revenue, value: income, fill: '#34d399' },
-      { name: t.charts.expenses, value: Math.abs(expenses), fill: '#f87171' },
-      { name: t.charts.netIncome, value: net, fill: net >= 0 ? '#34d399' : '#f87171' },
+      { name: t.charts.revenue, value: income, fill: 'var(--success)' },
+      { name: t.charts.expenses, value: Math.abs(expenses), fill: 'var(--danger)' },
+      { name: t.charts.netIncome, value: net, fill: net >= 0 ? 'var(--success)' : 'var(--danger)' },
     ];
   }, [pl, t]);
 
@@ -316,10 +278,10 @@ function RevenueExpensesChart({ pl, t }: { pl: DashboardContentProps['selectedCo
     >
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }} barSize={48}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-          <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
-          <Tooltip content={<ChartTooltipContent />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+          <XAxis dataKey="name" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+          <Tooltip content={<ChartTooltipContent />} cursor={{ fill: 'var(--surface-muted)' }} />
           <Bar dataKey="value" radius={[6, 6, 0, 0]}>
             {chartData.map((entry, index) => (
               <Cell key={index} fill={entry.fill} />
@@ -337,9 +299,9 @@ function FinancialCompositionChart({ bs, t }: { bs: ReturnType<typeof useDashboa
     if (!bs) return [];
     const equity = parseFloat(String(bs.total_equity)) || 0;
     return [
-      { name: t.charts.assets, value: parseFloat(String(bs.total_assets)) || 0, fill: '#60a5fa' },
-      { name: t.charts.liabilities, value: parseFloat(String(bs.total_liabilities)) || 0, fill: '#fbbf24' },
-      { name: t.charts.equity, value: equity, fill: '#a78bfa' },
+      { name: t.charts.assets, value: parseFloat(String(bs.total_assets)) || 0, fill: 'var(--info)' },
+      { name: t.charts.liabilities, value: parseFloat(String(bs.total_liabilities)) || 0, fill: 'var(--warning)' },
+      { name: t.charts.equity, value: equity, fill: 'var(--violet)' },
     ];
   }, [bs, t]);
 
@@ -353,10 +315,10 @@ function FinancialCompositionChart({ bs, t }: { bs: ReturnType<typeof useDashboa
     >
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }} barSize={48}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-          <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
-          <Tooltip content={<ChartTooltipContent />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+          <XAxis dataKey="name" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+          <Tooltip content={<ChartTooltipContent />} cursor={{ fill: 'var(--surface-muted)' }} />
           <Bar dataKey="value" radius={[6, 6, 0, 0]}>
             {chartData.map((entry, index) => (
               <Cell key={index} fill={entry.fill} />

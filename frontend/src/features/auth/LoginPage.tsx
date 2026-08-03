@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { AlertCircle, Eye, EyeOff, Loader2, Scale } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { useI18n } from '../../i18n';
-import { Scale, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
+import { ThemeToggleButton } from '../../components/ui/ThemeToggle';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -37,145 +38,121 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-surface-900 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background effects */}
-      <div className="absolute inset-0">
-        <div className="absolute top-1/4 -left-32 w-96 h-96 bg-brand-600/8 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-violet-600/6 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand-500/3 rounded-full blur-3xl" />
+    <div className="relative flex min-h-screen flex-col overflow-hidden">
+      {/* Decorative light field. Three slow-drifting blobs read as depth behind
+          the glass card; they are purely presentational. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute -left-40 -top-40 h-[34rem] w-[34rem] rounded-full bg-primary-solid opacity-[0.18] blur-[120px] motion-safe:animate-aurora" />
+        <div
+          className="absolute -right-32 top-10 h-[30rem] w-[30rem] rounded-full bg-violet opacity-[0.16] blur-[120px] motion-safe:animate-aurora"
+          style={{ animationDelay: '-5s' }}
+        />
+        <div
+          className="absolute bottom-[-14rem] left-1/3 h-[28rem] w-[28rem] rounded-full bg-info opacity-[0.14] blur-[120px] motion-safe:animate-aurora"
+          style={{ animationDelay: '-9s' }}
+        />
       </div>
 
-      {/* Grid pattern overlay */}
-      <div
-        className="absolute inset-0 opacity-[0.015]"
-        style={{
-          backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
-                           linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-          backgroundSize: '64px 64px',
-        }}
-      />
+      <div className="flex justify-end p-4">
+        <ThemeToggleButton />
+      </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.6, ease: 'easeOut' }}
-        className="w-full max-w-md relative z-10"
-      >
-        {/* Logo */}
+      <div className="flex flex-1 items-center justify-center px-4 pb-16">
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="text-center mb-8"
+          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          className="w-full max-w-sm"
         >
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-2xl shadow-brand-500/30 mb-4">
-            <Scale className="w-7 h-7 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
-            {t.login.title.split(' ').length > 1
-              ? <>{t.login.title.split(' ').slice(0, -1).join(' ')} <span className="gradient-text">{t.login.title.split(' ').slice(-1)[0]}</span></>
-              : t.login.title
-            }
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">{t.login.subtitle}</p>
-        </motion.div>
-
-        {/* Login Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="glass-panel p-8"
-        >
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-white">{t.login.welcomeBack}</h2>
-            <p className="text-gray-400 text-sm mt-1">{t.login.signInPrompt}</p>
+          <div className="mb-8 text-center">
+            <span className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-brand text-white shadow-[0_18px_40px_-12px_var(--primary-glow)]">
+              <Scale className="h-7 w-7" />
+            </span>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">{t.login.title}</h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">{t.login.subtitle}</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Error message */}
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -5 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20"
-              >
-                <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                <p className="text-sm text-red-300">{error}</p>
-              </motion.div>
-            )}
-
-            {/* Email */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
-                {t.login.emailLabel}
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder={t.login.emailPlaceholder}
-                required
-                autoComplete="email"
-                className="input-field"
-              />
+          <div className="glass rounded-xl border p-7 shadow-floating">
+            <div className="mb-6">
+              <h2 className="text-base font-semibold text-foreground">{t.login.welcomeBack}</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">{t.login.signInPrompt}</p>
             </div>
 
-            {/* Password */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
-                {t.login.passwordLabel}
-              </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={t.login.passwordPlaceholder}
-                  required
-                  autoComplete="current-password"
-                  className="input-field pr-11"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+            <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  role="alert"
+                  id="login-error"
+                  className="callout tone-danger"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="btn-primary flex items-center justify-center gap-2"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>{t.login.signingIn}</span>
-                </>
-              ) : (
-                <span>{t.login.signIn}</span>
+                  <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                  <span>{error}</span>
+                </motion.div>
               )}
-            </button>
-          </form>
-        </motion.div>
 
-        {/* Footer */}
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-          className="text-center text-xs text-gray-600 mt-6"
-        >
-          {t.login.footer}
-        </motion.p>
-      </motion.div>
+              <div>
+                <label htmlFor="email" className="field-label">
+                  {t.login.emailLabel}
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={t.login.emailPlaceholder}
+                  required
+                  autoComplete="email"
+                  aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? 'login-error' : undefined}
+                  className={`input ${error ? 'input-invalid' : ''}`}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="password" className="field-label">
+                  {t.login.passwordLabel}
+                </label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={t.login.passwordPlaceholder}
+                    required
+                    autoComplete="current-password"
+                    aria-invalid={error ? true : undefined}
+                    aria-describedby={error ? 'login-error' : undefined}
+                    className={`input pe-11 ${error ? 'input-invalid' : ''}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? t.login.hidePassword : t.login.showPassword}
+                    aria-pressed={showPassword}
+                    className="absolute end-1.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-subtle-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="btn btn-primary btn-block btn-lg"
+              >
+                {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isLoading ? t.login.signingIn : t.login.signIn}
+              </button>
+            </form>
+          </div>
+
+          <p className="mt-6 text-center text-xs text-subtle-foreground">{t.login.footer}</p>
+        </motion.div>
+      </div>
     </div>
   );
 }

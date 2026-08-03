@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useId } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Receipt, Search, Sprout, Loader2, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import PageLayout from '../../components/layout/PageLayout';
 import { AccountTypeBadge, useAccounts } from '../../entities/account';
 import PaginationControls from '../../components/ui/PaginationControls';
@@ -8,16 +9,7 @@ import ErrorState from '../../components/feedback/ErrorState';
 import EmptyState from '../../components/feedback/EmptyState';
 import { useI18n } from '../../i18n';
 import { canManageAccounts } from '../../auth/permissions';
-import type { CompanyUserRole } from '../../api/types';
-import {
-  Receipt,
-  Search,
-  Filter,
-  Sprout,
-  Loader2,
-  CheckCircle2,
-  X,
-} from 'lucide-react';
+import type { Account, CompanyUserRole } from '../../api/types';
 
 const ACCOUNT_FETCH_LIMIT = 500;
 const ACCOUNT_TYPES = ['asset', 'liability', 'equity', 'income', 'expense'];
@@ -50,10 +42,10 @@ interface AccountsContentProps {
 
 function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: AccountsContentProps) {
   const { t } = useI18n();
-  // ── Pagination ──
-  const [skip, setSkip] = useState(0);
+  const searchId = useId();
+  const typeId = useId();
 
-  // ── Filters ──
+  const [skip, setSkip] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('');
 
@@ -70,12 +62,10 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
     limit: ACCOUNT_FETCH_LIMIT, // backend enforces max 500
   });
 
-  // ── Seed state ──
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedResult, setSeedResult] = useState<{ created: number; skipped: number } | null>(null);
   const [seedError, setSeedError] = useState<string | null>(null);
 
-  // Reset pagination and filters on company change
   useEffect(() => {
     setSkip(0);
     setSearchQuery('');
@@ -84,12 +74,10 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
     setSeedError(null);
   }, [selectedCompanyId]);
 
-  // Fetch on mount and company change
   useEffect(() => {
     fetchAccounts();
   }, [fetchAccounts]);
 
-  // ── Client-side filtering ──
   const filteredAccounts = useMemo(() => {
     let result = accounts;
 
@@ -113,12 +101,14 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
   const filteredTotal = filteredAccounts.length;
   const paginatedAccounts = filteredAccounts.slice(skip, skip + PAGE_SIZE);
 
-  // Reset skip when filter changes
   useEffect(() => {
     setSkip(0);
   }, [searchQuery, typeFilter]);
 
-  // ── Seed handler ──
+  /** Parent codes are shown instead of raw ids, which are meaningless to the reader. */
+  const parentCodeOf = (acc: Account): string =>
+    acc.parent_id ? accounts.find((a) => a.id === acc.parent_id)?.code || `#${acc.parent_id}` : '—';
+
   const handleSeed = async () => {
     setIsSeeding(true);
     setSeedResult(null);
@@ -131,301 +121,312 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
         await fetchAccounts();
       }
     } catch {
-      setSeedError('Failed to seed default accounts. Please try again.');
+      setSeedError(t.accountsPage.seedFailed);
     } finally {
       setIsSeeding(false);
     }
   };
 
-  const isLoading = companiesLoading || accountsLoading;
+  const clearFilters = () => {
+    setSearchQuery('');
+    setTypeFilter('');
+  };
 
-  // Note: PageLayout handles pageSubtitle; content below provides the real header
+  const isLoading = companiesLoading || accountsLoading;
+  if (isLoading) return <LoadingState />;
+  if (error) return <ErrorState message={error} onRetry={fetchAccounts} />;
+
+  const canManage = canManageAccounts(userRole);
 
   return (
-    <>
-      {/* Loading */}
-      {isLoading && <LoadingState />}
-
-      {/* Error */}
-      {!isLoading && error && <ErrorState message={error} onRetry={fetchAccounts} />}
-
-      {/* Content */}
-      {!isLoading && !error && (
-        <>
-          {/* Header row */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
-          >
-            <div>
-              <h1 className="text-2xl font-bold text-white mb-1">{t.accountsPage.pageTitle}</h1>
-              <p className="text-sm text-gray-400">
-                {t.accountsPage.pageSubtitle}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 font-medium">
-                {total} account{total !== 1 ? 's' : ''} total
-              </span>
-              {canManageAccounts(userRole) && (
-                <button
-                  onClick={handleSeed}
-                  disabled={isSeeding}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-600/20 border border-brand-500/30 text-brand-300 text-xs font-semibold hover:bg-brand-600/30 hover:border-brand-500/40 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSeeding ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Sprout className="w-3.5 h-3.5" />
-                  )}
-                  {isSeeding ? t.accountsPage.seeding : t.accountsPage.seedDefaults}
-                </button>
+    <div className="space-y-5">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+        className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
+      >
+        <div>
+          <h2 className="page-title">{t.accountsPage.pageTitle}</h2>
+          <p className="page-description">{t.accountsPage.pageSubtitle}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="numeric text-xs text-subtle-foreground">
+            {total} {t.accountsPage.showingAccounts}
+          </span>
+          {canManage && (
+            <button
+              type="button"
+              onClick={handleSeed}
+              disabled={isSeeding}
+              className="btn btn-secondary btn-sm"
+            >
+              {isSeeding ? (
+                <Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sprout aria-hidden className="h-3.5 w-3.5" />
               )}
-            </div>
-          </motion.div>
+              {isSeeding ? t.accountsPage.seeding : t.accountsPage.seedDefaults}
+            </button>
+          )}
+        </div>
+      </motion.div>
 
-          {/* Seed result toast */}
-          <AnimatePresence>
-            {seedResult && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="mb-4 flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20"
-              >
-                <div className="flex items-center gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                  <p className="text-sm text-emerald-300">
-                    <span className="font-semibold">{seedResult.created}</span> account{seedResult.created !== 1 ? 's' : ''} created,{' '}
-                    <span className="font-semibold">{seedResult.skipped}</span> skipped.
-                  </p>
-                </div>
-                <button onClick={() => setSeedResult(null)} className="text-emerald-400 hover:text-emerald-300 transition-colors">
-                  <X className="w-4 h-4" />
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Seed error toast */}
-          <AnimatePresence>
-            {seedError && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="mb-4 flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20"
-              >
-                <p className="text-sm text-red-300">{seedError}</p>
-                <button onClick={() => setSeedError(null)} className="text-red-400 hover:text-red-300 transition-colors">
-                  <X className="w-4 h-4" />
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Search & filter bar */}
+      <AnimatePresence>
+        {seedResult && (
           <motion.div
-            initial={{ opacity: 0, y: 8 }}
+            key="seed-ok"
+            initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-            className="flex flex-col sm:flex-row gap-3 mb-6"
+            exit={{ opacity: 0, y: -8 }}
+            role="status"
+            className="callout tone-success"
           >
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.accountsPage.searchPlaceholder}
-                className="input-field pl-10 text-sm"
+            <CheckCircle2 aria-hidden className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <p className="flex-1">
+              <span className="numeric font-semibold">{seedResult.created}</span>{' '}
+              {t.accountsPage.created},{' '}
+              <span className="numeric font-semibold">{seedResult.skipped}</span>{' '}
+              {t.accountsPage.skipped}.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSeedResult(null)}
+              aria-label={t.common.close}
+              className="flex-shrink-0 opacity-70 transition-opacity hover:opacity-100"
+            >
+              <X aria-hidden className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+
+        {seedError && (
+          <motion.div
+            key="seed-error"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            role="alert"
+            className="callout tone-danger"
+          >
+            <AlertCircle aria-hidden className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <p className="flex-1">{seedError}</p>
+            <button
+              type="button"
+              onClick={() => setSeedError(null)}
+              aria-label={t.common.close}
+              className="flex-shrink-0 opacity-70 transition-opacity hover:opacity-100"
+            >
+              <X aria-hidden className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.05 }}
+        className="filter-bar"
+      >
+        <div className="min-w-[16rem] flex-1">
+          <label htmlFor={searchId} className="field-label">
+            {t.common.search}
+          </label>
+          <div className="relative">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle-foreground"
+            />
+            <input
+              id={searchId}
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t.accountsPage.searchPlaceholder}
+              className="input ps-10"
+            />
+          </div>
+        </div>
+
+        <div className="min-w-[10rem]">
+          <label htmlFor={typeId} className="field-label">
+            {t.accountsPage.type}
+          </label>
+          <select
+            id={typeId}
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="select"
+          >
+            <option value="">{t.accountsPage.allTypes}</option>
+            {ACCOUNT_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type.charAt(0).toUpperCase() + type.slice(1)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {(searchQuery || typeFilter) && (
+          <button type="button" onClick={clearFilters} className="btn btn-ghost btn-sm mb-0.5">
+            {t.common.clearFilters}
+          </button>
+        )}
+
+        <p className="numeric ms-auto pb-2.5 text-xs text-subtle-foreground">
+          {filteredTotal} {t.common.of} {accounts.length} {t.accountsPage.showingAccounts}
+        </p>
+      </motion.div>
+
+      {accounts.length === 0 && (
+        <EmptyState
+          icon={<Receipt className="h-7 w-7 text-primary" />}
+          title={t.accountsPage.noAccountsTitle}
+          description={t.accountsPage.noAccountsDescription}
+          action={
+            canManage ? (
+              <button
+                type="button"
+                onClick={handleSeed}
+                disabled={isSeeding}
+                className="btn btn-primary"
+              >
+                {isSeeding ? (
+                  <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sprout aria-hidden className="h-4 w-4" />
+                )}
+                {t.accountsPage.seedDefaults}
+              </button>
+            ) : undefined
+          }
+        />
+      )}
+
+      {accounts.length > 0 && filteredTotal === 0 && (
+        <EmptyState
+          icon={<Search className="h-7 w-7 text-primary" />}
+          title={t.accountsPage.noMatchTitle}
+          description={t.accountsPage.noMatchDescription}
+          action={
+            <button type="button" onClick={clearFilters} className="btn btn-secondary btn-sm">
+              {t.common.clearFilters}
+            </button>
+          }
+        />
+      )}
+
+      {paginatedAccounts.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+        >
+          {/* Desktop table */}
+          <div className="card hidden overflow-hidden md:block">
+            <div className="table-wrap">
+              <table className="data-table">
+                <caption className="sr-only">{t.accountsPage.pageTitle}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{t.accountsPage.code}</th>
+                    <th scope="col">{t.accountsPage.name}</th>
+                    <th scope="col">{t.accountsPage.type}</th>
+                    <th scope="col">{t.accountsPage.parentCode}</th>
+                    <th scope="col">{t.common.status}</th>
+                    <th scope="col">{t.accountsPage.origin}</th>
+                    <th scope="col">{t.common.description}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedAccounts.map((acc) => (
+                    <tr key={acc.id}>
+                      <td>
+                        <span className="numeric text-sm font-semibold text-primary">
+                          {acc.code}
+                        </span>
+                      </td>
+                      <td className="font-medium">{acc.name}</td>
+                      <td>
+                        <AccountTypeBadge type={acc.account_type} />
+                      </td>
+                      <td className="numeric text-xs text-muted-foreground">{parentCodeOf(acc)}</td>
+                      <td>
+                        <span className={`badge ${acc.is_active ? 'tone-success' : 'tone-neutral'}`}>
+                          {acc.is_active ? t.common.active : t.common.inactive}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge ${acc.is_system ? 'tone-info' : 'tone-neutral'}`}>
+                          {acc.is_system ? t.accountsPage.systemAccount : t.accountsPage.manualAccount}
+                        </span>
+                      </td>
+                      <td
+                        className="max-w-[220px] truncate text-xs text-muted-foreground"
+                        title={acc.description || undefined}
+                      >
+                        {acc.description || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="border-t border-border-subtle px-4 py-3">
+              <PaginationControls
+                skip={skip}
+                limit={PAGE_SIZE}
+                total={filteredTotal}
+                onPrev={() => setSkip(Math.max(0, skip - PAGE_SIZE))}
+                onNext={() => setSkip(skip + PAGE_SIZE)}
               />
             </div>
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-              <select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className="input-field pl-10 pr-8 text-sm appearance-none cursor-pointer min-w-[160px]"
-              >
-                <option value="">{t.accountsPage.allTypes}</option>
-                {ACCOUNT_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </motion.div>
+          </div>
 
-          {/* Empty state */}
-          {accounts.length === 0 && (
-            <EmptyState
-              icon={<Receipt className="w-7 h-7 text-brand-400" />}
-              title={t.accountsPage.noAccountsTitle}
-              description={t.accountsPage.noAccountsDescription}
-              action={
-                canManageAccounts(userRole) ? (
-                  <button
-                    onClick={handleSeed}
-                    disabled={isSeeding}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 text-white text-sm font-semibold hover:from-brand-500 hover:to-brand-400 hover:shadow-lg hover:shadow-brand-500/25 transition-all duration-300 disabled:opacity-50"
-                  >
-                    {isSeeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sprout className="w-4 h-4" />}
-                    {t.accountsPage.seedDefaults}
-                  </button>
-                ) : undefined
-              }
+          {/* Mobile card list */}
+          <div className="space-y-3 md:hidden">
+            {paginatedAccounts.map((acc) => (
+              <div key={acc.id} className="card p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="numeric text-xs font-semibold text-primary">{acc.code}</span>
+                    <h3 className="mt-0.5 text-sm font-medium text-foreground">{acc.name}</h3>
+                  </div>
+                  <AccountTypeBadge type={acc.account_type} />
+                </div>
+
+                {acc.description && (
+                  <p className="mt-2 text-xs text-muted-foreground">{acc.description}</p>
+                )}
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className={`badge ${acc.is_active ? 'tone-success' : 'tone-neutral'}`}>
+                    {acc.is_active ? t.common.active : t.common.inactive}
+                  </span>
+                  <span className={`badge ${acc.is_system ? 'tone-info' : 'tone-neutral'}`}>
+                    {acc.is_system ? t.accountsPage.systemAccount : t.accountsPage.manualAccount}
+                  </span>
+                  {acc.parent_id && (
+                    <span className="numeric text-[11px] text-subtle-foreground">
+                      {t.accountsPage.parent}: {parentCodeOf(acc)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            <PaginationControls
+              skip={skip}
+              limit={PAGE_SIZE}
+              total={filteredTotal}
+              onPrev={() => setSkip(Math.max(0, skip - PAGE_SIZE))}
+              onNext={() => setSkip(skip + PAGE_SIZE)}
             />
-          )}
-
-          {/* Filtered empty state */}
-          {accounts.length > 0 && filteredAccounts.length === 0 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-center py-16"
-            >
-              <Search className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400 text-sm">No accounts match your search or filter.</p>
-              <button
-                onClick={() => { setSearchQuery(''); setTypeFilter(''); }}
-                className="mt-3 text-brand-400 text-xs font-medium hover:text-brand-300 transition-colors"
-              >
-                Clear filters
-              </button>
-            </motion.div>
-          )}
-
-          {/* Table — desktop */}
-          {paginatedAccounts.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.15 }}
-            >
-              {/* Desktop table */}
-              <div className="hidden md:block glass-panel overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-white/[0.06]">
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.accountsPage.code}</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.accountsPage.name}</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.accountsPage.type}</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.accountsPage.parentCode}</th>
-                        <th className="text-center text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.active}</th>
-                        <th className="text-center text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">System</th>
-                        <th className="text-left text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-4 py-3">{t.common.description}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginatedAccounts.map((acc, i) => (
-                        <motion.tr
-                          key={acc.id}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ delay: i * 0.03 }}
-                          className="border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] transition-colors"
-                        >
-                          <td className="px-4 py-3">
-                            <span className="text-sm font-mono font-semibold text-brand-400">{acc.code}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-sm text-gray-200">{acc.name}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <AccountTypeBadge type={acc.account_type} />
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-xs text-gray-500">
-                              {acc.parent_id
-                                ? accounts.find((a) => a.id === acc.parent_id)?.code || `#${acc.parent_id}`
-                                : '—'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className={`inline-block w-2 h-2 rounded-full ${acc.is_active ? 'bg-emerald-400' : 'bg-gray-600'}`} />
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {acc.is_system ? (
-                              <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-brand-500/10 text-brand-400 border border-brand-500/20">SYS</span>
-                            ) : (
-                              <span className="text-[10px] text-gray-600">Manual</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-xs text-gray-500 truncate block max-w-[200px]">
-                              {acc.description || '—'}
-                            </span>
-                          </td>
-                        </motion.tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Pagination */}
-                <div className="px-4 py-3 border-t border-white/[0.04]">
-                  <PaginationControls
-                    skip={skip}
-                    limit={PAGE_SIZE}
-                    total={filteredTotal}
-                    onPrev={() => setSkip(Math.max(0, skip - PAGE_SIZE))}
-                    onNext={() => setSkip(skip + PAGE_SIZE)}
-                  />
-                </div>
-              </div>
-
-              {/* Mobile card list */}
-              <div className="md:hidden space-y-3">
-                {paginatedAccounts.map((acc, i) => (
-                  <motion.div
-                    key={acc.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.04 }}
-                    className="glass-panel p-4"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <span className="text-xs font-mono font-semibold text-brand-400">{acc.code}</span>
-                        <h4 className="text-sm font-medium text-white mt-0.5">{acc.name}</h4>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${acc.is_active ? 'bg-emerald-400' : 'bg-gray-600'}`} />
-                        <AccountTypeBadge type={acc.account_type} />
-                      </div>
-                    </div>
-                    {acc.description && (
-                      <p className="text-xs text-gray-500 mb-2">{acc.description}</p>
-                    )}
-                    <div className="flex items-center gap-3 text-[10px] text-gray-500">
-                      {acc.is_system && (
-                        <span className="font-semibold uppercase px-1.5 py-0.5 rounded bg-brand-500/10 text-brand-400 border border-brand-500/20">SYS</span>
-                      )}
-                      {acc.parent_id && (
-                        <span>Parent: {accounts.find((a) => a.id === acc.parent_id)?.code || `#${acc.parent_id}`}</span>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
-
-                {/* Mobile pagination */}
-                <PaginationControls
-                  skip={skip}
-                  limit={PAGE_SIZE}
-                  total={filteredTotal}
-                  onPrev={() => setSkip(Math.max(0, skip - PAGE_SIZE))}
-                  onNext={() => setSkip(skip + PAGE_SIZE)}
-                />
-              </div>
-            </motion.div>
-          )}
-        </>
+          </div>
+        </motion.div>
       )}
-    </>
+    </div>
   );
 }

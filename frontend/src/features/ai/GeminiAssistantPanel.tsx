@@ -87,7 +87,7 @@ function RichText({ text }: { text: string }) {
     <>
       {parts.map((part, i) =>
         i % 2 === 1 ? (
-          <strong key={i} className="font-semibold text-white">
+          <strong key={i} className="font-semibold text-foreground">
             {part}
           </strong>
         ) : (
@@ -105,9 +105,9 @@ function MessageBubble({ message, dir, language }: { message: GeminiMessage; dir
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
+      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
       className={`flex gap-2.5 ${isUser ? (dir === 'rtl' ? 'flex-row-reverse' : 'flex-row-reverse') : 'flex-row'}`}
     >
       {/* Avatar */}
@@ -115,37 +115,37 @@ function MessageBubble({ message, dir, language }: { message: GeminiMessage; dir
         className={`
           w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5
           ${isUser
-            ? 'bg-brand-500/20 border border-brand-500/30'
+            ? 'bg-primary-soft-hover border border-primary-border'
             : isError
-            ? 'bg-red-500/20 border border-red-500/30'
+            ? 'bg-danger-soft border border-danger-border'
             : isConfirmed
-            ? 'bg-emerald-500/20 border border-emerald-500/30'
-            : 'bg-violet-500/20 border border-violet-500/30'
+            ? 'bg-success-soft border border-success-border'
+            : 'bg-violet-soft border border-violet-border'
           }
         `}
       >
         {isUser ? (
-          <User className="w-3.5 h-3.5 text-brand-400" />
+          <User className="w-3.5 h-3.5 text-primary" />
         ) : isError ? (
-          <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+          <AlertTriangle className="w-3.5 h-3.5 text-danger" />
         ) : isConfirmed ? (
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+          <CheckCircle2 className="w-3.5 h-3.5 text-success" />
         ) : (
-          <Bot className="w-3.5 h-3.5 text-violet-400" />
+          <Bot className="w-3.5 h-3.5 text-violet" />
         )}
       </div>
 
       {/* Bubble */}
       <div
         className={`
-          max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed
+          max-w-[85%] rounded-lg px-3.5 py-2.5 text-sm leading-relaxed
           ${isUser
-            ? 'bg-brand-500/15 border border-brand-500/20 text-gray-200'
+            ? 'bg-primary-soft border border-primary-border text-foreground'
             : isError
-            ? 'bg-red-500/10 border border-red-500/20 text-red-300'
+            ? 'bg-danger-soft border border-danger-border text-danger'
             : isConfirmed
-            ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'
-            : 'bg-white/[0.04] border border-white/[0.08] text-gray-300'
+            ? 'bg-success-soft border border-success-border text-success'
+            : 'bg-surface-muted border border-border text-muted-foreground'
           }
         `}
         dir="auto"
@@ -156,7 +156,7 @@ function MessageBubble({ message, dir, language }: { message: GeminiMessage; dir
           </p>
         ))}
         <GroundingCards message={message} language={language} dir={dir} />
-        <p className="text-[10px] text-gray-600 mt-1.5">
+        <p className="text-[10px] text-subtle-foreground mt-1.5">
           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </p>
       </div>
@@ -192,33 +192,33 @@ function SuggestedActionCard({
       initial={{ opacity: 0, y: 12, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -8, scale: 0.97 }}
-      className="mx-3 mb-3 rounded-2xl bg-gradient-to-br from-violet-500/10 to-brand-500/10 border border-violet-500/20 overflow-hidden"
+      transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+      className="mx-3 mb-3 overflow-hidden rounded-xl border border-violet-border bg-surface shadow-card"
     >
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.06] bg-white/[0.02]">
-        <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-        <span className="text-xs font-semibold text-violet-300 uppercase tracking-wider">
-          {tc.previewNotCreated}
-        </span>
+      <div className="flex items-center gap-2 border-b border-violet-border bg-violet-soft px-3 py-2.5">
+        <Sparkles aria-hidden className="h-3.5 w-3.5 text-violet" />
+        <span className="overline text-violet">{tc.previewNotCreated}</span>
       </div>
 
       {/* Fiscal period warning banner (today-specific) */}
       {fiscalBlocked && (
-        <div className="px-3 py-2.5 bg-amber-500/10 border-b border-amber-500/20 space-y-2">
-          <div className="flex items-start gap-2 text-xs text-amber-300">
-            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+        <div className="space-y-1.5 border-b border-warning-border bg-warning-soft px-3 py-2.5 text-warning">
+          <div className="flex items-start gap-2 text-xs">
+            <AlertTriangle aria-hidden className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
             <p className="font-semibold leading-snug">{tc.todayNotInOpenFiscalPeriod}</p>
           </div>
-          <p className="text-[11px] text-amber-500/80 leading-snug pl-5">
-            {tc.createFiscalPeriodForToday}
-          </p>
+          <p className="ps-5 text-[11px] leading-snug">{tc.createFiscalPeriodForToday}</p>
         </div>
       )}
 
       {/* Confirm error banner (shown after a failed confirm attempt) */}
       {confirmError && !fiscalBlocked && (
-        <div className="flex items-start gap-2 px-3 py-2 bg-red-500/10 border-b border-red-500/20 text-xs text-red-300">
-          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+        <div
+          role="alert"
+          className="flex items-start gap-2 border-b border-danger-border bg-danger-soft px-3 py-2 text-xs text-danger"
+        >
+          <AlertTriangle aria-hidden className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
           <p>{confirmError}</p>
         </div>
       )}
@@ -227,35 +227,35 @@ function SuggestedActionCard({
       <div className="px-3 py-2.5 space-y-2" dir={dir}>
 
         {/* Read-only entry date (backend-derived today) */}
-        <div className="flex justify-between items-center gap-2 text-xs">
-          <span className="text-gray-500 flex items-center gap-1 shrink-0">
-            <CalendarDays className="w-3 h-3" />
+        <div className="flex items-center justify-between gap-2 text-xs">
+          <span className="flex shrink-0 items-center gap-1 text-subtle-foreground">
+            <CalendarDays aria-hidden className="h-3 w-3" />
             {tc.entryDateTodayOnly}
           </span>
-          <span className="font-mono text-xs text-gray-300 bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 py-1">
+          <span className="numeric rounded-md border border-border bg-surface-muted px-2 py-1 text-xs text-muted-foreground">
             {entryDate}
           </span>
         </div>
 
-        <div className="text-xs text-gray-400 italic truncate">
+        <div className="truncate text-xs italic text-muted-foreground">
           {action.payload.description}
         </div>
 
         {/* Journal lines */}
-        <div className="space-y-1 pt-1 border-t border-white/[0.05]">
+        <div className="space-y-1 border-t border-border-subtle pt-1">
           {action.payload.lines.map((line, i) => (
-            <div key={i} className="flex justify-between items-center text-xs gap-2">
-              <span className="text-gray-400 truncate flex-1 min-w-0">
+            <div key={i} className="flex items-center justify-between gap-2 text-xs">
+              <span className="min-w-0 flex-1 truncate text-muted-foreground">
                 {line.account_name}
-                <span className="text-gray-600 ml-1">({line.account_code})</span>
+                <span className="ms-1 text-subtle-foreground">({line.account_code})</span>
               </span>
               {line.debit > 0 && (
-                <span className="text-emerald-400 font-mono whitespace-nowrap">
+                <span className="numeric whitespace-nowrap text-debit">
                   {tc.debit} {Number(line.debit).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </span>
               )}
               {line.credit > 0 && (
-                <span className="text-amber-400 font-mono whitespace-nowrap">
+                <span className="numeric whitespace-nowrap text-credit">
                   {tc.credit} {Number(line.credit).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </span>
               )}
@@ -265,8 +265,8 @@ function SuggestedActionCard({
 
         {/* Warnings */}
         {action.payload.warnings.length > 0 && (
-          <div className="flex items-start gap-1.5 text-xs text-amber-400 pt-1">
-            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+          <div className="flex items-start gap-1.5 pt-1 text-xs text-warning">
+            <AlertTriangle aria-hidden className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
             <span>{action.payload.warnings.join(' | ')}</span>
           </div>
         )}
@@ -274,8 +274,8 @@ function SuggestedActionCard({
         {/* Confirmation notice */}
         {!fiscalBlocked && (
           <>
-            <p className="text-[11px] text-gray-500 pt-1">{tc.confirmWarning}</p>
-            <p className="text-[10px] text-gray-600 pt-0.5 italic">{tc.draftDoesNotAffectReports}</p>
+            <p className="pt-1 text-[11px] text-subtle-foreground">{tc.confirmWarning}</p>
+            <p className="pt-0.5 text-[10px] italic text-subtle-foreground">{tc.draftDoesNotAffectReports}</p>
           </>
         )}
       </div>
@@ -283,31 +283,28 @@ function SuggestedActionCard({
       {/* Actions */}
       <div className="flex gap-2 px-3 pb-3">
         <button
+          type="button"
           onClick={() => onConfirm()}
           disabled={isConfirmDisabled}
           title={fiscalBlocked ? tc.todayNotInOpenFiscalPeriod : undefined}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all
-            ${
-              fiscalBlocked
-                ? 'bg-gray-500/10 border border-gray-500/20 text-gray-600 cursor-not-allowed'
-                : 'bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-50 disabled:cursor-not-allowed'
-            }`}
+          className={`btn btn-tone btn-sm flex-1 ${fiscalBlocked ? 'tone-neutral' : 'tone-success'}`}
           id="gemini-assistant-confirm-btn"
         >
           {isConfirming ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <CheckCircle2 className="w-3.5 h-3.5" />
+            <CheckCircle2 aria-hidden className="h-3.5 w-3.5" />
           )}
           {tc.confirmAction}
         </button>
         <button
+          type="button"
           onClick={onCancel}
           disabled={isConfirming}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold hover:bg-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn btn-tone tone-danger btn-sm flex-1"
           id="gemini-assistant-cancel-btn"
         >
-          <XCircle className="w-3.5 h-3.5" />
+          <XCircle aria-hidden className="h-3.5 w-3.5" />
           {tc.cancelAction}
         </button>
       </div>
@@ -498,7 +495,7 @@ export default function GeminiAssistantPanel({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[59] bg-black/30 backdrop-blur-sm lg:hidden"
+            className="fixed inset-0 z-[59] bg-backdrop backdrop-blur-sm lg:hidden"
             onClick={onClose}
           />
 
@@ -507,111 +504,146 @@ export default function GeminiAssistantPanel({
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: isRtl ? -40 : 40, scale: 0.96 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className={`fixed inset-x-2 bottom-2 z-[60] flex h-[calc(100dvh-1rem)] max-h-[720px] flex-col overflow-hidden rounded-2xl border border-white/[0.1] bg-surface-800/95 shadow-2xl shadow-black/50 backdrop-blur-2xl transition-[width] sm:inset-x-auto sm:bottom-20 sm:h-[min(640px,calc(100vh-120px))] ${isRtl ? 'sm:left-4' : 'sm:right-4'} ${showHistory ? 'sm:w-[min(760px,calc(100vw-2rem))]' : 'sm:w-[420px]'}`}
+            className={`glass fixed inset-x-2 bottom-2 z-[60] flex h-[calc(100dvh-1rem)] max-h-[720px] flex-col overflow-hidden rounded-2xl border shadow-floating transition-[width] duration-normal ease-emphasized sm:inset-x-auto sm:bottom-20 sm:h-[min(640px,calc(100vh-120px))] ${isRtl ? 'sm:left-4' : 'sm:right-4'} ${showHistory ? 'sm:w-[min(760px,calc(100vw-2rem))]' : 'sm:w-[420px]'}`}
             id="gemini-assistant-panel"
             dir={dir}
             role="dialog"
             aria-label={tc.assistant}
           >
-            <div className="flex min-h-[58px] flex-shrink-0 items-center justify-between gap-2 border-b border-white/[0.07] bg-white/[0.02] px-3 py-2.5">
+            <div className="flex min-h-[58px] flex-shrink-0 items-center justify-between gap-2 border-b border-border bg-surface-muted px-3 py-2.5">
               <div className="flex min-w-0 items-center gap-2.5">
                 {showHistory && (
                   <button
+                    type="button"
                     onClick={() => setShowHistory(false)}
-                    className="rounded-lg p-1.5 text-gray-400 hover:bg-white/[0.05] hover:text-white sm:hidden"
+                    className="btn-icon h-8 w-8 sm:hidden"
                     title={labels.back}
                     aria-label={labels.back}
                   >
-                    {isRtl ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                    {isRtl ? (
+                      <ChevronRight aria-hidden className="h-4 w-4" />
+                    ) : (
+                      <ChevronLeft aria-hidden className="h-4 w-4" />
+                    )}
                   </button>
                 )}
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-brand-600 shadow-lg shadow-violet-500/20">
-                  <Sparkles className="h-4 w-4 text-white" />
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary-solid bg-gradient-primary shadow-[0_6px_18px_-8px_var(--primary-glow)]">
+                  <Sparkles aria-hidden className="h-4 w-4 text-primary-foreground" />
                 </div>
                 <div className="min-w-0">
                   <p
-                    className="max-w-[190px] truncate text-sm font-semibold text-white sm:max-w-[300px]"
+                    className="max-w-[190px] truncate text-sm font-semibold text-foreground sm:max-w-[300px]"
                     title={currentConversation?.title || tc.assistant}
                   >
                     {currentConversation?.title || tc.assistant}
                   </p>
-                  <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-gray-500">
-                    {isArchived && <span className="rounded bg-amber-500/10 px-1 text-amber-300">{labels.archived}</span>}
+                  <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-subtle-foreground">
+                    {isArchived && <span className="badge tone-warning">{labels.archived}</span>}
                     {companyName && <span className="truncate" title={companyName}>{companyName}</span>}
                   </div>
                 </div>
               </div>
 
               <div className="flex flex-shrink-0 items-center gap-0.5">
-                <button onClick={() => void createConversation()} className="rounded-lg p-2 text-gray-400 hover:bg-white/[0.05] hover:text-brand-300" title={labels.newConversation} aria-label={labels.newConversation}>
-                  <Plus className="h-4 w-4" />
+                <button
+                  type="button"
+                  onClick={() => void createConversation()}
+                  className="btn-icon h-8 w-8"
+                  title={labels.newConversation}
+                  aria-label={labels.newConversation}
+                >
+                  <Plus aria-hidden className="h-4 w-4" />
                 </button>
-                <button onClick={() => setShowHistory((value) => !value)} className={`rounded-lg p-2 hover:bg-white/[0.05] ${showHistory ? 'bg-white/[0.05] text-brand-300' : 'text-gray-400 hover:text-white'}`} title={labels.history} aria-label={labels.history}>
-                  <History className="h-4 w-4" />
+                <button
+                  type="button"
+                  onClick={() => setShowHistory((value) => !value)}
+                  className={`btn-icon h-8 w-8 ${showHistory ? 'bg-surface-overlay text-primary' : ''}`}
+                  title={labels.history}
+                  aria-label={labels.history}
+                  aria-expanded={showHistory}
+                >
+                  <History aria-hidden className="h-4 w-4" />
                 </button>
                 {currentConversation && (
-                  <button onClick={() => void renameConversation(currentConversation)} className="hidden rounded-lg p-2 text-gray-400 hover:bg-white/[0.05] hover:text-white sm:block" title={labels.rename} aria-label={labels.rename}>
-                    <Pencil className="h-4 w-4" />
+                  <button
+                    type="button"
+                    onClick={() => void renameConversation(currentConversation)}
+                    className="btn-icon hidden h-8 w-8 sm:inline-flex"
+                    title={labels.rename}
+                    aria-label={labels.rename}
+                  >
+                    <Pencil aria-hidden className="h-4 w-4" />
                   </button>
                 )}
-                <button onClick={onClose} className="rounded-lg p-2 text-gray-400 hover:bg-white/[0.05] hover:text-white" id="gemini-assistant-close" title={labels.close} aria-label={labels.close}>
-                  <X className="h-4 w-4" />
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="btn-icon h-8 w-8"
+                  id="gemini-assistant-close"
+                  title={labels.close}
+                  aria-label={labels.close}
+                >
+                  <X aria-hidden className="h-4 w-4" />
                 </button>
               </div>
             </div>
 
             <div className="flex min-h-0 flex-1">
-              <section className={`${showHistory ? 'flex' : 'hidden'} w-full min-w-0 flex-col border-white/[0.07] bg-black/15 sm:w-[300px] sm:flex-shrink-0 ${isRtl ? 'sm:border-l' : 'sm:border-r'}`} aria-label={labels.history}>
-                <div className="space-y-2 border-b border-white/[0.07] p-3">
-                  <button onClick={() => void createConversation()} className="flex w-full items-center justify-center gap-2 rounded-xl border border-brand-500/20 bg-brand-500/10 px-3 py-2 text-xs font-semibold text-brand-300 hover:bg-brand-500/15">
-                    <Plus className="h-3.5 w-3.5" />
+              <section className={`${showHistory ? 'flex' : 'hidden'} w-full min-w-0 flex-col bg-surface-sunken sm:w-[300px] sm:flex-shrink-0 sm:border-s sm:border-border`} aria-label={labels.history}>
+                <div className="space-y-2 border-b border-border p-3">
+                  <button type="button" onClick={() => void createConversation()} className="btn btn-tone tone-primary btn-sm btn-block">
+                    <Plus aria-hidden className="h-3.5 w-3.5" />
                     {labels.newConversation}
                   </button>
                   <div className="relative">
-                    <Search className={`pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-600 ${isRtl ? 'right-3' : 'left-3'}`} />
+                    <Search aria-hidden className="pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground start-3" />
                     <input
+                      type="search"
                       value={historySearch}
                       onChange={(event) => onHistorySearchChange(event.target.value)}
                       placeholder={labels.search}
                       aria-label={labels.search}
                       maxLength={100}
-                      className={`w-full rounded-xl border border-white/[0.08] bg-white/[0.04] py-2 text-xs text-gray-200 outline-none placeholder:text-gray-600 focus:border-brand-500/40 ${isRtl ? 'pr-9 pl-3' : 'pl-9 pr-3'}`}
+                      className="input py-1.5 text-xs ps-9 pe-3"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-1 rounded-xl bg-white/[0.03] p-1" role="tablist">
+                  <div className="grid grid-cols-2 gap-1 rounded-lg bg-surface-muted p-1" role="tablist" aria-label={labels.history}>
                     {(['active', 'archived'] as const).map((status) => (
                       <button
                         key={status}
+                        type="button"
                         role="tab"
                         aria-selected={historyStatus === status}
                         onClick={() => onHistoryStatusChange(status)}
-                        className={`rounded-lg px-2 py-1.5 text-xs font-medium ${historyStatus === status ? 'bg-brand-500/15 text-brand-300' : 'text-gray-500 hover:text-gray-300'}`}
+                        className={`rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${historyStatus === status ? 'bg-surface text-primary shadow-sm' : 'text-subtle-foreground hover:text-foreground'}`}
                       >
                         {status === 'active' ? labels.active : labels.archived}
                       </button>
                     ))}
                   </div>
-                  <p className="px-1 text-[10px] text-gray-600">{labels.conversationsCount}</p>
+                  <p className="px-1 text-[10px] text-subtle-foreground">{labels.conversationsCount}</p>
                 </div>
 
                 <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
                   {isHistoryLoading && conversations.length === 0 && [0, 1, 2].map((item) => (
-                    <div key={item} className="animate-pulse rounded-xl border border-white/[0.05] p-3">
-                      <div className="h-3 w-2/3 rounded bg-white/[0.08]" />
-                      <div className="mt-2 h-2 w-full rounded bg-white/[0.05]" />
+                    <div key={item} className="rounded-lg border border-border-subtle p-3">
+                      <div className="skeleton h-3 w-2/3" />
+                      <div className="skeleton mt-2 h-2 w-full" />
                     </div>
                   ))}
 
                   {historyError && (
-                    <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-center text-xs text-red-300">
+                    <div role="alert" className="rounded-lg border border-danger-border bg-danger-soft p-3 text-center text-xs text-danger">
                       <p>{historyError}</p>
-                      <button onClick={() => void onRetryHistory()} className="mt-2 rounded-lg border border-red-400/20 px-2 py-1 font-semibold hover:bg-red-500/10">{labels.retry}</button>
+                      <button type="button" onClick={() => void onRetryHistory()} className="btn btn-tone tone-danger btn-sm mt-2">
+                        {labels.retry}
+                      </button>
                     </div>
                   )}
 
                   {!isHistoryLoading && !historyError && conversations.length === 0 && (
-                    <div className="flex h-36 flex-col items-center justify-center gap-2 text-center text-xs text-gray-500">
-                      <History className="h-6 w-6 text-gray-700" />
+                    <div className="flex h-36 flex-col items-center justify-center gap-2 text-center text-xs text-subtle-foreground">
+                      <History aria-hidden className="h-6 w-6 text-subtle-foreground" />
                       {labels.noConversations}
                     </div>
                   )}
@@ -619,38 +651,39 @@ export default function GeminiAssistantPanel({
                   {conversations.map((conversation) => (
                     <article
                       key={conversation.id}
-                      className={`group rounded-xl border p-2 ${conversation.id === currentConversationId ? 'border-brand-500/40 bg-brand-500/10' : 'border-transparent hover:border-white/[0.06] hover:bg-white/[0.03]'}`}
+                      className={`group rounded-lg border p-2 ${conversation.id === currentConversationId ? 'border-primary-border bg-primary-soft' : 'border-transparent hover:border-border hover:bg-surface-muted'}`}
                       aria-current={conversation.id === currentConversationId ? 'true' : undefined}
                     >
-                      <button onClick={() => void selectConversation(conversation.id)} className="w-full min-w-0 text-start" title={conversation.title}>
+                      <button type="button" onClick={() => void selectConversation(conversation.id)} className="w-full min-w-0 rounded text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-soft" title={conversation.title}>
                         <div className="flex items-center gap-2">
-                          <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-200">{conversation.title}</span>
-                          {conversation.id === currentConversationId && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-400" title={labels.current} />}
+                          <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{conversation.title}</span>
+                          {conversation.id === currentConversationId && <span aria-hidden className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary-solid" title={labels.current} />}
                         </div>
-                        <p className="mt-1 truncate text-[10px] text-gray-500" title={conversation.last_message_preview || ''}>{conversation.last_message_preview || '—'}</p>
-                        <p className="mt-1 text-[9px] text-gray-600">{formatActivity(conversation.last_message_at)}</p>
+                        <p className="mt-1 truncate text-[10px] text-subtle-foreground" title={conversation.last_message_preview || ''}>{conversation.last_message_preview || '—'}</p>
+                        <p className="mt-1 text-[9px] text-subtle-foreground">{formatActivity(conversation.last_message_at)}</p>
                       </button>
-                      <div className="mt-1 flex items-center justify-end gap-0.5 border-t border-white/[0.04] pt-1">
-                        <button onClick={() => void renameConversation(conversation)} className="rounded p-1.5 text-gray-600 hover:bg-white/[0.05] hover:text-gray-300" title={labels.rename} aria-label={`${labels.rename}: ${conversation.title}`}><Pencil className="h-3 w-3" /></button>
+                      <div className="mt-1 flex items-center justify-end gap-0.5 border-t border-border-subtle pt-1">
+                        <button type="button" onClick={() => void renameConversation(conversation)} className="btn-icon h-7 w-7" title={labels.rename} aria-label={`${labels.rename}: ${conversation.title}`}><Pencil aria-hidden className="h-3 w-3" /></button>
                         <button
+                          type="button"
                           onClick={() => {
                             if (conversation.status === 'active' && !window.confirm(labels.archiveConfirm(conversation.title))) return;
                             void onSetConversationStatus(conversation.id, conversation.status === 'active' ? 'archived' : 'active');
                           }}
-                          className="rounded p-1.5 text-gray-600 hover:bg-white/[0.05] hover:text-amber-300"
+                          className="btn-icon h-7 w-7 hover:text-warning"
                           title={conversation.status === 'active' ? labels.archive : labels.unarchive}
                           aria-label={`${conversation.status === 'active' ? labels.archive : labels.unarchive}: ${conversation.title}`}
                         >
-                          {conversation.status === 'active' ? <Archive className="h-3 w-3" /> : <ArchiveRestore className="h-3 w-3" />}
+                          {conversation.status === 'active' ? <Archive aria-hidden className="h-3 w-3" /> : <ArchiveRestore aria-hidden className="h-3 w-3" />}
                         </button>
-                        <button onClick={() => void deleteConversation(conversation)} className="rounded p-1.5 text-gray-600 hover:bg-red-500/10 hover:text-red-300" title={labels.delete} aria-label={`${labels.delete}: ${conversation.title}`}><Trash2 className="h-3 w-3" /></button>
+                        <button type="button" onClick={() => void deleteConversation(conversation)} className="btn-icon h-7 w-7 hover:bg-danger-soft hover:text-danger" title={labels.delete} aria-label={`${labels.delete}: ${conversation.title}`}><Trash2 aria-hidden className="h-3 w-3" /></button>
                       </div>
                     </article>
                   ))}
 
                   {hasMoreConversations && (
-                    <button onClick={() => void onLoadMoreConversations()} disabled={isHistoryLoading} className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs text-brand-300 hover:bg-brand-500/10 disabled:opacity-50">
-                      {isHistoryLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    <button type="button" onClick={() => void onLoadMoreConversations()} disabled={isHistoryLoading} className="btn btn-ghost btn-sm btn-block text-primary">
+                      {isHistoryLoading && <Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin" />}
                       {labels.loadMore}
                     </button>
                   )}
@@ -658,18 +691,18 @@ export default function GeminiAssistantPanel({
               </section>
 
               <section className={`${showHistory ? 'hidden sm:flex' : 'flex'} min-w-0 flex-1 flex-col`} aria-label={currentConversation?.title || tc.assistant}>
-                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10">
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
                   {isRestoring && (
-                    <div className="flex h-full items-center justify-center gap-2 text-xs text-gray-400">
-                      <Loader2 className="h-4 w-4 animate-spin text-violet-400" />
+                    <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 aria-hidden className="h-4 w-4 animate-spin text-violet" />
                       {labels.restore}
                     </div>
                   )}
 
                   {!isRestoring && messages.length === 0 && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full flex-col items-center justify-center gap-3 py-6 text-center">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/20 to-brand-500/20"><Sparkles className="h-7 w-7 text-violet-400" /></div>
-                      <div><p className="text-sm font-semibold text-gray-300">{tc.assistant}</p><p className="mt-1 max-w-[240px] text-xs leading-relaxed text-gray-500">{tc.typeYourQuestion}</p></div>
+                      <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-violet-border bg-violet-soft"><Sparkles aria-hidden className="h-7 w-7 text-violet" /></div>
+                      <div><p className="text-sm font-semibold text-foreground">{tc.assistant}</p><p className="mt-1 max-w-[240px] text-xs leading-relaxed text-subtle-foreground">{tc.typeYourQuestion}</p></div>
                     </motion.div>
                   )}
 
@@ -677,8 +710,8 @@ export default function GeminiAssistantPanel({
 
                   {isLoading && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2.5">
-                      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-violet-500/30 bg-violet-500/20"><Bot className="h-3.5 w-3.5 text-violet-400" /></div>
-                      <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.04] px-3.5 py-2.5"><Loader2 className="h-3.5 w-3.5 animate-spin text-violet-400" /><span className="text-xs text-gray-400">{tc.thinking}</span></div>
+                      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-violet-border bg-violet-soft"><Bot aria-hidden className="h-3.5 w-3.5 text-violet" /></div>
+                      <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-muted px-3.5 py-2.5"><Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin text-violet" /><span className="text-xs text-muted-foreground">{tc.thinking}</span></div>
                     </motion.div>
                   )}
                   <div ref={messagesEndRef} />
@@ -714,21 +747,34 @@ export default function GeminiAssistantPanel({
                 </AnimatePresence>
 
                 {(error || notice) && (
-                  <div className={`mx-3 mt-2 flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs ${error ? 'border-red-500/20 bg-red-500/10 text-red-300' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'}`}>
+                  <div
+                    role={error ? 'alert' : 'status'}
+                    className={`callout mx-3 mt-2 items-center justify-between text-xs ${error ? 'tone-danger' : 'tone-success'}`}
+                  >
                     <span className="min-w-0 flex-1">{error || notice}</span>
-                    {failedSend && <button onClick={onRetryMessage} disabled={isLoading} className="flex-shrink-0 rounded-lg border border-red-400/20 px-2 py-1 font-semibold hover:bg-red-500/10">{labels.retry}</button>}
+                    {failedSend && (
+                      <button type="button" onClick={onRetryMessage} disabled={isLoading} className="btn btn-tone tone-danger btn-sm flex-shrink-0">
+                        {labels.retry}
+                      </button>
+                    )}
                   </div>
                 )}
 
                 {isArchived && (
-                  <div className="mx-3 mt-2 flex items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                    <span>{labels.readOnly}</span>
-                    <button onClick={() => currentConversation && void onSetConversationStatus(currentConversation.id, 'active')} className="flex-shrink-0 rounded-lg border border-amber-400/20 px-2 py-1 font-semibold hover:bg-amber-500/10">{labels.unarchive}</button>
+                  <div className="callout tone-warning mx-3 mt-2 items-center justify-between text-xs">
+                    <span className="min-w-0 flex-1">{labels.readOnly}</span>
+                    <button
+                      type="button"
+                      onClick={() => currentConversation && void onSetConversationStatus(currentConversation.id, 'active')}
+                      className="btn btn-tone tone-warning btn-sm flex-shrink-0"
+                    >
+                      {labels.unarchive}
+                    </button>
                   </div>
                 )}
 
-                <div className="flex-shrink-0 border-t border-white/[0.07] px-3 pb-3 pt-2">
-                  <div className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 transition-colors focus-within:border-brand-500/40">
+                <div className="flex-shrink-0 border-t border-border px-3 pb-3 pt-2">
+                  <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-muted px-3 py-2 transition-colors focus-within:border-primary-solid focus-within:ring-2 focus-within:ring-ring-soft">
                     <input
                       ref={inputRef}
                       type="text"
@@ -738,12 +784,12 @@ export default function GeminiAssistantPanel({
                       placeholder={isArchived ? labels.cannotSend : tc.typeYourQuestion}
                       disabled={isLoading || isRestoring || isArchived}
                       dir="auto"
-                      className="min-w-0 flex-1 bg-transparent text-sm text-gray-200 outline-none placeholder:text-gray-600 disabled:opacity-50"
+                      className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-subtle-foreground disabled:opacity-50"
                       id="gemini-assistant-input"
                       maxLength={2000}
                     />
-                    <button onClick={handleSend} disabled={isLoading || isRestoring || isArchived || !inputText.trim()} className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-brand-500/30 bg-brand-500/20 text-brand-400 hover:bg-brand-500/30 disabled:cursor-not-allowed disabled:opacity-40" id="gemini-assistant-send" aria-label={tc.send} title={tc.send}>
-                      {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className={`h-3.5 w-3.5 ${isRtl ? 'rotate-180' : ''}`} />}
+                    <button type="button" onClick={handleSend} disabled={isLoading || isRestoring || isArchived || !inputText.trim()} className="btn btn-primary h-7 w-7 flex-shrink-0 p-0" id="gemini-assistant-send" aria-label={tc.send} title={tc.send}>
+                      {isLoading ? <Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin" /> : <Send aria-hidden className="h-3.5 w-3.5 rtl:rotate-180" />}
                     </button>
                   </div>
                 </div>

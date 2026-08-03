@@ -1,23 +1,36 @@
+import { Ban, CheckCircle2, FileEdit, RotateCcw, ShieldCheck } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { JournalEntryStatus } from '../../api/types';
+import { useI18n } from '../../i18n';
 
 interface JournalStatusBadgeProps {
   status: JournalEntryStatus;
 }
 
-const statusStyles: Record<JournalEntryStatus, string> = {
-  draft: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
-  reviewed: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  posted: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  void: 'bg-red-500/10 text-red-400 border-red-500/20',
-  reversed: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
+// Each status carries an icon so the state is legible without colour vision.
+const statusTones: Record<JournalEntryStatus, { tone: string; icon: LucideIcon }> = {
+  draft: { tone: 'tone-neutral', icon: FileEdit },
+  reviewed: { tone: 'tone-warning', icon: ShieldCheck },
+  posted: { tone: 'tone-success', icon: CheckCircle2 },
+  void: { tone: 'tone-danger', icon: Ban },
+  reversed: { tone: 'tone-violet', icon: RotateCcw },
 };
 
 export default function JournalStatusBadge({ status }: JournalStatusBadgeProps) {
-  const style = statusStyles[status] || 'bg-gray-500/10 text-gray-400 border-gray-500/20';
+  const { t } = useI18n();
+  const { tone, icon: Icon } = statusTones[status] ?? { tone: 'tone-neutral', icon: FileEdit };
+  const label = {
+    draft: t.journals.draft,
+    reviewed: t.journals.reviewed,
+    posted: t.journals.posted,
+    void: t.journals.voided,
+    reversed: t.journals.reversed,
+  }[status];
 
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border ${style}`}>
-      {status}
+    <span className={`badge badge-uppercase ${tone}`}>
+      <Icon aria-hidden className="h-3 w-3" />
+      {label ?? status}
     </span>
   );
 }

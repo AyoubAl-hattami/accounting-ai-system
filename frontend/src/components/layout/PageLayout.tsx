@@ -1,6 +1,6 @@
-import { type ReactNode } from 'react';
-import AppShell from './AppShell';
+import { useLayoutEffect, type ReactNode } from 'react';
 import EmptyState from '../feedback/EmptyState';
+import { usePageMeta } from './pageMeta';
 import { useCompanies } from '../../features/companies/useCompanies';
 import { useCompanyRole } from '../../auth/useCompanyRole';
 import { useI18n } from '../../i18n';
@@ -22,6 +22,14 @@ interface PageLayoutProps {
   children: (props: PageLayoutChildProps) => ReactNode;
 }
 
+/**
+ * Page-level content wrapper. It no longer renders the application shell — that
+ * is mounted once by {@link AppLayout} and survives navigation. What remains is
+ * the page's contract with the shell: it announces its title and active nav
+ * entry, and hands the current company down to the page body.
+ *
+ * The call signature is unchanged, so every page keeps working as written.
+ */
 export default function PageLayout({
   pageTitle,
   pageSubtitle,
@@ -29,47 +37,35 @@ export default function PageLayout({
   children,
 }: PageLayoutProps) {
   const { t } = useI18n();
+  const { setMeta } = usePageMeta();
   const {
     companies,
     selectedCompanyId,
     selectedCompany,
-    selectCompany,
     isLoading: companiesLoading,
   } = useCompanies();
   const { role: userRole } = useCompanyRole(selectedCompanyId);
 
-  // No companies guard
+  // Layout effect rather than a plain effect: it runs before the browser paints,
+  // so the topbar shows the new page's title on the first frame instead of
+  // flashing the previous one.
+  useLayoutEffect(() => {
+    setMeta({ pageTitle, pageSubtitle, activePath });
+  }, [pageTitle, pageSubtitle, activePath, setMeta]);
+
   if (!companiesLoading && companies.length === 0) {
     return (
-      <AppShell
-        companies={companies}
-        selectedCompany={selectedCompany}
-        onSelectCompany={selectCompany}
-        pageTitle={pageTitle}
-        pageSubtitle={pageSubtitle}
-        activePath={activePath}
-        userRole={userRole}
-      >
-        <EmptyState
-          icon={<Building2 className="w-7 h-7 text-brand-400" />}
-          title={t.common.noCompaniesYet}
-          description={t.common.noCompaniesDescription}
-          className="py-32"
-        />
-      </AppShell>
+      <EmptyState
+        icon={<Building2 className="h-7 w-7 text-primary" />}
+        title={t.common.noCompaniesYet}
+        description={t.common.noCompaniesDescription}
+        className="py-32"
+      />
     );
   }
 
   return (
-    <AppShell
-      companies={companies}
-      selectedCompany={selectedCompany}
-      onSelectCompany={selectCompany}
-      pageTitle={pageTitle}
-      pageSubtitle={pageSubtitle}
-      activePath={activePath}
-      userRole={userRole}
-    >
+    <>
       {children({
         selectedCompanyId,
         selectedCompany,
@@ -77,6 +73,6 @@ export default function PageLayout({
         companiesLoading,
         userRole,
       })}
-    </AppShell>
+    </>
   );
 }
