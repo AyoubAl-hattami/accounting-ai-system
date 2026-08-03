@@ -157,6 +157,13 @@ strings that mention "invoice" as a generic accounting term inside
 
 ## 5. Demo Blockers (top 5)
 
+> **Status update 2026-08-03 (Phase 71).** Blocker 1 is resolved
+> (`backend/scripts/seed_demo_data.py`). Blocker 2 is resolved for local
+> development via `scripts/dev-*.ps1` plus `docs/demo/local-demo-quickstart.md`;
+> Docker Compose is still absent and now sits with Phase 75. Blocker 3 is
+> documented rather than removed — the demo path defaults to the offline `rules`
+> provider and the quickstart explains how to switch. Blockers 4 and 5 are open.
+
 1. **No sample/seed data story beyond default COA** — a demo needs a company with
    realistic transaction history; `backend/app/application/accounts/defaults.py`
    seeds a chart of accounts but there's no seeded set of journal entries/reports to

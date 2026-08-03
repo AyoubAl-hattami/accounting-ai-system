@@ -6,6 +6,24 @@ The system currently includes authentication, company access control, role-based
 
 ---
 
+## Run the demo
+
+To get a working local instance with realistic data in a few minutes, follow the
+[local demo quickstart](docs/demo/local-demo-quickstart.md):
+
+```powershell
+cd C:\ayoub\accounting-ai-system
+.\scripts\dev-start-backend.ps1     # migrations + API on 127.0.0.1:8010
+.\scripts\dev-seed-demo.ps1         # idempotent demo user, company, chart, journals
+.\scripts\dev-start-frontend.ps1    # Vite dev server on 127.0.0.1:5173
+```
+
+The seed data and its credentials are for local development only — see the
+quickstart for the full checklist, expected report figures, and troubleshooting.
+The manual setup below remains the reference for everything the helper scripts do.
+
+---
+
 ## Current Status
 
 Backend MVP is active and tested.

@@ -1,8 +1,9 @@
 # Phase 70 — Demo Readiness Plan (proposal)
 
 Date: 2026-08-02
-Status: Proposal, not yet started. This document is documentation output of the
-Phase 69 audit — it does not itself change any code or config.
+Status: **Partially delivered by Phase 71** (2026-08-03). This document remains the
+plan of record; see the implementation status section below for what shipped and
+what is still outstanding.
 
 ## Goal
 
@@ -156,3 +157,54 @@ The only way this phase introduces risk is if seed-data scripts bypass applicati
 use cases and write directly to the database — this must be avoided; seed scripts
 should call the same `CreateJournalEntry`/`PostJournalEntry`/etc. use cases that
 production code and tests already exercise.
+
+---
+
+## Implementation status (updated 2026-08-03, Phase 71)
+
+Phase 71 delivered the scripted local-run and seed-data half of this plan.
+Containerisation was deliberately deferred.
+
+### Delivered
+
+- **Seed/demo data script** — `backend/scripts/seed_demo_data.py`. Creates the demo
+  admin user, `Demo Company Ltd` (USD), the shipped default chart of accounts, an
+  open fiscal year with twelve open monthly periods, and eight balanced journal
+  entries carried through `draft → reviewed → posted`. All writes go through the
+  existing application use cases (`CreateUser`, `CreateCompany`, `CreateCompanyUser`,
+  `SeedDefaultAccounts`, `CreateFiscalYear`, `CreateFiscalPeriod`,
+  `CreateOpeningBalance`, `CreateJournalEntry`, `ReviewJournalEntry`,
+  `PostJournalEntry`) — no raw-SQL inserts, as this plan required. Idempotent and
+  additive; refuses to run when `APP_ENV=production`.
+- **One-command local run helpers** — `scripts/dev-start-backend.ps1`,
+  `scripts/dev-start-frontend.ps1`, `scripts/dev-seed-demo.ps1`. Non-destructive:
+  no database drop, no `node_modules` deletion.
+- **Demo runbook** — `docs/demo/local-demo-quickstart.md`, covering prerequisites,
+  startup, seeding, login, a twelve-route demo checklist, expected report figures,
+  troubleshooting, and a production warning.
+- **AI assistant demo readiness** — documented in the quickstart. The helper scripts
+  pin `AI_JOURNAL_PROVIDER=rules`, so the assistant demos offline with no API key;
+  the quickstart explains how to switch to Gemini/OpenAI for a live demo.
+- **Seed-plan unit tests** — `backend/tests/test_seed_demo_data.py`. Pure tests over
+  the seed's date/plan helpers: every entry balanced, entry numbers unique, all dates
+  inside the current fiscal year and never in the future, exactly one opening balance.
+  No database or browser required.
+
+### Verified report output from the seed
+
+```text
+Trial Balance    total debit  91,050.00   total credit 91,050.00
+Profit & Loss    income       28,250.00   expenses      6,050.00   net profit 22,200.00
+Balance Sheet    assets       72,950.00   liabilities     750.00   equity     72,200.00
+Account Ledger   1110 Main Bank closing balance 69,450.00 across 6 lines
+General Ledger   movement on 7 accounts
+```
+
+### Still outstanding from this plan
+
+- **Docker Compose + Dockerfiles.** Phase 71 shipped PowerShell helper scripts
+  instead. Containerisation stays open; it now belongs with the Phase 75 deployment
+  hardening work rather than blocking a local demo.
+- **First-run UX walkthrough with seeded data.** The seeded data has been verified
+  at the report/use-case level, not by manually clicking every screen.
+- **`.env` secrets hygiene verification.** Still a read-only check to perform.
