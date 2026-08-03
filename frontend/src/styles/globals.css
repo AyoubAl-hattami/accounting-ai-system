@@ -153,8 +153,12 @@
   --duration-fast:   140ms;
   --duration-normal: 220ms;
   --duration-slow:   320ms;
+  /* Route changes sit at the short end deliberately: the shell no longer moves,
+     so the content only needs to acknowledge the change, not perform it. */
+  --duration-page:   160ms;
   --ease-standard:   cubic-bezier(0.4, 0, 0.2, 1);
   --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out:        cubic-bezier(0, 0, 0.2, 1);
 
   /* Launcher height + its offset + a gap, so page content clears the corner. */
   --fab-safe-area: 6.5rem;
@@ -369,6 +373,11 @@ html.dark {
 
 @keyframes slide-up {
   from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes page-enter {
+  from { opacity: 0; transform: translate3d(0, 4px, 0); }
   to   { opacity: 1; transform: none; }
 }
 
@@ -904,10 +913,13 @@ html.dark {
     animation: aurora 14s var(--ease-standard) infinite;
   }
 
-  /* Every page mounts through this, which is what gives navigation a sense of
-     continuity instead of a hard cut. */
+  /* Every page mounts through this. It used to reuse slide-up — 320ms and a
+     10px lift — which was legible as movement back when the whole window was
+     being replaced anyway. Now that the shell holds still, that same travel
+     reads as the content jumping. A 4px settle over 160ms acknowledges the
+     change without performing it. */
   .page-enter {
-    animation: slide-up var(--duration-slow) var(--ease-emphasized) both;
+    animation: page-enter var(--duration-page) var(--ease-out) both;
   }
 
   /* Reserves the corner the assistant launcher occupies, so a report's closing
@@ -1019,5 +1031,13 @@ html[dir='rtl'] .mr-auto { margin-right: 0; margin-left: auto; }
 
   .skeleton::after {
     display: none;
+  }
+
+  /* The route transition is decorative by definition — the content is already
+     correct without it. Tailwind's `motion-safe:` prefix means the class is
+     never applied under this preference, but the rule is stated outright so the
+     guarantee does not depend on the call site remembering the prefix. */
+  .page-enter {
+    animation: none !important;
   }
 }

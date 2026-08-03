@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   BarChart3,
@@ -69,12 +69,19 @@ export default function AppShell({
   onSelectCompany,
   pageTitle,
   pageSubtitle,
-  activePath = '/dashboard',
+  activePath,
   userRole = null,
 }: AppShellProps) {
   const { user, logout } = useAuth();
   const { t, dir, language, setLanguage } = useI18n();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  // The URL is right on the first render; the page's own declaration arrives a
+  // beat later from a layout effect. Reading the route here keeps the content
+  // transition key stable from the outset — keying it on the late value would
+  // tear down and rebuild each page immediately after mounting it, firing every
+  // data fetch twice.
+  const currentPath = activePath ?? pathname;
   // Lazy initialiser, so the stored width is applied on the first paint of the
   // new route rather than flashing expanded and then snapping shut.
   const [collapsed, setCollapsed] = useState(readStoredCollapsed);
@@ -148,7 +155,7 @@ export default function AppShell({
   const roleLabel = userRole ? userRole.charAt(0).toUpperCase() + userRole.slice(1) : null;
 
   const renderNavButton = ({ icon: Icon, label, path }: NavItem) => {
-    const isActive = path === activePath;
+    const isActive = path === currentPath;
     return (
       <button
         key={path}
@@ -280,7 +287,7 @@ export default function AppShell({
             >
               <Menu className="nav-icon" />
             </button>
-            <div key={activePath} className="motion-safe:animate-fade-in min-w-0">
+            <div key={pathname} className="motion-safe:animate-fade-in min-w-0">
               <h1 className="truncate text-base font-semibold tracking-tight text-foreground">
                 {displayTitle}
               </h1>
@@ -332,13 +339,15 @@ export default function AppShell({
           </div>
         </header>
 
-        {/* Keyed on the route so each section fades and lifts in rather than
-            swapping instantly. */}
-        <main
-          key={activePath}
-          className="motion-safe:page-enter pb-safe-fab flex-1 px-4 pt-4 lg:px-6 lg:pt-6"
-        >
-          {children}
+        {/* The <main> box itself is never keyed: its padding, flex sizing and
+            FAB safe area must stay in the DOM across navigations, or the page
+            height collapses for a frame and the scrollbar flicks away. Only the
+            inner wrapper is keyed, so the content re-enters while the well it
+            sits in holds still. */}
+        <main className="pb-safe-fab min-w-0 flex-1 px-4 pt-4 lg:px-6 lg:pt-6">
+          <div key={pathname} className="motion-safe:page-enter">
+            {children}
+          </div>
         </main>
       </div>
 
