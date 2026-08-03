@@ -120,6 +120,22 @@ the documented value:
 .\scripts\dev-seed-demo.ps1 --reset-demo-password
 ```
 
+### Demoing the platform subscriptions page
+
+The demo admin is a *company* administrator, so **Platform → Subscriptions** is
+hidden from it by design — that page belongs to the SaaS operator, not to a
+tenant. To demo it, promote a user to platform administrator:
+
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d accounting_ai `
+  -c "UPDATE users SET is_superuser = true WHERE email = 'admin@example.com';"
+```
+
+Sign out and back in, and the Platform group appears in the sidebar. See
+[SaaS Subscription Model](../product/saas-subscription-model.md) for what the
+page does. Prefer a separate account for this in any shared environment, so the
+tenant walkthrough still shows what a real client sees.
+
 ---
 
 ## 6. Demo route checklist
@@ -140,6 +156,7 @@ Walk these in order. Select **Demo Company Ltd** in the company switcher first.
 | 10 | Audit Logs | Trail behind the seeded activity |
 | 11 | Settings | Company profile, base currency, light/dark mode |
 | 12 | AI Assistant | Works offline with the rules provider (see below) |
+| 13 | Platform → Subscriptions | Platform admins only — tenant list, expiry, activate/suspend/extend |
 
 ### AI Assistant during a demo
 
