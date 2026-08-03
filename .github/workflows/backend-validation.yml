@@ -202,4 +202,5 @@ jobs:
             tests/test_gemini_assistant_explain.py \
             tests/test_gemini_assistant_profit.py \
             tests/test_semantic_transaction.py \
+            tests/test_platform_subscriptions.py \
             -v

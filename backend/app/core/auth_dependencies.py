@@ -53,6 +53,23 @@ def get_current_user(
     return user
 
 
+def get_current_platform_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Restrict a route to the SaaS platform owner.
+
+    Platform admins operate across tenants and are deliberately not members of
+    any client company, so this checks the global flag and never a membership.
+    """
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Platform administrator access required",
+        )
+
+    return current_user
+
+
 bearer_scheme_optional = HTTPBearer(auto_error=False)
 
 def get_current_user_optional(
