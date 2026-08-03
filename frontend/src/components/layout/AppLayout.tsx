@@ -1,11 +1,14 @@
 import { Suspense, useMemo, useState } from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import AppShell from './AppShell';
 import { PageMetaContext, type PageMeta } from './pageMeta';
 import { useAuth } from '../../auth/AuthContext';
+import { isPlatformPage } from '../../auth/permissions';
 import { useCompanies } from '../../features/companies/useCompanies';
 import { useCompanyRole } from '../../auth/useCompanyRole';
+import SubscriptionInactiveScreen from '../../features/subscriptions/SubscriptionInactiveScreen';
+import { useCompanySubscriptionStatus } from '../../features/subscriptions/useCompanySubscriptionStatus';
 
 /**
  * The one place the application shell is mounted.
@@ -21,9 +24,16 @@ export default function AppLayout() {
   const { user, isLoading } = useAuth();
   const { companies, selectedCompany, selectCompany } = useCompanies();
   const { role: userRole } = useCompanyRole(selectedCompany?.id ?? null);
+  const { pathname } = useLocation();
+  const { status: subscription } = useCompanySubscriptionStatus(selectedCompany?.id ?? null);
   const [meta, setMeta] = useState<PageMeta>({});
 
   const metaValue = useMemo(() => ({ meta, setMeta }), [meta]);
+
+  // Platform pages belong to the operator, not to the tenant, so a locked out
+  // company must not hide them — and the operator is never locked out at all.
+  const locked =
+    subscription?.is_active === false && !user?.is_superuser && !isPlatformPage(pathname);
 
   if (isLoading) {
     return (
@@ -51,9 +61,13 @@ export default function AppLayout() {
         {/* Scoped to the content well, so pulling a lazy page chunk swaps the
             main area and leaves the sidebar and topbar on screen. Hoisted to
             the router it blanked the entire window on first visit to a route. */}
-        <Suspense fallback={<ContentFallback />}>
-          <Outlet />
-        </Suspense>
+        {locked && subscription ? (
+          <SubscriptionInactiveScreen status={subscription} />
+        ) : (
+          <Suspense fallback={<ContentFallback />}>
+            <Outlet />
+          </Suspense>
+        )}
       </AppShell>
     </PageMetaContext.Provider>
   );

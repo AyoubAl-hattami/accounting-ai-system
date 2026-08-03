@@ -300,10 +300,13 @@ def get_my_company_user_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CompanyUser:
+    # Exempt from the subscription gate: the client resolves its own role from
+    # this call, and it must still render the subscription-inactive screen.
     company_user = ensure_company_access(
         db=db,
         current_user=current_user,
         company_id=company_id,
+        require_active_subscription=False,
     )
     return company_user
 

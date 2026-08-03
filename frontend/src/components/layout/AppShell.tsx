@@ -5,6 +5,7 @@ import {
   BarChart3,
   BookMarked,
   BookOpen,
+  Building2,
   ChevronLeft,
   FileText,
   Globe,
@@ -146,6 +147,18 @@ export default function AppShell({
   ]
     .map((group) => ({ ...group, items: group.items.filter((i) => canViewPage(userRole, i.path)) }))
     .filter((group) => group.items.length > 0);
+
+  // Appended after the role filter on purpose: canViewPage answers for tenant
+  // roles and lets unknown paths through, which would show this group to
+  // everyone. Platform pages key off the platform flag instead.
+  if (user?.is_superuser) {
+    navGroups.push({
+      label: t.nav.groupPlatform,
+      items: [
+        { icon: Building2, label: t.nav.platformSubscriptions, path: '/platform/subscriptions' },
+      ],
+    });
+  }
 
   const handleNav = (path: string) => {
     navigate(path);

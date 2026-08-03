@@ -24,6 +24,7 @@ from app.modules.accounting.models.account import Account
 from app.modules.accounting.models.assistant_conversation import AssistantConversation
 from app.modules.accounting.models.audit_log import AuditLog
 from app.modules.accounting.models.company import Company
+from app.modules.accounting.models.company_subscription import CompanySubscription
 from app.modules.accounting.models.company_user import CompanyUser
 from app.modules.accounting.models.company_user_invitation import CompanyUserInvitation
 from app.modules.accounting.models.fiscal_period import FiscalPeriod
@@ -137,6 +138,32 @@ class AccountingTestFactory:
         self.db.add(membership)
         self.db.flush()
         return membership
+
+    def set_subscription(
+        self,
+        *,
+        company: Company,
+        status: str = "active",
+        expires_at: datetime | None = None,
+        plan_code: str | None = None,
+        suspension_reason: str | None = None,
+    ) -> CompanySubscription:
+        """Create or overwrite the company's single subscription record."""
+        subscription = self.db.scalar(
+            select(CompanySubscription).where(
+                CompanySubscription.company_id == company.id
+            )
+        )
+        if subscription is None:
+            subscription = CompanySubscription(company_id=company.id)
+            self.db.add(subscription)
+
+        subscription.status = status
+        subscription.expires_at = expires_at
+        subscription.plan_code = plan_code
+        subscription.suspension_reason = suspension_reason
+        self.db.flush()
+        return subscription
 
     def add_member(
         self,

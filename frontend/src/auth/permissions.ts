@@ -90,3 +90,17 @@ export function canViewPage(role: CompanyUserRole | null, path: string): boolean
   if (!allowed) return true; // unknown pages default to visible
   return hasRole(role, allowed);
 }
+
+// ── Platform Pages ──
+
+/**
+ * Routes owned by the SaaS platform operator rather than by any tenant. They are
+ * gated on `user.is_superuser`, never on a company role: the platform owner is
+ * deliberately not a member of the companies it administers, so `canViewPage`
+ * (which defaults unknown paths to visible) must not be consulted for them.
+ */
+const PLATFORM_PAGES: readonly string[] = ['/platform/subscriptions'];
+
+export function isPlatformPage(path: string): boolean {
+  return PLATFORM_PAGES.includes(path);
+}

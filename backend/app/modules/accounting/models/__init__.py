@@ -7,6 +7,7 @@ from app.modules.accounting.models.journal_line import JournalLine
 from app.modules.accounting.models.audit_log import AuditLog
 from app.modules.accounting.models.user import User
 from app.modules.accounting.models.company_user import CompanyUser
+from app.modules.accounting.models.company_subscription import CompanySubscription
 from app.modules.accounting.models.company_user_invitation import CompanyUserInvitation
 from app.modules.accounting.models.assistant_conversation import (
     AssistantConversation,
@@ -23,6 +24,7 @@ __all__ = [
     "AuditLog",
     "User",
     "CompanyUser",
+    "CompanySubscription",
     "CompanyUserInvitation",
     "AssistantConversation",
     "AssistantMessage",

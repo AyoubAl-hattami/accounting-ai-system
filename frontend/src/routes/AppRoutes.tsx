@@ -18,6 +18,9 @@ const AuditLogsPage = lazy(() => import('../features/audit/AuditLogsPage'));
 const CompanyUsersPage = lazy(() => import('../features/company-users/CompanyUsersPage'));
 const AcceptInvitePage = lazy(() => import('../features/company-users/AcceptInvitePage'));
 const SettingsPage = lazy(() => import('../features/settings/SettingsPage'));
+const PlatformSubscriptionsPage = lazy(
+  () => import('../features/subscriptions/PlatformSubscriptionsPage'),
+);
 
 function RouteLoader() {
   return (
@@ -140,6 +143,14 @@ export default function AppRoutes() {
               element={
                 <ProtectedRoute requiredPagePath="/settings">
                   <SettingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/platform/subscriptions"
+              element={
+                <ProtectedRoute requiredPagePath="/platform/subscriptions">
+                  <PlatformSubscriptionsPage />
                 </ProtectedRoute>
               }
             />

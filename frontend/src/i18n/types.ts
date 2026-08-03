@@ -179,6 +179,8 @@ export interface Translations {
     groupBookkeeping: string;
     groupReports: string;
     groupAdministration: string;
+    groupPlatform: string;
+    platformSubscriptions: string;
     collapseSidebar: string;
     expandSidebar: string;
     openMenu: string;
@@ -765,5 +767,77 @@ export interface Translations {
     todayNotInOpenFiscalPeriod: string;
     createFiscalPeriodForToday: string;
     entryDateTodayOnly: string;
+  };
+
+  // ── Platform Subscriptions (platform owner only) ──
+  platformSubscriptions: {
+    pageTitle: string;
+    pageSubtitle: string;
+    searchPlaceholder: string;
+    statusFilterLabel: string;
+    allStatuses: string;
+    columnCompany: string;
+    columnCurrency: string;
+    columnStatus: string;
+    columnEffectiveStatus: string;
+    columnExpires: string;
+    columnDaysRemaining: string;
+    columnPlan: string;
+    columnMembers: string;
+    columnActions: string;
+    noExpiry: string;
+    noPlan: string;
+    expiredAgo: string;
+    daysLeft: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    loadFailed: string;
+    accessDeniedTitle: string;
+    accessDeniedDescription: string;
+    actionActivate: string;
+    actionSuspend: string;
+    actionCancel: string;
+    actionExtendMonth: string;
+    actionExtendYear: string;
+    actionEdit: string;
+    activateTitle: string;
+    activateDescription: string;
+    suspendTitle: string;
+    suspendDescription: string;
+    cancelTitle: string;
+    cancelDescription: string;
+    reasonLabel: string;
+    reasonPlaceholder: string;
+    editTitle: string;
+    editDescription: string;
+    expiresAtLabel: string;
+    expiresAtHelp: string;
+    planCodeLabel: string;
+    planCodePlaceholder: string;
+    statusLabel: string;
+    saveChanges: string;
+    activatedToast: string;
+    suspendedToast: string;
+    cancelledToast: string;
+    extendedToast: string;
+    updatedToast: string;
+    actionFailed: string;
+  };
+
+  // ── Subscription statuses ──
+  subscriptionStatus: {
+    trial: string;
+    active: string;
+    past_due: string;
+    suspended: string;
+    cancelled: string;
+  };
+
+  // ── Locked-out tenant screen ──
+  subscriptionInactive: {
+    title: string;
+    message: string;
+    currentStatus: string;
+    expiredOn: string;
   };
 }
