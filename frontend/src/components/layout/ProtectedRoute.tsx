@@ -2,7 +2,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { useCompanyRole } from '../../auth/useCompanyRole';
 import { useCompanies } from '../../features/companies/useCompanies';
-import { canViewPage } from '../../auth/permissions';
+import { canViewPage, isPlatformPage } from '../../auth/permissions';
 import AccessDenied from '../feedback/AccessDenied';
 import { Loader2 } from 'lucide-react';
 
@@ -35,6 +35,12 @@ export default function ProtectedRoute({ children, requiredPagePath }: Protected
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Platform routes answer to the platform flag alone, and are checked first so
+  // the tenant role is never consulted for a page that has no tenant.
+  if (requiredPagePath && isPlatformPage(requiredPagePath)) {
+    return user.is_superuser ? <>{children}</> : <AccessDenied />;
   }
 
   // Role-based page access check

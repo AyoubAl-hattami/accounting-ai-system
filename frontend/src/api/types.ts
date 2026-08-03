@@ -312,3 +312,47 @@ export interface CompanyUserInvitationRead {
   accepted_by_user_id: number | null;
   created_at: string;
 }
+
+// ── Subscriptions ──
+
+export type SubscriptionStatus =
+  | 'trial'
+  | 'active'
+  | 'past_due'
+  | 'suspended'
+  | 'cancelled';
+
+export interface Subscription {
+  id: number | null;
+  company_id: number;
+  status: SubscriptionStatus;
+  plan_code: string | null;
+  expires_at: string | null;
+  trial_ends_at: string | null;
+  suspended_at: string | null;
+  cancelled_at: string | null;
+  suspension_reason: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+/** Platform-owner view of one tenant and its subscription. */
+export interface CompanySubscription {
+  company_id: number;
+  company_name: string;
+  base_currency: string;
+  company_is_active: boolean;
+  subscription: Subscription;
+  effective_status: SubscriptionStatus;
+  days_remaining: number | null;
+  member_count: number;
+}
+
+/** Company-facing projection: enough to explain a lockout, nothing more. */
+export interface CompanySubscriptionStatus {
+  company_id: number;
+  effective_status: SubscriptionStatus;
+  expires_at: string | null;
+  days_remaining: number | null;
+  is_active: boolean;
+}
