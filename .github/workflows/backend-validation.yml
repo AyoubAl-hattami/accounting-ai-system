@@ -204,4 +204,5 @@ jobs:
             tests/test_semantic_transaction.py \
             tests/test_platform_subscriptions.py \
             tests/test_client_onboarding.py \
+            tests/test_onboard_client_script.py \
             -v

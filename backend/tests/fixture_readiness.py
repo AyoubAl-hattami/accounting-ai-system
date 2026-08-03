@@ -50,6 +50,7 @@ EXPECTED_HTTP_INTEGRATION_FILES = frozenset(
         "test_invitation_lifecycle_integrity.py",
         "test_journal_lifecycle_policy.py",
         "test_non_journal_audit_logs.py",
+        "test_onboard_client_script.py",
         "test_opening_balance_workflow.py",
         "test_password_policy.py",
         "test_platform_subscriptions.py",
@@ -113,6 +114,7 @@ EXPECTED_FACTORY_BACKED_HTTP_FILES = frozenset(
         "test_assistant_conversations.py",
         "test_platform_subscriptions.py",
         "test_client_onboarding.py",
+        "test_onboard_client_script.py",
     }
 )
 
