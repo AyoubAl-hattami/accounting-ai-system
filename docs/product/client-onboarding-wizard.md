@@ -58,6 +58,11 @@ valid the first time through.
 | **Set a password** | The operator types one; the wizard applies the same rule the backend does before sending |
 | **Reuse an existing account** | An account that already exists on the platform is attached to the new company and keeps its own password |
 
+The first two modes hand a credential to a human being, so the new account is
+created with `must_change_password = true` and reaches nothing but the change
+screen until it picks its own. The third does not, so it is left alone. See
+[secure-client-handover.md](secure-client-handover.md).
+
 Generation happens on the server (`app/application/onboarding/passwords.py`)
 using `secrets.SystemRandom`, over an alphabet with the ambiguous glyphs
 (`l`, `I`, `O`, `0`, `1`) removed so the password survives being read aloud.
@@ -133,6 +138,9 @@ route, and the response body of the request that created the account.
   onboarding, so it cannot leak into the next client's session.
 - Reusing an existing account returns `generated_password: null` — that account
   keeps its own credentials and there is nothing to hand over.
+- It is **spent on first use.** The account it belongs to is created with
+  `must_change_password = true` and is refused everywhere except `/auth/me` and
+  the change endpoint until it is replaced.
 
 The success screen says so plainly, in both languages, before the operator
 navigates away.
@@ -146,13 +154,14 @@ Hello,
 
 Your accounting system access has been created.
 
-Login URL: [add your domain here]
+Login URL: https://accounting.example.com
 Company: Northwind Trading
 Admin email: admin@northwind.test
 Temporary password: Sw1ftPelican42
 Subscription valid until: 2026-09-30
 
-Please log in and change your password immediately. You can then invite your
+This password is temporary. The system will ask you to set a new one the first
+time you log in, and nothing else opens until you do. You can then invite your
 team members from Company Users.
 ```
 
@@ -163,19 +172,22 @@ In Arabic:
 
 تم إنشاء حساب شركتكم في نظام المحاسبة.
 
-رابط الدخول: [ضع رابط الموقع هنا]
+رابط الدخول: https://accounting.example.com
 الشركة: Northwind Trading
 البريد الإداري: admin@northwind.test
 كلمة المرور المؤقتة: Sw1ftPelican42
 الاشتراك صالح حتى: 2026-09-30
 
-يرجى تسجيل الدخول وتغيير كلمة المرور مباشرة. بعد ذلك يمكنكم إضافة أعضاء فريقكم
-من صفحة مستخدمي الشركة.
+كلمة المرور هذه مؤقتة، وسيطلب منكم النظام تعيين كلمة مرور جديدة عند أول تسجيل
+دخول، ولن يفتح أي شيء آخر قبل ذلك. بعد ذلك يمكنكم إضافة أعضاء فريقكم من صفحة
+مستخدمي الشركة.
 ```
 
-`[add your domain here]` is a literal placeholder. The system does not know its
-own public URL, and guessing one that turns out to be wrong is worse than asking
-the operator to paste it.
+The login URL comes from `APP_PUBLIC_URL`. When it is unset the server sends
+`[add your domain here]` instead, and the success screen raises a warning
+callout on it — a wrong guessed domain in a message the operator forwards is
+worse than an obvious blank. See
+[secure-client-handover.md](secure-client-handover.md).
 
 The message is built in two places on purpose:
 
@@ -195,8 +207,11 @@ Both routes require `get_current_platform_admin`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/platform/onboarding/defaults` | Currencies, plan codes, expiry presets, generated-password length |
+| `GET` | `/platform/onboarding/defaults` | Currencies, plan codes, expiry presets, `public_login_url`, generated-password length |
 | `POST` | `/platform/onboarding/clients` | Create the tenant (201) |
+
+The 201 response carries `generated_password` (once), `must_change_password`,
+`public_login_url` and the rendered `handover_message`.
 
 ### Request
 
@@ -276,17 +291,13 @@ python scripts/onboard_client.py --company-name "Acme Trading" \
 It generates a password when none is supplied, prints the English handover
 message once, and writes the same audit row the API does. The password reaches
 the terminal and nowhere else — do not pipe the output into a file that outlives
-the handover.
+the handover. It prints the `APP_PUBLIC_URL` login address and warns when that
+variable is unset, since the message is not worth sending without it.
 
 ## Limitations
 
 Deliberately out of scope, and worth knowing before you rely on them:
 
-- **There is no forced password change.** The schema has no
-  `must_change_password` flag, and adding one would touch the whole auth flow.
-  The handover message and the wizard both tell the client to change it
-  immediately, but nothing in the system enforces that. This is the single
-  largest gap in the flow.
 - **No email is sent.** The system has no mail transport. The operator delivers
   the handover message through whatever channel it already uses with the client.
 - **No payment gateway and no invoices.** The subscription records a commercial
@@ -296,22 +307,31 @@ Deliberately out of scope, and worth knowing before you rely on them:
   tenant is created by the platform operator.
 - **No demo journal entries.** The wizard seeds structure, not bookkeeping. Use
   `backend/scripts/seed_demo_data.py` when a populated tenant is wanted.
-- **The login URL is a placeholder.** The system does not know its public
-  address; the operator fills it in.
+- **The login URL has to be configured.** The system cannot infer its public
+  address. Until `APP_PUBLIC_URL` is set the message carries a visible
+  placeholder.
+- **Temporary passwords do not expire.** The first login is forced through a
+  password change, but a handed-over password that is never used stays usable
+  indefinitely.
 - **Company names are compared case-insensitively but are not unique in the
   database.** The 409 is enforced by a lookup in the use case, not by a
   constraint, so a company created outside this endpoint can still collide.
 
 ## Tests
 
-- `backend/tests/test_client_onboarding.py` — 27 HTTP integration tests covering
-  authorisation, refusals, atomicity, isolation, credential handling, the
-  seeded chart of accounts and fiscal calendar, and the trial window.
-- `backend/tests/test_onboard_client_script.py` — 9 tests for the CLI.
+- `backend/tests/test_client_onboarding.py` — 29 HTTP integration tests covering
+  authorisation, refusals, atomicity, isolation, credential handling, the forced
+  password change on the new admin, the seeded chart of accounts and fiscal
+  calendar, and the trial window.
+- `backend/tests/test_onboard_client_script.py` — 12 tests for the CLI.
 - `frontend/src/test/smoke/ClientOnboardingRouteGuard.test.tsx` — the platform
   route guard.
 - `frontend/src/test/smoke/ClientOnboardingWizard.test.tsx` — step validation,
-  the request payload for active and trial terms, the success screen, password
-  clearing, and each mapped error.
+  the request payload for active and trial terms, the success screen, the public
+  login URL and the first-login notice, password clearing, and each mapped error.
 - `frontend/src/test/smoke/handoverMessage.test.ts` — the English message line
-  for line, the Arabic message, and the reused-account variant.
+  for line, the Arabic message, the server-sent URL, and the reused-account
+  variant.
+
+The forced password change itself is covered separately; see
+[secure-client-handover.md](secure-client-handover.md).
