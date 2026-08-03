@@ -181,6 +181,7 @@ export interface Translations {
     groupAdministration: string;
     groupPlatform: string;
     platformSubscriptions: string;
+    platformOnboarding: string;
     collapseSidebar: string;
     expandSidebar: string;
     openMenu: string;
@@ -839,5 +840,144 @@ export interface Translations {
     message: string;
     currentStatus: string;
     expiredOn: string;
+  };
+
+  // ── Client onboarding wizard (platform owner only) ──
+  clientOnboarding: {
+    pageTitle: string;
+    pageSubtitle: string;
+    accessDeniedTitle: string;
+    accessDeniedDescription: string;
+
+    // Stepper
+    stepCompany: string;
+    stepAdmin: string;
+    stepSubscription: string;
+    stepAccounting: string;
+    stepReview: string;
+    stepProgress: string; // "Step {current} of {total}"
+
+    // Step 1 — client company
+    companyStepTitle: string;
+    companyStepDescription: string;
+    companyNameLabel: string;
+    companyNamePlaceholder: string;
+    baseCurrencyLabel: string;
+    baseCurrencyHelp: string;
+
+    // Step 2 — client admin
+    adminStepTitle: string;
+    adminStepDescription: string;
+    adminEmailLabel: string;
+    adminEmailPlaceholder: string;
+    adminFullNameLabel: string;
+    adminFullNamePlaceholder: string;
+    passwordModeLabel: string;
+    passwordModeGenerate: string;
+    passwordModeManual: string;
+    passwordModeReuse: string;
+    generatePasswordHelp: string;
+    temporaryPasswordLabel: string;
+    temporaryPasswordPlaceholder: string;
+    passwordPolicyHelp: string;
+    changePasswordWarning: string;
+    reuseExistingUserHelp: string;
+
+    // Step 3 — subscription
+    subscriptionStepTitle: string;
+    subscriptionStepDescription: string;
+    planCodeLabel: string;
+    planCodePlaceholder: string;
+    statusLabel: string;
+    expiresAtLabel: string;
+    expiresAtHelp: string;
+    trialEndsAtLabel: string;
+    trialEndsAtHelp: string;
+    presetMonth: string;
+    presetQuarter: string;
+    presetYear: string;
+    daysRemainingLabel: string;
+    daysRemainingValue: string; // "{days} days remaining"
+    expiryInPastWarning: string;
+
+    // Step 4 — initial accounting setup
+    accountingStepTitle: string;
+    accountingStepDescription: string;
+    seedAccountsLabel: string;
+    seedAccountsHelp: string;
+    createFiscalYearLabel: string;
+    createFiscalYearHelp: string;
+    openPeriodsLabel: string;
+    openPeriodsHelp: string;
+    openPeriodsRequiresFiscalYear: string;
+    onboardingNoteLabel: string;
+    onboardingNotePlaceholder: string;
+
+    // Step 5 — review
+    reviewStepTitle: string;
+    reviewStepDescription: string;
+    reviewCompanySection: string;
+    reviewAdminSection: string;
+    reviewSubscriptionSection: string;
+    reviewAccountingSection: string;
+    reviewPasswordGenerated: string;
+    reviewPasswordManual: string;
+    reviewPasswordReuse: string;
+    reviewNoPlan: string;
+    reviewNoExpiry: string;
+    reviewNotProvided: string;
+    createClient: string;
+    creating: string;
+
+    // Success screen
+    successTitle: string;
+    successDescription: string;
+    summaryCompanyId: string;
+    summaryAdminUserId: string;
+    summarySeededAccounts: string;
+    summaryFiscalYear: string;
+    summaryFiscalPeriods: string;
+    summaryExpiry: string;
+    summaryEffectiveStatus: string;
+    fiscalYearCreated: string;
+    fiscalYearExisting: string;
+    passwordShownOnceWarning: string;
+    onboardAnother: string;
+    goToSubscriptions: string;
+
+    // Handover message (73-F)
+    handoverTitle: string;
+    handoverHelp: string;
+    copyMessage: string;
+    copiedToast: string;
+    copyFailed: string;
+    handoverGreeting: string;
+    handoverIntro: string;
+    handoverLoginUrl: string;
+    handoverLoginUrlPlaceholder: string;
+    handoverCompany: string;
+    handoverAdminEmail: string;
+    handoverTemporaryPassword: string;
+    handoverValidUntil: string;
+    handoverNoExpiry: string;
+    handoverInstructions: string;
+    handoverInstructionsExistingPassword: string;
+
+    // Validation and errors
+    validationCompanyNameRequired: string;
+    validationCurrencyRequired: string;
+    validationEmailRequired: string;
+    validationEmailInvalid: string;
+    validationPasswordRequired: string;
+    validationPasswordTooWeak: string;
+    validationExpiryRequired: string;
+    errorCompanyExists: string;
+    errorAdminEmailExists: string;
+    errorReusedPlatformAdmin: string;
+    errorReusedInactive: string;
+    errorInvalidWindow: string;
+    errorAccessDenied: string;
+    errorGeneric: string;
+    createdToast: string;
   };
 }

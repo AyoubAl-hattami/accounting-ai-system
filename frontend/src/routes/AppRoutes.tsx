@@ -21,6 +21,9 @@ const SettingsPage = lazy(() => import('../features/settings/SettingsPage'));
 const PlatformSubscriptionsPage = lazy(
   () => import('../features/subscriptions/PlatformSubscriptionsPage'),
 );
+const ClientOnboardingPage = lazy(
+  () => import('../features/onboarding/ClientOnboardingPage'),
+);
 
 function RouteLoader() {
   return (
@@ -151,6 +154,14 @@ export default function AppRoutes() {
               element={
                 <ProtectedRoute requiredPagePath="/platform/subscriptions">
                   <PlatformSubscriptionsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/platform/onboarding"
+              element={
+                <ProtectedRoute requiredPagePath="/platform/onboarding">
+                  <ClientOnboardingPage />
                 </ProtectedRoute>
               }
             />

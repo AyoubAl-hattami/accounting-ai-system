@@ -356,3 +356,62 @@ export interface CompanySubscriptionStatus {
   days_remaining: number | null;
   is_active: boolean;
 }
+
+// ── Client onboarding (platform owner only) ──
+
+/** Statuses a brand-new tenant may be created with. */
+export type OnboardingSubscriptionStatus = Extract<SubscriptionStatus, 'trial' | 'active'>;
+
+export interface ClientOnboardingRequest {
+  company_name: string;
+  base_currency: string;
+  admin_email: string;
+  admin_full_name: string | null;
+  temporary_password?: string;
+  generate_password: boolean;
+  plan_code: string | null;
+  subscription_status: OnboardingSubscriptionStatus;
+  subscription_expires_at: string | null;
+  trial_ends_at?: string | null;
+  seed_default_accounts: boolean;
+  create_fiscal_year: boolean;
+  open_monthly_periods: boolean;
+  reuse_existing_user?: boolean;
+  onboarding_note?: string | null;
+}
+
+/**
+ * `generated_password` is returned exactly once, by the request that created
+ * the account. It is never stored and cannot be read back, so it must not be
+ * persisted anywhere on the client either.
+ */
+export interface ClientOnboardingResult {
+  company_id: number;
+  company_name: string;
+  base_currency: string;
+  admin_user_id: number;
+  admin_email: string;
+  admin_was_existing: boolean;
+  subscription_status: SubscriptionStatus;
+  effective_status: SubscriptionStatus;
+  plan_code: string | null;
+  expires_at: string | null;
+  trial_ends_at: string | null;
+  days_remaining: number | null;
+  seeded_accounts_count: number;
+  fiscal_year_created: boolean;
+  fiscal_periods_created: number;
+  generated_password: string | null;
+  handover_message: string;
+}
+
+export interface OnboardingDefaults {
+  default_currency: string;
+  suggested_currencies: string[];
+  default_plan_code: string;
+  suggested_plan_codes: string[];
+  default_subscription_status: OnboardingSubscriptionStatus;
+  expiry_presets: string[];
+  login_url_placeholder: string;
+  generated_password_length: number;
+}
