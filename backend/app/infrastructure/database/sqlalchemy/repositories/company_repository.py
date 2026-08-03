@@ -51,6 +51,20 @@ class SqlAlchemyCompanyRepository:
         company = self._db.scalar(select(Company).where(Company.id == company_id))
         return self._to_dto(company) if company is not None else None
 
+    def find_by_name(self, name: str) -> CompanyDTO | None:
+        """Case- and whitespace-insensitive lookup used by client onboarding.
+
+        There is no unique index on ``companies.name`` — historic data contains
+        duplicates — so this is a read used to enforce the rule at the point of
+        creation rather than a constraint.
+        """
+        company = self._db.scalar(
+            select(Company)
+            .where(func.lower(func.trim(Company.name)) == name.strip().lower())
+            .order_by(Company.id.asc())
+        )
+        return self._to_dto(company) if company is not None else None
+
     def update(self, command: UpdateCompanyCommand) -> CompanyDTO:
         company = self._db.scalar(select(Company).where(Company.id == command.company_id))
         if company is None:
