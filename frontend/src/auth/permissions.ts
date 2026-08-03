@@ -99,7 +99,10 @@ export function canViewPage(role: CompanyUserRole | null, path: string): boolean
  * deliberately not a member of the companies it administers, so `canViewPage`
  * (which defaults unknown paths to visible) must not be consulted for them.
  */
-const PLATFORM_PAGES: readonly string[] = ['/platform/subscriptions'];
+const PLATFORM_PAGES: readonly string[] = [
+  '/platform/subscriptions',
+  '/platform/onboarding',
+];
 
 export function isPlatformPage(path: string): boolean {
   return PLATFORM_PAGES.includes(path);

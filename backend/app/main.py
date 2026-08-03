@@ -17,6 +17,9 @@ from app.modules.accounting.routes.ai_routes import router as ai_router
 from app.modules.accounting.routes.assistant_conversation_routes import (
     router as assistant_conversation_router,
 )
+from app.modules.accounting.routes.platform_onboarding_routes import (
+    router as platform_onboarding_router,
+)
 from app.modules.accounting.routes.platform_subscription_routes import (
     router as platform_subscription_router,
 )
@@ -51,6 +54,7 @@ app.include_router(audit_router)
 app.include_router(ai_router)
 app.include_router(assistant_conversation_router)
 app.include_router(platform_subscription_router)
+app.include_router(platform_onboarding_router)
 
 
 @app.get("/")

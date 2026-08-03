@@ -17,6 +17,7 @@ import {
   Scale,
   Settings,
   Shield,
+  UserPlus,
   Users,
   X,
 } from 'lucide-react';
@@ -156,6 +157,7 @@ export default function AppShell({
       label: t.nav.groupPlatform,
       items: [
         { icon: Building2, label: t.nav.platformSubscriptions, path: '/platform/subscriptions' },
+        { icon: UserPlus, label: t.nav.platformOnboarding, path: '/platform/onboarding' },
       ],
     });
   }
