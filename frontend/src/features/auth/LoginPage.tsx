@@ -23,8 +23,11 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
-      navigate('/dashboard', { replace: true });
+      const signedIn = await login(email, password);
+      navigate(
+        signedIn.must_change_password ? '/auth/change-temporary-password' : '/dashboard',
+        { replace: true },
+      );
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'response' in err) {
         const axiosError = err as { response?: { data?: { detail?: string } } };

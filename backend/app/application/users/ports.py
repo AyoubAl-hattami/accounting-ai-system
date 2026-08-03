@@ -8,7 +8,12 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from app.application.users.dto import CreateUserCommand, SetUserActiveCommand, UserDTO
+from app.application.users.dto import (
+    ChangePasswordCommand,
+    CreateUserCommand,
+    SetUserActiveCommand,
+    UserDTO,
+)
 
 
 class UserRepository(Protocol):
@@ -18,3 +23,4 @@ class UserRepository(Protocol):
     def authenticate(self, email: str, password: str) -> UserDTO | None: ...
     def set_active(self, command: SetUserActiveCommand) -> UserDTO: ...
     def count_active_superusers(self) -> int: ...
+    def change_password(self, command: ChangePasswordCommand) -> UserDTO: ...

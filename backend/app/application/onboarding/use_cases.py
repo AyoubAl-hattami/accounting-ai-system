@@ -163,6 +163,11 @@ class OnboardClient:
                     email=admin_email,
                     password=command.temporary_password,
                     full_name=command.admin_full_name,
+                    # The password reaches the client over chat or email, so the
+                    # account is locked to the change screen until it picks its
+                    # own.  A reused account keeps a password nobody handed over,
+                    # so it is deliberately left untouched.
+                    must_change_password=True,
                 )
             )
         else:

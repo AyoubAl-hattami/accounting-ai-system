@@ -47,6 +47,12 @@ export default function AppLayout() {
     return <Navigate to="/login" replace />;
   }
 
+  // Every page in the shell is refused by the backend until the temporary
+  // password is replaced, so the shell never mounts for such an account.
+  if (user.must_change_password) {
+    return <Navigate to="/auth/change-temporary-password" replace />;
+  }
+
   return (
     <PageMetaContext.Provider value={metaValue}>
       <AppShell

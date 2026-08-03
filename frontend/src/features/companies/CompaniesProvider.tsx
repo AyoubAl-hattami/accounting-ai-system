@@ -54,7 +54,8 @@ export function CompaniesProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Signed out there is nothing to ask for, and asking would only earn a 401.
-    if (!user) {
+    // Holding a temporary password earns a 403 for the same reason.
+    if (!user || user.must_change_password) {
       setCompanies([]);
       setSelectedCompanyId(null);
       setIsLoading(false);

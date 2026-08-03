@@ -205,4 +205,5 @@ jobs:
             tests/test_platform_subscriptions.py \
             tests/test_client_onboarding.py \
             tests/test_onboard_client_script.py \
+            tests/test_forced_password_change.py \
             -v

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy import Boolean, DateTime, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -18,6 +18,16 @@ class User(Base):
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_superuser: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    # Set when an account is handed over with a temporary password.  While true
+    # the account can authenticate but reach nothing except the password change,
+    # so a credential that travelled over chat or email is never the one in use.
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

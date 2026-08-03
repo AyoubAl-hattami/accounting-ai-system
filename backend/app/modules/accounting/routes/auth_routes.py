@@ -3,8 +3,18 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.application.users.dto import AuthenticateUserCommand, CreateUserCommand
-from app.application.users.use_cases import AuthenticateUser, CreateUser, LookupUserByEmail
+from app.application.users.dto import (
+    AuthenticateUserCommand,
+    ChangePasswordCommand,
+    CreateUserCommand,
+)
+from app.application.users.errors import CurrentPasswordMismatch, NewPasswordReused
+from app.application.users.use_cases import (
+    AuthenticateUser,
+    ChangeUserPassword,
+    CreateUser,
+    LookupUserByEmail,
+)
 from app.core.auth_dependencies import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
@@ -20,6 +30,7 @@ from app.infrastructure.database.sqlalchemy.repositories.user_repository import 
 )
 from app.modules.accounting.models.user import User
 from app.modules.accounting.schemas.user import (
+    ChangeTemporaryPassword,
     TokenRead,
     UserCreate,
     UserLogin,
@@ -184,6 +195,7 @@ def login_endpoint(
     return TokenRead(
         access_token=token,
         token_type="bearer",
+        must_change_password=user.must_change_password,
     )
 
 
@@ -195,3 +207,59 @@ def me_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     return current_user
+
+
+@router.post(
+    "/change-temporary-password",
+    response_model=UserRead,
+)
+def change_temporary_password_endpoint(
+    payload: ChangeTemporaryPassword,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Replace the password the account is currently holding.
+
+    Reachable whether or not the change is forced, so an account that already
+    cleared the flag can still rotate its own credential through the same path.
+
+    Existing access tokens stay valid until they expire: the tokens are stateless
+    JWTs and the system keeps no revocation list, so there is nothing to revoke.
+    """
+    user_repo = SqlAlchemyUserRepository(db)
+
+    try:
+        updated = ChangeUserPassword(user_repo).execute(
+            ChangePasswordCommand(
+                user_id=current_user.id,
+                current_password=payload.current_password,
+                new_password=payload.new_password,
+            )
+        )
+    except CurrentPasswordMismatch:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+    except NewPasswordReused:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="New password must differ from the current password",
+        )
+
+    # Only the fact of the change is recorded; neither password reaches the log.
+    prepare_audit_log(
+        db=db,
+        company_id=None,
+        actor=updated.email,
+        actor_user_id=updated.id,
+        actor_email=updated.email,
+        actor_name=updated.full_name,
+        action="change_password",
+        entity_type="user",
+        entity_id=updated.id,
+        description=f"User {updated.email} changed their password",
+    )
+    db.commit()
+
+    return updated
