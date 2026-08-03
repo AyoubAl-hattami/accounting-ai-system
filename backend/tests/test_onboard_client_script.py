@@ -22,15 +22,26 @@ from app.modules.accounting.models.company_subscription import CompanySubscripti
 from app.modules.accounting.models.company_user import CompanyUser
 from app.modules.accounting.models.fiscal_period import FiscalPeriod
 from app.modules.accounting.models.user import User
+from app.core import public_url as public_url_module
+from app.core.public_url import PUBLIC_URL_PLACEHOLDER
 from app.modules.accounting.services.auth_service import create_user_token
 from scripts.onboard_client import build_parser, run
+from test_config import build_settings
 
 
 MONTHS_IN_YEAR = 12
+SETTLED_PASSWORD = "S3ttledCliPass"
 
 
 def _run_cli(*argv: str) -> None:
     run(build_parser().parse_args(list(argv)))
+
+
+def _printed_password(output: str) -> str:
+    line = next(
+        line for line in output.splitlines() if line.startswith("Temporary password: ")
+    )
+    return line.removeprefix("Temporary password: ").strip()
 
 
 def _company_name() -> str:
@@ -38,7 +49,9 @@ def _company_name() -> str:
 
 
 def _admin_email() -> str:
-    return f"cli-admin-{uuid4().hex[:10]}@clients.test"
+    # A real TLD, not `.test`: the login endpoint validates the address and
+    # rejects reserved special-use names.
+    return f"cli-admin-{uuid4().hex[:10]}@clients-test.dev"
 
 
 @pytest.fixture
@@ -114,6 +127,44 @@ def test_cli_prints_the_handover_message_with_a_generated_password(onboarded_by_
     assert f"Admin email: {email}" in output
     assert "Temporary password: " in output
     assert "Subscription valid until: 2030-12-31" in output
+    # The operator has to be told the credential is spent and must be replaced.
+    assert "shown once" in output
+    assert "change it at first login" in output
+
+
+def test_cli_prints_the_configured_public_url(accounting_factory, monkeypatch, capsys):
+    monkeypatch.setattr(
+        public_url_module,
+        "settings",
+        build_settings(APP_PUBLIC_URL="https://accounting.example.com/"),
+    )
+
+    _run_cli(
+        "--company-name", _company_name(),
+        "--admin-email", _admin_email(),
+        "--expires", "2030-12-31",
+    )
+    output = capsys.readouterr().out
+
+    assert "Login URL         https://accounting.example.com" in output
+    assert "Login URL: https://accounting.example.com" in output
+    assert PUBLIC_URL_PLACEHOLDER not in output
+
+
+def test_cli_warns_when_no_public_url_is_configured(
+    accounting_factory, monkeypatch, capsys
+):
+    monkeypatch.setattr(public_url_module, "settings", build_settings(APP_PUBLIC_URL=""))
+
+    _run_cli(
+        "--company-name", _company_name(),
+        "--admin-email", _admin_email(),
+        "--expires", "2030-12-31",
+    )
+    output = capsys.readouterr().out
+
+    assert "APP_PUBLIC_URL is not set" in output
+    assert f"Login URL: {PUBLIC_URL_PLACEHOLDER}" in output
 
 
 def test_cli_audit_log_omits_the_generated_password(
@@ -124,10 +175,7 @@ def test_cli_audit_log_omits_the_generated_password(
 
     # Recover the one password the CLI printed, so the assertion checks the real
     # secret rather than a plausible-looking stand-in.
-    password_line = next(
-        line for line in output.splitlines() if line.startswith("Temporary password: ")
-    )
-    password = password_line.removeprefix("Temporary password: ").strip()
+    password = _printed_password(output)
     assert password
 
     log = db.scalar(
@@ -142,14 +190,50 @@ def test_cli_audit_log_omits_the_generated_password(
     assert password not in (log.description or "")
 
 
-def test_cli_created_admin_can_authenticate_and_reach_only_its_company(
+def test_cli_created_admin_is_locked_to_the_password_change(
     base_url, accounting_factory, onboarded_by_cli
 ):
-    company, email, _ = onboarded_by_cli
+    """The CLI hands over a password too, so it earns the same lock."""
+    _, email, _ = onboarded_by_cli
     admin = accounting_factory.db.scalar(select(User).where(User.email == email))
-    headers = {"Authorization": f"Bearer {create_user_token(admin)}"}
 
-    response = requests.get(f"{base_url}/companies", headers=headers)
+    blocked = requests.get(
+        f"{base_url}/companies",
+        headers={"Authorization": f"Bearer {create_user_token(admin)}"},
+    )
+
+    assert admin.must_change_password is True
+    assert blocked.status_code == 403
+    assert blocked.json()["detail"]["code"] == "PASSWORD_CHANGE_REQUIRED"
+
+
+def test_cli_created_admin_reaches_only_its_company_once_settled(
+    base_url, accounting_factory, onboarded_by_cli
+):
+    company, email, output = onboarded_by_cli
+    temporary = _printed_password(output)
+
+    login = requests.post(
+        f"{base_url}/auth/login", json={"email": email, "password": temporary}
+    )
+    assert login.status_code == 200, login.text
+    changed = requests.post(
+        f"{base_url}/auth/change-temporary-password",
+        json={
+            "current_password": temporary,
+            "new_password": SETTLED_PASSWORD,
+            "confirm_password": SETTLED_PASSWORD,
+        },
+        headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+    )
+    assert changed.status_code == 200, changed.text
+
+    accounting_factory.db.expire_all()
+    admin = accounting_factory.db.scalar(select(User).where(User.email == email))
+    response = requests.get(
+        f"{base_url}/companies",
+        headers={"Authorization": f"Bearer {create_user_token(admin)}"},
+    )
 
     assert response.status_code == 200
     assert [item["id"] for item in response.json()["items"]] == [company.id]

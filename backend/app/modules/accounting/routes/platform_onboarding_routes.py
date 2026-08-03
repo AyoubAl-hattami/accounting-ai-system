@@ -22,10 +22,7 @@ from app.application.onboarding.errors import (
     ReusedAdminIsInactive,
     ReusedAdminIsPlatformAdmin,
 )
-from app.application.onboarding.handover import (
-    LOGIN_URL_PLACEHOLDER,
-    build_handover_message,
-)
+from app.application.onboarding.handover import build_handover_message
 from app.application.onboarding.passwords import (
     TEMPORARY_PASSWORD_LENGTH,
     generate_temporary_password,
@@ -33,6 +30,7 @@ from app.application.onboarding.passwords import (
 from app.application.onboarding.use_cases import OnboardClient
 from app.core.auth_dependencies import get_current_platform_admin
 from app.core.database import get_db
+from app.core.public_url import public_login_url
 from app.infrastructure.database.sqlalchemy.repositories.account_repository import (
     SqlAlchemyAccountRepository,
 )
@@ -115,7 +113,7 @@ def onboarding_defaults_endpoint(
         suggested_plan_codes=list(SUGGESTED_PLAN_CODES),
         default_plan_code=DEFAULT_PLAN_CODE,
         expiry_presets=["1_month", "3_months", "1_year"],
-        login_url_placeholder=LOGIN_URL_PLACEHOLDER,
+        public_login_url=public_login_url(),
         generated_password_length=TEMPORARY_PASSWORD_LENGTH,
     )
 
@@ -182,6 +180,7 @@ def onboard_client_endpoint(
     handover_password = (
         temporary_password if not result.admin_was_existing else None
     )
+    login_url = public_login_url()
 
     prepare_audit_log(
         db=db,
@@ -236,10 +235,15 @@ def onboard_client_endpoint(
         fiscal_year_created=result.fiscal_year_created,
         fiscal_periods_created=result.fiscal_periods_created,
         generated_password=handover_password,
+        # A reused account keeps the password its owner already chose, so only a
+        # freshly created admin is forced through the change screen.
+        must_change_password=not result.admin_was_existing,
+        public_login_url=login_url,
         handover_message=build_handover_message(
             company_name=result.company_name,
             admin_email=result.admin_email,
             temporary_password=handover_password,
             expires_at=result.expires_at,
+            login_url=login_url,
         ),
     )

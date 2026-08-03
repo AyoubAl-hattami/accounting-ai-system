@@ -46,6 +46,7 @@ from app.application.onboarding.handover import build_handover_message
 from app.application.onboarding.passwords import generate_temporary_password
 from app.application.onboarding.use_cases import OnboardClient
 from app.core.database import SessionLocal
+from app.core.public_url import is_public_url_configured, public_login_url
 from app.infrastructure.database.sqlalchemy.repositories.account_repository import (
     SqlAlchemyAccountRepository,
 )
@@ -179,6 +180,8 @@ def run(args: argparse.Namespace) -> None:
     finally:
         db.close()
 
+    login_url = public_login_url()
+
     print("\n  Client onboarded.\n")
     print(f"  Company ID        {result.company_id}")
     print(f"  Admin user ID     {result.admin_user_id}")
@@ -186,6 +189,22 @@ def run(args: argparse.Namespace) -> None:
     print(f"  Accounts seeded   {result.seeded_accounts_count}")
     print(f"  Fiscal year       {'created' if result.fiscal_year_created else 'not created'}")
     print(f"  Fiscal periods    {result.fiscal_periods_created}")
+    print(f"  Login URL         {login_url}")
+
+    if not is_public_url_configured():
+        print(
+            "\n  ! APP_PUBLIC_URL is not set, so the handover message below "
+            "carries a placeholder\n"
+            "    instead of a real address. Set it before sending the message."
+        )
+
+    if handover_password:
+        print(
+            "\n  ! The temporary password is shown once, in the message below. "
+            "The admin must\n"
+            "    change it at first login before anything else opens."
+        )
+
     print("\n  ---------------- handover message ----------------\n")
     print(
         build_handover_message(
@@ -193,6 +212,7 @@ def run(args: argparse.Namespace) -> None:
             admin_email=result.admin_email,
             temporary_password=handover_password,
             expires_at=result.expires_at,
+            login_url=login_url,
         )
     )
     print("\n  --------------------------------------------------\n")

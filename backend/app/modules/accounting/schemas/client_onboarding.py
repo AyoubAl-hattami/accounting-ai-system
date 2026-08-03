@@ -5,7 +5,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
-from app.application.onboarding.handover import LOGIN_URL_PLACEHOLDER
 from app.core.identity import normalize_email
 from app.modules.accounting.schemas.user import validate_password_strength
 
@@ -124,6 +123,8 @@ class ClientOnboardingRead(BaseModel):
     fiscal_periods_created: int = 0
 
     generated_password: str | None = None
+    must_change_password: bool = False
+    public_login_url: str
     handover_message: str
 
     model_config = ConfigDict(from_attributes=True)
@@ -138,5 +139,7 @@ class OnboardingDefaultsRead(BaseModel):
     suggested_plan_codes: list[str]
     default_subscription_status: str = "active"
     expiry_presets: list[str]
-    login_url_placeholder: str = LOGIN_URL_PLACEHOLDER
+    # The real URL once APP_PUBLIC_URL is set, otherwise the placeholder, so the
+    # wizard never has to decide which one to show.
+    public_login_url: str
     generated_password_length: int
