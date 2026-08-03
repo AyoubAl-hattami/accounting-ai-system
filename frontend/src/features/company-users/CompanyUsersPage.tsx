@@ -566,13 +566,22 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
                   <caption className="sr-only">{t.companyUsersPage.pageTitle}</caption>
                   <thead>
                     <tr>
-                      <th scope="col">{t.common.user}</th>
+                      {/* The name and address are what this table is for, so the
+                          column is given an explicit floor. Without it the auto
+                          layout hands width to the nowrap date columns first and
+                          squeezes the identity into a ragged two-line wrap. */}
+                      <th scope="col" className="w-[38%] min-w-[280px]">
+                        {t.common.user}
+                      </th>
                       <th scope="col">{t.companyUsersPage.role}</th>
                       <th scope="col">{t.common.status}</th>
-                      <th scope="col">{t.companyUsersPage.createdAt}</th>
-                      {/* Last-changed is reference data; it yields width to the
-                          action buttons until the viewport can afford both. */}
+                      {/* Timestamps are reference data. They yield width to the
+                          identity and the actions, one breakpoint at a time, and
+                          both remain on the mobile card at every size. */}
                       <th scope="col" className="hidden xl:table-cell">
+                        {t.companyUsersPage.createdAt}
+                      </th>
+                      <th scope="col" className="hidden 2xl:table-cell">
                         {t.companyUsersPage.updatedAt}
                       </th>
                       <th scope="col" className="text-end">
@@ -584,19 +593,37 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
                     {filteredUsers.map((user) => (
                       <tr key={user.id}>
                         <th scope="row" className="text-start align-middle font-normal">
-                          <span className="block text-sm font-medium text-foreground">{displayName(user)}</span>
-                          {user.user_full_name && user.user_email && (
-                            <span className="block text-xs text-subtle-foreground">{user.user_email}</span>
-                          )}
+                          {/* The cap is what makes the ellipsis work: in an auto
+                              layout table a nowrap cell widens the column rather
+                              than truncating, so the content needs a ceiling of
+                              its own. Below that ceiling the block shrinks with
+                              the column and clips honestly. Arabic truncates from
+                              the correct edge because the cell inherits `dir`. */}
+                          <div className="max-w-[420px]">
+                            <span
+                              className="block truncate text-sm font-medium text-foreground"
+                              title={displayName(user)}
+                            >
+                              {displayName(user)}
+                            </span>
+                            {user.user_full_name && user.user_email && (
+                              <span
+                                className="mt-0.5 block truncate text-xs text-subtle-foreground"
+                                title={user.user_email}
+                              >
+                                {user.user_email}
+                              </span>
+                            )}
+                          </div>
                         </th>
                         <td>
                           <CompanyUserRoleBadge role={user.role} />
                         </td>
                         <td>{renderStatus(user)}</td>
-                        <td className="numeric whitespace-nowrap text-xs text-muted-foreground">
+                        <td className="numeric hidden whitespace-nowrap text-xs text-muted-foreground xl:table-cell">
                           {formatDateTime(user.created_at)}
                         </td>
-                        <td className="numeric hidden whitespace-nowrap text-xs text-muted-foreground xl:table-cell">
+                        <td className="numeric hidden whitespace-nowrap text-xs text-muted-foreground 2xl:table-cell">
                           {formatDateTime(user.updated_at)}
                         </td>
                         <td className="text-end">{renderActions(user, 'row')}</td>

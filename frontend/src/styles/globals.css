@@ -653,7 +653,12 @@ html.dark {
     -webkit-backdrop-filter: blur(8px);
   }
 
-  .data-table tbody td {
+  /* Row headers are included deliberately. A `<th scope="row">` is the correct
+     markup for the cell that names the row, but without this it was the one
+     cell in the system receiving no padding — so its text ran flush into the
+     next column and looked clipped. */
+  .data-table tbody td,
+  .data-table tbody th {
     @apply border-b border-border-subtle px-4 py-3 align-middle text-foreground;
   }
 
@@ -674,7 +679,8 @@ html.dark {
     box-shadow: inset -3px 0 0 0 var(--primary-solid);
   }
 
-  .data-table tbody tr:last-child td {
+  .data-table tbody tr:last-child td,
+  .data-table tbody tr:last-child th {
     @apply border-b-0;
   }
 
@@ -808,6 +814,16 @@ html.dark {
     background-color: var(--surface-overlay);
   }
 
+  /* The single source of truth for shell icon size. Lucide ships width/height
+     attributes of 24px on every SVG, so any icon that reaches the shell without
+     an explicit size renders a third too large. Declaring it once here — rather
+     than repeating a utility pair at each call site — means active, hover,
+     collapsed, expanded, light and dark all resolve to the same box, and a new
+     nav entry cannot drift. */
+  .nav-icon {
+    @apply h-[18px] w-[18px] flex-shrink-0;
+  }
+
   /* Nudging on hover makes the sidebar feel responsive without moving layout. */
   .nav-item:hover :where(svg) {
     transform: scale(1.08);
@@ -815,6 +831,9 @@ html.dark {
 
   .nav-item :where(svg) {
     transition: transform var(--duration-fast) var(--ease-emphasized);
+    /* Belt and braces: even an icon that forgets `.nav-icon` cannot blow the
+       row open, because scale is a paint-time transform and this is the box. */
+    @apply h-[18px] w-[18px] flex-shrink-0;
   }
 
   .nav-item-active {

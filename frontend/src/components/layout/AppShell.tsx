@@ -45,6 +45,23 @@ interface NavItem {
   path: string;
 }
 
+/**
+ * Every page renders its own PageLayout, so navigating unmounts this component
+ * and mounts a fresh one. Plain `useState` therefore forgets the collapse choice
+ * on every route change and the sidebar springs back to full width. Persisting it
+ * makes the preference outlive the remount — and a page reload with it.
+ */
+const SIDEBAR_STORAGE_KEY = 'app-sidebar-collapsed';
+
+function readStoredCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true';
+  } catch {
+    // localStorage unavailable (private mode, embedded webview)
+    return false;
+  }
+}
+
 export default function AppShell({
   children,
   companies,
@@ -58,8 +75,22 @@ export default function AppShell({
   const { user, logout } = useAuth();
   const { t, dir, language, setLanguage } = useI18n();
   const navigate = useNavigate();
-  const [collapsed, setCollapsed] = useState(false);
+  // Lazy initialiser, so the stored width is applied on the first paint of the
+  // new route rather than flashing expanded and then snapping shut.
+  const [collapsed, setCollapsed] = useState(readStoredCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+      } catch {
+        // localStorage unavailable — the choice still holds for this session
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -127,7 +158,7 @@ export default function AppShell({
         title={collapsed ? label : undefined}
         className={`nav-item ${isActive ? 'nav-item-active' : ''} ${collapsed ? 'justify-center' : ''}`}
       >
-        <Icon className="h-[18px] w-[18px] flex-shrink-0" />
+        <Icon className="nav-icon" />
         {!collapsed && <span className="truncate">{label}</span>}
       </button>
     );
@@ -166,7 +197,7 @@ export default function AppShell({
             className="group flex min-w-0 flex-1 items-center gap-3 text-start"
           >
             <span className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gradient-brand text-white shadow-[0_6px_18px_-6px_var(--primary-glow)] transition-transform duration-fast ease-emphasized group-hover:scale-105">
-              <Scale className="h-[18px] w-[18px]" />
+              <Scale className="nav-icon" />
             </span>
             {!collapsed && (
               <span className="min-w-0">
@@ -183,7 +214,7 @@ export default function AppShell({
             aria-label={t.nav.closeMenu}
             className="btn-icon lg:hidden"
           >
-            <X className="h-[18px] w-[18px]" />
+            <X className="nav-icon" />
           </button>
         </div>
 
@@ -216,14 +247,14 @@ export default function AppShell({
             title={collapsed ? t.nav.signOut : undefined}
             className={`nav-item hover:bg-danger-soft hover:text-danger ${collapsed ? 'justify-center' : ''}`}
           >
-            <LogOut className="h-[18px] w-[18px] flex-shrink-0" />
+            <LogOut className="nav-icon" />
             {!collapsed && <span className="truncate">{t.nav.signOut}</span>}
           </button>
         </div>
 
         <button
           type="button"
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={toggleCollapsed}
           aria-label={collapsed ? t.nav.expandSidebar : t.nav.collapseSidebar}
           title={collapsed ? t.nav.expandSidebar : t.nav.collapseSidebar}
           className={`absolute top-[74px] hidden h-6 w-6 items-center justify-center rounded-full border border-border-strong bg-surface-raised text-muted-foreground shadow-sm transition-all duration-fast ease-emphasized hover:scale-110 hover:border-primary-border hover:text-primary lg:flex ${
@@ -247,7 +278,7 @@ export default function AppShell({
               aria-label={t.nav.openMenu}
               className="btn-icon lg:hidden"
             >
-              <Menu className="h-[18px] w-[18px]" />
+              <Menu className="nav-icon" />
             </button>
             <div key={activePath} className="motion-safe:animate-fade-in min-w-0">
               <h1 className="truncate text-base font-semibold tracking-tight text-foreground">
@@ -277,7 +308,7 @@ export default function AppShell({
               className="btn btn-ghost btn-sm gap-1.5"
               title={language === 'en' ? 'التبديل إلى العربية' : 'Switch to English'}
             >
-              <Globe className="h-[18px] w-[18px]" />
+              <Globe className="nav-icon" />
               <span className="text-[11px] font-semibold uppercase tracking-wide">
                 {language === 'en' ? 'EN' : 'AR'}
               </span>
