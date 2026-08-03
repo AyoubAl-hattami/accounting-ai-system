@@ -164,114 +164,169 @@
   --fab-safe-area: 6.5rem;
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+   DARK PALETTE
+
+   Deep navy rather than near-black. The previous palette bottomed out at
+   #060a14 — dark enough that surfaces had nowhere left to sit below them, so
+   cards, the sidebar and the page all collapsed into one flat sheet. Raising
+   the floor to #0b1020 buys room for a real elevation ladder above it.
+
+   Every step below is the same hue (~222°) at a rising lightness, so the app
+   reads as one material lit from above rather than as several greys that
+   happen to be near each other:
+
+     sunken  6%  ·  page  8%  ·  card 12%  ·  muted 14%  ·  raised 18%  ·
+     overlay 21%
+
+   Accents were pulled back from neon. Mint (#2ee6c5) and cyan (#56cdf8) glow
+   against a dark ground and tire the eye over a working day; the replacements
+   are the calmer emerald / sky / amber / rose family. Purple is now a single
+   restrained indigo instead of a second brand colour.
+   ──────────────────────────────────────────────────────────────────────────── */
+
 html.dark {
   color-scheme: dark;
 
-  --background:       #060a14;
-  --surface:          #0d1424;
-  --surface-muted:    #111a2c;
-  --surface-raised:   #162034;
-  --surface-overlay:  #1d2942;
-  --surface-sunken:   #080d18;
-  --backdrop:         rgba(2, 5, 12, 0.72);
+  /* ── Elevation ─────────────────────────────────────────────────────────── */
+  --background:       #0b1020;
+  --surface:          #111a2c;
+  --surface-muted:    #151e33;
+  --surface-raised:   #1a2440;
+  --surface-overlay:  #1f2b4a;
+  --surface-sunken:   #080d1a;
+  --backdrop:         rgba(3, 6, 15, 0.70);
 
-  --foreground:        #e9eefb;
-  --muted-foreground:  #9dafcc;
-  --subtle-foreground: #7286a3;
-  --inverse:           #060a14;
+  /* ── Text ──────────────────────────────────────────────────────────────── */
+  /* Soft white, not #fff: pure white on a dark ground haloes and reads harsh.
+     Muted and subtle are both a step brighter than before — the old subtle
+     (#7286a3) sat at 4.5:1, exactly on the AA line and visibly faint in table
+     headers and hint text. */
+  --foreground:        #e6edf7;
+  --muted-foreground:  #9aabc8;
+  --subtle-foreground: #7f92b2;
+  --inverse:           #0b1020;
 
-  --border:        #1e2a41;
-  --border-subtle: #16202f;
-  --border-strong: #334361;
-  --ring:          #56cdf8;
-  --ring-soft:     rgba(86, 205, 248, 0.28);
-  --ring-danger:   rgba(255, 122, 147, 0.28);
+  /* ── Hairlines & focus ─────────────────────────────────────────────────── */
+  /* Translucent rather than fixed hex, so a hairline strengthens naturally as
+     the surface beneath it rises. A card border reads slightly brighter than
+     the same token on the page, which is what edges do in real light. */
+  --border:        rgba(148, 163, 184, 0.16);
+  --border-subtle: rgba(148, 163, 184, 0.08);
+  --border-strong: rgba(148, 163, 184, 0.30);
+  --ring:          #60a5fa;
+  --ring-soft:     rgba(96, 165, 250, 0.28);
+  --ring-danger:   rgba(251, 113, 133, 0.28);
 
-  --primary:            #7fb2ff;
-  --primary-solid:      #2a5fe8;
-  --primary-solid-hover:#3d72f5;
+  /* ── Primary (refined blue — brand, navigation, primary actions) ───────── */
+  /* `--primary` is the accent *text* colour and `--primary-solid` the button
+     fill, so they are tuned against different backgrounds: the first for
+     legibility on a card, the second to carry white text at AA. */
+  --primary:            #60a5fa;
+  --primary-solid:      #2f5fe0;
+  --primary-solid-hover:#3d70f0;
   --primary-foreground: #ffffff;
-  --primary-soft:       rgba(90, 140, 255, 0.14);
-  --primary-soft-hover: rgba(90, 140, 255, 0.22);
-  --primary-border:     rgba(120, 165, 255, 0.32);
-  --primary-glow:       rgba(58, 110, 245, 0.45);
-  --danger-glow:        rgba(255, 122, 147, 0.42);
+  --primary-soft:       rgba(96, 165, 250, 0.13);
+  --primary-soft-hover: rgba(96, 165, 250, 0.20);
+  --primary-border:     rgba(96, 165, 250, 0.30);
+  --primary-glow:       rgba(47, 95, 224, 0.40);
+  --danger-glow:        rgba(251, 113, 133, 0.38);
 
-  --secondary:            #17223a;
-  --secondary-hover:      #1f2c48;
-  --secondary-foreground: #cbd8ee;
+  /* ── Secondary (neutral action surface) ────────────────────────────────── */
+  --secondary:            #18223a;
+  --secondary-hover:      #202c49;
+  --secondary-foreground: #d3dff2;
 
-  --success:        #3ce0a6;
-  --success-solid:  #059669;
-  --success-soft:   rgba(60, 224, 166, 0.13);
-  --success-border: rgba(60, 224, 166, 0.30);
+  /* ── Status tones ──────────────────────────────────────────────────────── */
+  --success:        #34d399;
+  --success-solid:  #10b981;
+  --success-soft:   rgba(52, 211, 153, 0.13);
+  --success-border: rgba(52, 211, 153, 0.28);
 
   --warning:        #fbbf24;
-  --warning-solid:  #d97706;
+  --warning-solid:  #f59e0b;
   --warning-soft:   rgba(251, 191, 36, 0.13);
-  --warning-border: rgba(251, 191, 36, 0.30);
+  --warning-border: rgba(251, 191, 36, 0.28);
 
-  --danger:            #ff7a93;
+  --danger:            #fb7185;
   --danger-solid:      #e11d48;
   --danger-solid-hover:#f43f5e;
-  --danger-soft:       rgba(255, 122, 147, 0.13);
-  --danger-border:     rgba(255, 122, 147, 0.30);
+  --danger-soft:       rgba(251, 113, 133, 0.13);
+  --danger-border:     rgba(251, 113, 133, 0.28);
 
-  --info:        #56cdf8;
-  --info-solid:  #0284c7;
-  --info-soft:   rgba(86, 205, 248, 0.13);
-  --info-border: rgba(86, 205, 248, 0.30);
+  --info:        #38bdf8;
+  --info-solid:  #0ea5e9;
+  --info-soft:   rgba(56, 189, 248, 0.13);
+  --info-border: rgba(56, 189, 248, 0.28);
 
-  --violet:        #b9a5ff;
-  --violet-soft:   rgba(185, 165, 255, 0.13);
-  --violet-border: rgba(185, 165, 255, 0.30);
+  /* Indigo, not lavender. The old #b9a5ff was the second-loudest colour on
+     screen and made the theme read purple. */
+  --violet:        #a5b4fc;
+  --violet-soft:   rgba(165, 180, 252, 0.13);
+  --violet-border: rgba(165, 180, 252, 0.28);
 
-  --rose:        #ff7a93;
-  --rose-soft:   rgba(255, 122, 147, 0.13);
-  --rose-border: rgba(255, 122, 147, 0.30);
+  --rose:        #fb7185;
+  --rose-soft:   rgba(251, 113, 133, 0.13);
+  --rose-border: rgba(251, 113, 133, 0.28);
 
-  --teal:        #2ee6c5;
-  --teal-soft:   rgba(46, 230, 197, 0.13);
-  --teal-border: rgba(46, 230, 197, 0.30);
+  --teal:        #2dd4bf;
+  --teal-soft:   rgba(45, 212, 191, 0.13);
+  --teal-border: rgba(45, 212, 191, 0.28);
 
-  --neutral:        #9aa9c2;
-  --neutral-soft:   rgba(154, 169, 194, 0.12);
-  --neutral-border: rgba(154, 169, 194, 0.24);
+  --neutral:        #94a3b8;
+  --neutral-soft:   rgba(148, 163, 184, 0.12);
+  --neutral-border: rgba(148, 163, 184, 0.24);
 
-  --debit:    #7fb2ff;
-  --credit:   #2ee6c5;
-  --positive: #3ce0a6;
-  --negative: #ff7a93;
+  /* ── Accounting semantics ──────────────────────────────────────────────── */
+  /* Positive matches success and negative matches rose, exactly as they do in
+     light mode — the two pairs are the same judgement, so they are the same
+     colour.
 
-  --chart-1: #5a8cff;
-  --chart-2: #a78bfa;
-  --chart-3: #56cdf8;
-  --chart-4: #2ee6c5;
+     Debit and credit stay a matched cool pair carrying no judgement. In dark
+     they are sky and indigo: a teal credit would land within a few degrees of
+     the positive emerald, and a trial balance shows a credit column and a
+     signed balance side by side, where that ambiguity is expensive. */
+  --debit:    #7dd3fc;
+  --credit:   #c4b5fd;
+  --positive: #34d399;
+  --negative: #fb7185;
+
+  /* ── Report / chart series — calm cool ramp, one warm accent ───────────── */
+  --chart-1: #60a5fa;
+  --chart-2: #a5b4fc;
+  --chart-3: #38bdf8;
+  --chart-4: #2dd4bf;
   --chart-5: #fbbf24;
-  --chart-grid: #1e2a41;
+  --chart-grid: #1c2740;
 
+  /* ── Depth: gradients, glass, sheen ────────────────────────────────────── */
   --gradient-app:
-    radial-gradient(1100px 580px at 10% -14%, rgba(58, 110, 245, 0.20), transparent 62%),
-    radial-gradient(900px 520px at 94% -6%, rgba(124, 58, 237, 0.16), transparent 58%),
-    radial-gradient(800px 460px at 60% 110%, rgba(6, 182, 212, 0.08), transparent 60%);
-  --gradient-primary:   linear-gradient(135deg, #2a5fe8 0%, #6d43f5 100%);
-  --gradient-brand:     linear-gradient(135deg, #5a8cff 0%, #a78bfa 55%, #56cdf8 100%);
-  --gradient-card:      linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0));
-  --gradient-nav-active:linear-gradient(90deg, rgba(90, 140, 255, 0.20), rgba(124, 58, 237, 0.07));
+    radial-gradient(1100px 580px at 10% -14%, rgba(47, 95, 224, 0.16), transparent 62%),
+    radial-gradient(900px 520px at 94% -6%, rgba(99, 102, 241, 0.10), transparent 58%),
+    radial-gradient(800px 460px at 60% 110%, rgba(45, 212, 191, 0.05), transparent 60%);
+  --gradient-primary:   linear-gradient(135deg, #2f5fe0 0%, #4338ca 100%);
+  --gradient-brand:     linear-gradient(135deg, #60a5fa 0%, #a5b4fc 55%, #38bdf8 100%);
+  --gradient-card:      linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0));
+  --gradient-nav-active:linear-gradient(90deg, rgba(96, 165, 250, 0.18), rgba(96, 165, 250, 0.04));
 
-  --glass:        rgba(13, 20, 36, 0.68);
-  --glass-border: rgba(255, 255, 255, 0.07);
-  --shimmer:      rgba(255, 255, 255, 0.07);
-  --row-hover:    rgba(90, 140, 255, 0.07);
+  /* The sidebar and topbar both use `.glass`. Sitting it *below* the page
+     colour is what gives the shell its frame: chrome recedes, content comes
+     forward. Raised opacity keeps text on it crisp through the blur. */
+  --glass:        rgba(8, 12, 24, 0.80);
+  --glass-border: rgba(148, 163, 184, 0.14);
+  --shimmer:      rgba(255, 255, 255, 0.06);
+  --row-hover:    rgba(96, 165, 250, 0.06);
 
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.34);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.44), 0 1px 2px rgba(0, 0, 0, 0.26);
-  --shadow-md: 0 4px 14px -4px rgba(0, 0, 0, 0.50), 0 2px 6px -3px rgba(0, 0, 0, 0.32);
-  --shadow-lg: 0 14px 34px -10px rgba(0, 0, 0, 0.60), 0 4px 12px -6px rgba(0, 0, 0, 0.38);
-  --shadow-xl: 0 28px 64px -16px rgba(0, 0, 0, 0.74);
+  /* Navy-tinted rather than pure black. A black shadow over a navy surface
+     desaturates the edge it falls on and is what made cards look smudged. */
+  --shadow-xs: 0 1px 2px rgba(2, 5, 14, 0.36);
+  --shadow-sm: 0 1px 3px rgba(2, 5, 14, 0.46), 0 1px 2px rgba(2, 5, 14, 0.28);
+  --shadow-md: 0 4px 14px -4px rgba(2, 5, 14, 0.52), 0 2px 6px -3px rgba(2, 5, 14, 0.34);
+  --shadow-lg: 0 14px 34px -10px rgba(2, 5, 14, 0.62), 0 4px 12px -6px rgba(2, 5, 14, 0.40);
+  --shadow-xl: 0 28px 64px -16px rgba(2, 5, 14, 0.76);
 
-  --shadow-card:     0 1px 2px rgba(0, 0, 0, 0.40), 0 12px 30px -16px rgba(0, 0, 0, 0.72);
-  --shadow-floating: 0 26px 62px -20px rgba(0, 0, 0, 0.86), 0 6px 18px -8px rgba(0, 0, 0, 0.52);
+  --shadow-card:     0 1px 2px rgba(2, 5, 14, 0.42), 0 12px 30px -16px rgba(2, 5, 14, 0.70);
+  --shadow-floating: 0 26px 62px -20px rgba(2, 5, 14, 0.84), 0 6px 18px -8px rgba(2, 5, 14, 0.52);
   --shadow-glow:     0 0 0 1px var(--primary-border), 0 14px 38px -12px var(--primary-glow);
 }
 
@@ -508,8 +563,12 @@ html.dark {
     background-size: 1rem;
   }
 
+  /* The chevron is a data-URI, so it cannot read a CSS variable — this is the
+     one colour in the system that has to be repeated by hand. It tracks
+     `--subtle-foreground` for the active theme; if that token moves, move
+     these two with it. */
   html.dark .select {
-    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%237286a3' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%237f92b2' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
   }
 
   html[dir='rtl'] .select {
@@ -678,14 +737,18 @@ html.dark {
   }
 
   /* Hover paints a tinted row and lights an accent bar on the leading edge,
-     so the eye can track across a wide financial table. */
+     so the eye can track across a wide financial table. The bar uses
+     `--primary` rather than `--primary-solid`: the solid tone is a button
+     fill chosen to carry white text, which on a dark row is barely lighter
+     than the row itself. `--primary` is the tone picked to be legible
+     *against* a surface, which is exactly what this marker has to do. */
   .data-table tbody tr:hover {
     background-color: var(--row-hover);
-    box-shadow: inset 3px 0 0 0 var(--primary-solid);
+    box-shadow: inset 3px 0 0 0 var(--primary);
   }
 
   html[dir='rtl'] .data-table tbody tr:hover {
-    box-shadow: inset -3px 0 0 0 var(--primary-solid);
+    box-shadow: inset -3px 0 0 0 var(--primary);
   }
 
   .data-table tbody tr:last-child td,
