@@ -37,6 +37,12 @@ export default function ProtectedRoute({ children, requiredPagePath }: Protected
     return <Navigate to="/login" replace />;
   }
 
+  // Also enforced by AppLayout; repeated here so a future route that uses this
+  // guard outside the shell is covered too. No role is exempt.
+  if (user.must_change_password) {
+    return <Navigate to="/auth/change-temporary-password" replace />;
+  }
+
   // Platform routes answer to the platform flag alone, and are checked first so
   // the tenant role is never consulted for a page that has no tenant.
   if (requiredPagePath && isPlatformPage(requiredPagePath)) {

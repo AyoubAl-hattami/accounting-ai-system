@@ -7,6 +7,7 @@ const INPUT = {
   adminEmail: 'admin@northwind.test',
   temporaryPassword: 'Sw1ftPelican42',
   expiresAt: '2026-09-30T23:59:59Z',
+  loginUrl: 'https://accounting.example.com',
 };
 
 describe('client handover message', () => {
@@ -19,14 +20,15 @@ describe('client handover message', () => {
         '',
         'Your accounting system access has been created.',
         '',
-        'Login URL: [add your domain here]',
+        'Login URL: https://accounting.example.com',
         'Company: Northwind Trading',
         'Admin email: admin@northwind.test',
         'Temporary password: Sw1ftPelican42',
         'Subscription valid until: 2026-09-30',
         '',
-        'Please log in and change your password immediately. You can then invite '
-          + 'your team members from Company Users.',
+        'This password is temporary. The system will ask you to set a new one '
+          + 'the first time you log in, and nothing else opens until you do. '
+          + 'You can then invite your team members from Company Users.',
       ].join('\n'),
     );
   });
@@ -35,10 +37,20 @@ describe('client handover message', () => {
     const message = buildHandoverMessage(ar.clientOnboarding, INPUT);
     expect(message).toContain('مرحبًا،');
     expect(message).toContain('تم إنشاء حساب شركتكم في نظام المحاسبة.');
-    expect(message).toContain('رابط الدخول: [ضع رابط الموقع هنا]');
+    expect(message).toContain('رابط الدخول: https://accounting.example.com');
     expect(message).toContain('كلمة المرور المؤقتة: Sw1ftPelican42');
     expect(message).toContain('الاشتراك صالح حتى: 2026-09-30');
-    expect(message).toContain('يرجى تسجيل الدخول وتغيير كلمة المرور مباشرة.');
+    expect(message).toContain('وسيطلب منكم النظام تعيين كلمة مرور جديدة عند أول تسجيل دخول');
+  });
+
+  // The placeholder is the server's, not the wizard's: whatever APP_PUBLIC_URL
+  // resolves to is printed verbatim.
+  it('prints the unconfigured placeholder the server sent', () => {
+    const message = buildHandoverMessage(en.clientOnboarding, {
+      ...INPUT,
+      loginUrl: '[add your domain here]',
+    });
+    expect(message).toContain('Login URL: [add your domain here]');
   });
 
   // A reused account keeps its own credentials, so there is no password to hand

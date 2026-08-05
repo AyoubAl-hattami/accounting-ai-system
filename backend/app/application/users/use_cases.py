@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.application.users.dto import (
     AuthenticateUserCommand,
+    ChangePasswordCommand,
     CreateUserCommand,
     SetUserActiveCommand,
     UserDTO,
@@ -49,3 +50,17 @@ class SetUserActive:
 
     def execute(self, command: SetUserActiveCommand) -> UserDTO:
         return self._repository.set_active(command)
+
+
+class ChangeUserPassword:
+    """Replace a password and clear any outstanding change requirement.
+
+    The current password is re-verified here even though the caller is already
+    authenticated, so a stolen access token alone cannot take over the account.
+    """
+
+    def __init__(self, repository: UserRepository) -> None:
+        self._repository = repository
+
+    def execute(self, command: ChangePasswordCommand) -> UserDTO:
+        return self._repository.change_password(command)

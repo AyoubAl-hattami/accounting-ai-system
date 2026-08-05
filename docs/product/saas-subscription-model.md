@@ -171,11 +171,18 @@ Route `/platform/subscriptions`, visible in the sidebar only when
 **Access Denied** panel inside the app shell — the guard runs before any data is
 requested, so no company list is fetched or leaked.
 
-Columns: company, base currency, effective status, expiry, days remaining, plan
-code, member count. Actions per row: Activate, Extend 1 month, Extend 1 year,
-Edit (status / expiry / plan code), Suspend, Cancel. Suspend and Cancel open a
-confirmation modal with an optional reason, which is stored in
-`suspension_reason` and shown in the audit trail.
+Desktop columns: company, effective status, expiry, plan code, actions. Base
+currency and member count sit under the company name; days remaining sits under
+the expiry date. Below `lg` the table gives way to compact cards carrying the
+same fields.
+
+Actions per row: Activate (hidden when the subscription is already active),
+Extend 1 month, Extend 1 year, Edit (status / expiry / plan code), Suspend,
+Cancel. The first three that apply stay labelled; Extend 1 year, Suspend and
+Cancel are icon buttons behind a divider, each carrying the same text as its
+`title` and `aria-label`, so the action column does not dominate the row.
+Suspend and Cancel open a confirmation modal with an optional reason, which is
+stored in `suspension_reason` and shown in the audit trail.
 
 Search filters by company name; the status filter matches the *effective*
 status, so an `active` row whose term has lapsed is found under `past_due`.

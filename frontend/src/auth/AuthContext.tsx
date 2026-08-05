@@ -9,12 +9,13 @@ import {
 import apiClient from '../api/client';
 import { getToken, setToken, removeToken } from './token';
 
-interface User {
+export interface User {
   id: number;
   email: string;
   full_name: string | null;
   is_active: boolean;
   is_superuser: boolean;
+  must_change_password: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -22,8 +23,9 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -61,6 +63,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const meResponse = await apiClient.get('/auth/me');
     setUser(meResponse.data);
+
+    // Returned so the caller can route on must_change_password without waiting
+    // for the context state to settle.
+    return meResponse.data as User;
   };
 
   const logout = () => {
@@ -68,8 +74,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  // Re-reads the session after the password change so the forced-change guard
+  // sees the cleared flag without a full reload.
+  const refreshUser = useCallback(async () => {
+    const response = await apiClient.get('/auth/me');
+    setUser(response.data);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

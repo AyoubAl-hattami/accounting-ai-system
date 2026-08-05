@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.password_change_gate import password_change_required_error
 from app.core.subscription_access import ensure_active_subscription
 from app.modules.accounting.models.company_user import CompanyUser
 from app.modules.accounting.models.user import User
@@ -43,6 +44,12 @@ def ensure_company_access(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Inactive user",
         )
+
+    # Already enforced by ``get_current_user``; repeated here because this is the
+    # one gate every company-scoped endpoint calls, and it must never be the
+    # weaker of the two.  No /auth route reaches this function.
+    if current_user.must_change_password:
+        raise password_change_required_error()
 
     if current_user.is_superuser:
         return CompanyUser(

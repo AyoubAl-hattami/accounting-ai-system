@@ -159,6 +159,28 @@ export interface Translations {
     hidePassword: string;
   };
 
+  // ── Forced temporary password change ──
+  changePassword: {
+    title: string;
+    description: string;
+    currentPasswordLabel: string;
+    currentPasswordPlaceholder: string;
+    newPasswordLabel: string;
+    newPasswordPlaceholder: string;
+    confirmPasswordLabel: string;
+    confirmPasswordPlaceholder: string;
+    requirements: string;
+    submit: string;
+    submitting: string;
+    signOut: string;
+    mismatch: string;
+    sameAsCurrent: string;
+    tooWeak: string;
+    currentIncorrect: string;
+    genericError: string;
+    networkError: string;
+  };
+
   // ── Sidebar / Navigation ──
   nav: {
     appName: string;
@@ -954,7 +976,7 @@ export interface Translations {
     handoverGreeting: string;
     handoverIntro: string;
     handoverLoginUrl: string;
-    handoverLoginUrlPlaceholder: string;
+    handoverUrlNotConfigured: string;
     handoverCompany: string;
     handoverAdminEmail: string;
     handoverTemporaryPassword: string;

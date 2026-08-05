@@ -17,6 +17,7 @@ class UserDTO:
     created_at: datetime
     updated_at: datetime
     full_name: str | None = None
+    must_change_password: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,9 +31,23 @@ class CreateUserCommand:
     email: str
     password: str
     full_name: str | None = None
+    must_change_password: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class AuthenticateUserCommand:
     email: str
     password: str
+
+
+@dataclass(frozen=True, slots=True)
+class ChangePasswordCommand:
+    """Replace a password the holder can already prove they know.
+
+    Both values are plaintext in memory for the length of one request and are
+    never persisted, logged, or echoed back.
+    """
+
+    user_id: int
+    current_password: str
+    new_password: str

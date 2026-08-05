@@ -36,6 +36,8 @@ const RESULT: ClientOnboardingResult = {
   fiscal_year_created: true,
   fiscal_periods_created: 12,
   generated_password: 'Sw1ftPelican42',
+  must_change_password: true,
+  public_login_url: 'https://accounting.example.com',
   handover_message: 'server copy, unused by the wizard',
 };
 
@@ -164,10 +166,36 @@ describe('client onboarding wizard', () => {
     expect(message.textContent).toContain('Company: Northwind Trading');
     expect(message.textContent).toContain('Admin email: admin@northwind.test');
     expect(message.textContent).toContain('Temporary password: Sw1ftPelican42');
-    expect(message.textContent).toContain('Login URL: [add your domain here]');
+    expect(message.textContent).toContain('Login URL: https://accounting.example.com');
 
     expect(screen.getAllByText(copy.passwordShownOnceWarning).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: copy.copyMessage })).toBeInTheDocument();
+  });
+
+  // The operator must be told the client cannot use the credential as-is, and
+  // must be given the address to send them.
+  it('shows the public login URL and the forced first-login change', async () => {
+    mockPost.mockResolvedValueOnce({ data: RESULT } as never);
+    renderWizard();
+    advanceToReview();
+    fireEvent.click(screen.getByRole('button', { name: copy.createClient }));
+
+    await screen.findByTestId('handover-message');
+
+    expect(screen.getAllByText('https://accounting.example.com').length).toBeGreaterThan(0);
+    expect(screen.getByText(copy.changePasswordWarning)).toBeInTheDocument();
+    expect(screen.queryByText(copy.handoverUrlNotConfigured)).not.toBeInTheDocument();
+  });
+
+  it('warns when the server has no public URL configured', async () => {
+    mockPost.mockResolvedValueOnce({
+      data: { ...RESULT, public_login_url: '[add your domain here]' },
+    } as never);
+    renderWizard();
+    advanceToReview();
+    fireEvent.click(screen.getByRole('button', { name: copy.createClient }));
+
+    expect(await screen.findByText(copy.handoverUrlNotConfigured)).toBeInTheDocument();
   });
 
   // Leaving the success screen must drop the plaintext password with it.

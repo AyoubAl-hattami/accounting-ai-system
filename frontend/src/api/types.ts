@@ -402,6 +402,10 @@ export interface ClientOnboardingResult {
   fiscal_year_created: boolean;
   fiscal_periods_created: number;
   generated_password: string | null;
+  /** True when the new admin is locked to the password change on first login. */
+  must_change_password: boolean;
+  /** APP_PUBLIC_URL, or the server's placeholder when it is unconfigured. */
+  public_login_url: string;
   handover_message: string;
 }
 
@@ -412,6 +416,6 @@ export interface OnboardingDefaults {
   suggested_plan_codes: string[];
   default_subscription_status: OnboardingSubscriptionStatus;
   expiry_presets: string[];
-  login_url_placeholder: string;
+  public_login_url: string;
   generated_password_length: number;
 }

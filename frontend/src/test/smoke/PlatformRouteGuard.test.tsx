@@ -13,6 +13,7 @@ interface SessionUser {
   full_name: string | null;
   is_active: boolean;
   is_superuser: boolean;
+  must_change_password: boolean;
 }
 
 const authState = { user: null as SessionUser | null, isLoading: false };
@@ -29,13 +30,14 @@ vi.mock('../../auth/useCompanyRole', () => ({
   useCompanyRole: () => ({ role: 'admin', isLoading: false }),
 }));
 
-function makeUser(isSuperuser: boolean): SessionUser {
+function makeUser(isSuperuser: boolean, mustChangePassword = false): SessionUser {
   return {
     id: 1,
     email: 'someone@example.com',
     full_name: 'Someone',
     is_active: true,
     is_superuser: isSuperuser,
+    must_change_password: mustChangePassword,
   };
 }
 
@@ -72,5 +74,14 @@ describe('platform route guard', () => {
     renderPlatformRoute();
     expect(screen.getByText(en.permissions.accessDenied)).toBeInTheDocument();
     expect(screen.queryByText(PLATFORM_CONTENT)).not.toBeInTheDocument();
+  });
+
+  // The platform owner is the one role that could plausibly be exempted, so it
+  // is the case that proves nobody is.
+  it('sends even a platform admin to the password change while the flag is set', () => {
+    authState.user = makeUser(true, true);
+    renderPlatformRoute();
+    expect(screen.queryByText(PLATFORM_CONTENT)).not.toBeInTheDocument();
+    expect(screen.queryByText(en.permissions.accessDenied)).not.toBeInTheDocument();
   });
 });

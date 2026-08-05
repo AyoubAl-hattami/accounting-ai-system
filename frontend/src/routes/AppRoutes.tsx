@@ -3,9 +3,13 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from '../components/layout/ProtectedRoute';
 import AppLayout from '../components/layout/AppLayout';
 import LoadingState from '../components/feedback/LoadingState';
+import { useAuth } from '../auth/AuthContext';
 import { CompaniesProvider } from '../features/companies/CompaniesProvider';
 
 const LoginPage = lazy(() => import('../features/auth/LoginPage'));
+const ChangeTemporaryPasswordPage = lazy(
+  () => import('../features/auth/ChangeTemporaryPasswordPage'),
+);
 const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage'));
 const AccountsPage = lazy(() => import('../features/accounts/AccountsPage'));
 const JournalEntriesPage = lazy(() => import('../features/journals/JournalEntriesPage'));
@@ -33,6 +37,29 @@ function RouteLoader() {
   );
 }
 
+/**
+ * Keeps the change screen from becoming its own trap: an account that has
+ * already cleared the flag is sent on to the app rather than left staring at a
+ * form it cannot meaningfully submit.
+ */
+function ForcedPasswordChangeRoute() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <RouteLoader />;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!user.must_change_password) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <ChangeTemporaryPasswordPage />;
+}
+
 export default function AppRoutes() {
   return (
     <BrowserRouter>
@@ -53,6 +80,16 @@ export default function AppRoutes() {
             element={
               <Suspense fallback={<RouteLoader />}>
                 <AcceptInvitePage />
+              </Suspense>
+            }
+          />
+          {/* Outside the shell on purpose: an account that must change its
+              password can reach nothing behind that shell yet. */}
+          <Route
+            path="/auth/change-temporary-password"
+            element={
+              <Suspense fallback={<RouteLoader />}>
+                <ForcedPasswordChangeRoute />
               </Suspense>
             }
           />

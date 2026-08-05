@@ -43,6 +43,7 @@ EXPECTED_HTTP_INTEGRATION_FILES = frozenset(
         "test_default_accounts_seed.py",
         "test_fiscal_management.py",
         "test_fiscal_year_date_protection.py",
+        "test_forced_password_change.py",
         "test_gemini_assistant.py",
         "test_gemini_assistant_explain.py",
         "test_gemini_assistant_profit.py",
@@ -115,6 +116,7 @@ EXPECTED_FACTORY_BACKED_HTTP_FILES = frozenset(
         "test_platform_subscriptions.py",
         "test_client_onboarding.py",
         "test_onboard_client_script.py",
+        "test_forced_password_change.py",
     }
 )
 

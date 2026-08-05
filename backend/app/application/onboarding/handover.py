@@ -9,10 +9,6 @@ from __future__ import annotations
 
 from datetime import datetime
 
-# The backend does not know which domain it is served from, and a wrong default
-# would be worse than an obvious blank, so the operator fills this in.
-LOGIN_URL_PLACEHOLDER = "[add your domain here]"
-
 NO_EXPIRY_TEXT = "No expiry date"
 
 
@@ -26,7 +22,7 @@ def build_handover_message(
     admin_email: str,
     temporary_password: str | None,
     expires_at: datetime | None,
-    login_url: str = LOGIN_URL_PLACEHOLDER,
+    login_url: str,
 ) -> str:
     """Return the ready-to-copy handover text.
 
@@ -56,8 +52,9 @@ def build_handover_message(
 
     if temporary_password:
         lines.append(
-            "Please log in and change your password immediately. You can then "
-            "invite your team members from Company Users."
+            "This password is temporary. The system will ask you to set a new "
+            "one the first time you log in, and nothing else opens until you "
+            "do. You can then invite your team members from Company Users."
         )
     else:
         lines.append(

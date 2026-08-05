@@ -159,6 +159,30 @@ export const en: Translations = {
     hidePassword: 'Hide password',
   },
 
+  // ── Forced temporary password change ──
+  changePassword: {
+    title: 'Change your temporary password',
+    description: 'For security, you must set a new password before using the system.',
+    currentPasswordLabel: 'Current password',
+    currentPasswordPlaceholder: 'Enter your temporary password',
+    newPasswordLabel: 'New password',
+    newPasswordPlaceholder: 'Choose a new password',
+    confirmPasswordLabel: 'Confirm new password',
+    confirmPasswordPlaceholder: 'Repeat the new password',
+    requirements:
+      'At least 8 characters, including an uppercase letter, a lowercase letter and a digit.',
+    submit: 'Set new password',
+    submitting: 'Saving...',
+    signOut: 'Sign out',
+    mismatch: 'The new password and its confirmation do not match.',
+    sameAsCurrent: 'The new password must be different from your current password.',
+    tooWeak:
+      'The new password must be at least 8 characters and include an uppercase letter, a lowercase letter and a digit.',
+    currentIncorrect: 'Your current password is incorrect.',
+    genericError: 'Could not change the password. Please try again.',
+    networkError: 'Network error. Please try again.',
+  },
+
   // ── Nav ──
   nav: {
     appName: 'Accounting',
@@ -876,7 +900,7 @@ export const en: Translations = {
     passwordPolicyHelp:
       'At least 8 characters, including one lowercase letter, one uppercase letter, and one digit.',
     changePasswordWarning:
-      'The client must change this password after their first login. The system does not force a password change automatically.',
+      'The client must change this password at first login. Until they do, nothing else in the system opens for them.',
     reuseExistingUserHelp:
       'The account already exists on the platform and keeps its current password. No new password is issued.',
 
@@ -948,14 +972,15 @@ export const en: Translations = {
     handoverGreeting: 'Hello,',
     handoverIntro: 'Your accounting system access has been created.',
     handoverLoginUrl: 'Login URL',
-    handoverLoginUrlPlaceholder: '[add your domain here]',
+    handoverUrlNotConfigured:
+      'APP_PUBLIC_URL is not set on the server, so the message below carries a placeholder instead of a real address. Set it before sending.',
     handoverCompany: 'Company',
     handoverAdminEmail: 'Admin email',
     handoverTemporaryPassword: 'Temporary password',
     handoverValidUntil: 'Subscription valid until',
     handoverNoExpiry: 'No expiry date',
     handoverInstructions:
-      'Please log in and change your password immediately. You can then invite your team members from Company Users.',
+      'This password is temporary. The system will ask you to set a new one the first time you log in, and nothing else opens until you do. You can then invite your team members from Company Users.',
     handoverInstructionsExistingPassword:
       'Please log in with your existing password. You can then invite your team members from Company Users.',
 
@@ -1136,6 +1161,29 @@ export const ar: Translations = {
     footer: 'نظام المحاسبة الذكية · منصة مالية آمنة',
     showPassword: 'إظهار كلمة المرور',
     hidePassword: 'إخفاء كلمة المرور',
+  },
+
+  // ── تغيير كلمة المرور المؤقتة ──
+  changePassword: {
+    title: 'غيّر كلمة المرور المؤقتة',
+    description: 'لأسباب أمنية، يجب تعيين كلمة مرور جديدة قبل استخدام النظام.',
+    currentPasswordLabel: 'كلمة المرور الحالية',
+    currentPasswordPlaceholder: 'أدخل كلمة المرور المؤقتة',
+    newPasswordLabel: 'كلمة المرور الجديدة',
+    newPasswordPlaceholder: 'اختر كلمة مرور جديدة',
+    confirmPasswordLabel: 'تأكيد كلمة المرور الجديدة',
+    confirmPasswordPlaceholder: 'أعد إدخال كلمة المرور الجديدة',
+    requirements: '‏8 أحرف على الأقل، وتشمل حرفاً كبيراً وحرفاً صغيراً ورقماً.',
+    submit: 'تعيين كلمة المرور',
+    submitting: 'جاري الحفظ...',
+    signOut: 'تسجيل الخروج',
+    mismatch: 'كلمة المرور الجديدة وتأكيدها غير متطابقين.',
+    sameAsCurrent: 'يجب أن تختلف كلمة المرور الجديدة عن الحالية.',
+    tooWeak:
+      'يجب أن تتكون كلمة المرور الجديدة من 8 أحرف على الأقل وتشمل حرفاً كبيراً وحرفاً صغيراً ورقماً.',
+    currentIncorrect: 'كلمة المرور الحالية غير صحيحة.',
+    genericError: 'تعذّر تغيير كلمة المرور. يرجى المحاولة مرة أخرى.',
+    networkError: 'خطأ في الشبكة. يرجى المحاولة مرة أخرى.',
   },
 
   // ── Nav ──
@@ -1852,7 +1900,7 @@ export const ar: Translations = {
     temporaryPasswordPlaceholder: '٨ أحرف على الأقل',
     passwordPolicyHelp: '٨ أحرف على الأقل، تتضمن حرفًا صغيرًا وحرفًا كبيرًا ورقمًا.',
     changePasswordWarning:
-      'يجب على العميل تغيير كلمة المرور بعد أول تسجيل دخول. النظام لا يفرض تغييرها تلقائيًا.',
+      'يجب على العميل تغيير كلمة المرور عند أول تسجيل دخول، ولن يُفتح له أي جزء من النظام قبل ذلك.',
     reuseExistingUserHelp:
       'الحساب موجود مسبقًا على المنصة ويحتفظ بكلمة مروره الحالية، ولن تُصدر كلمة مرور جديدة.',
 
@@ -1923,14 +1971,15 @@ export const ar: Translations = {
     handoverGreeting: 'مرحبًا،',
     handoverIntro: 'تم إنشاء حساب شركتكم في نظام المحاسبة.',
     handoverLoginUrl: 'رابط الدخول',
-    handoverLoginUrlPlaceholder: '[ضع رابط الموقع هنا]',
+    handoverUrlNotConfigured:
+      'لم يتم ضبط APP_PUBLIC_URL على الخادم، لذلك تحمل الرسالة أدناه نصًا بديلًا بدل الرابط الحقيقي. اضبطه قبل الإرسال.',
     handoverCompany: 'الشركة',
     handoverAdminEmail: 'البريد الإداري',
     handoverTemporaryPassword: 'كلمة المرور المؤقتة',
     handoverValidUntil: 'الاشتراك صالح حتى',
     handoverNoExpiry: 'بدون تاريخ انتهاء',
     handoverInstructions:
-      'يرجى تسجيل الدخول وتغيير كلمة المرور مباشرة. بعد ذلك يمكنكم إضافة أعضاء فريقكم من صفحة مستخدمي الشركة.',
+      'كلمة المرور هذه مؤقتة، وسيطلب منكم النظام تعيين كلمة مرور جديدة عند أول تسجيل دخول، ولن يُفتح أي جزء آخر قبل ذلك. بعد ذلك يمكنكم إضافة أعضاء فريقكم من صفحة مستخدمي الشركة.',
     handoverInstructionsExistingPassword:
       'يرجى تسجيل الدخول بكلمة المرور الحالية. بعد ذلك يمكنكم إضافة أعضاء فريقكم من صفحة مستخدمي الشركة.',
 

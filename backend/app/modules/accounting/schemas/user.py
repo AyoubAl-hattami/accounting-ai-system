@@ -1,6 +1,13 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.core.identity import normalize_email
 
@@ -38,6 +45,7 @@ class UserRead(BaseModel):
 
     is_active: bool
     is_superuser: bool
+    must_change_password: bool = False
 
     created_at: datetime
     updated_at: datetime
@@ -53,6 +61,28 @@ class UserLogin(BaseModel):
 class TokenRead(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    # Told at login so the client can route straight to the password change
+    # instead of bouncing off the first business call it tries.
+    must_change_password: bool = False
+
+
+class ChangeTemporaryPassword(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)
+    confirm_password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password_strength(cls, value: str) -> str:
+        return validate_password_strength(value)
+
+    @model_validator(mode="after")
+    def confirmation_matches(self) -> "ChangeTemporaryPassword":
+        if self.new_password != self.confirm_password:
+            raise ValueError("New password and confirmation do not match")
+        if self.new_password == self.current_password:
+            raise ValueError("New password must differ from the current password")
+        return self
 
 
 class TokenPayload(BaseModel):

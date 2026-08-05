@@ -91,6 +91,7 @@ class AccountingTestFactory:
         password: str = DEFAULT_TEST_PASSWORD,
         full_name: str = "Deterministic Test User",
         is_superuser: bool = False,
+        must_change_password: bool = False,
     ) -> User:
         user = User(
             email=email or self.unique_email(),
@@ -98,6 +99,7 @@ class AccountingTestFactory:
             hashed_password=hash_password(password),
             is_active=True,
             is_superuser=is_superuser,
+            must_change_password=must_change_password,
         )
         self.db.add(user)
         self.db.flush()

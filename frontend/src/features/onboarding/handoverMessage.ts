@@ -25,11 +25,16 @@ export interface HandoverMessageInput {
   /** `null` when an existing account was reused and keeps its own password. */
   temporaryPassword: string | null;
   expiresAt: string | null;
+  /**
+   * Resolved by the server from APP_PUBLIC_URL. It already carries the
+   * placeholder when unconfigured, so there is nothing to decide here.
+   */
+  loginUrl: string;
 }
 
 export function buildHandoverMessage(
   copy: Translations['clientOnboarding'],
-  { companyName, adminEmail, temporaryPassword, expiresAt }: HandoverMessageInput,
+  { companyName, adminEmail, temporaryPassword, expiresAt, loginUrl }: HandoverMessageInput,
 ): string {
   const expiry = formatHandoverDate(expiresAt) ?? copy.handoverNoExpiry;
 
@@ -38,7 +43,7 @@ export function buildHandoverMessage(
     '',
     copy.handoverIntro,
     '',
-    `${copy.handoverLoginUrl}: ${copy.handoverLoginUrlPlaceholder}`,
+    `${copy.handoverLoginUrl}: ${loginUrl}`,
     `${copy.handoverCompany}: ${companyName}`,
     `${copy.handoverAdminEmail}: ${adminEmail}`,
   ];

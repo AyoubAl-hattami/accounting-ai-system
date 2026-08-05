@@ -655,6 +655,12 @@ html.dark {
            hover:bg-surface-overlay hover:text-foreground;
   }
 
+  /* For icon buttons sharing a table row with `.btn-sm` labelled buttons, so
+     the two line up on the same cap height instead of the icons towering. */
+  .btn-icon-sm {
+    @apply h-7 w-7;
+  }
+
   /* Press is a physical cue, so every variant gets it. Listed explicitly
      because some call sites use a variant class on its own rather than
      alongside `.btn`. */
@@ -728,6 +734,16 @@ html.dark {
   .data-table tbody td,
   .data-table tbody th {
     @apply border-b border-border-subtle px-4 py-3 align-middle text-foreground;
+  }
+
+  /* Density modifier for operational tables. The default padding is tuned for
+     financial statements, where figures need air; on an admin list where each
+     row is one short line plus its controls it leaves the row looking half
+     empty and pushes the list past the fold for no gain. */
+  .data-table-compact thead th,
+  .data-table-compact tbody td,
+  .data-table-compact tbody th {
+    @apply px-3 py-2;
   }
 
   .data-table tbody tr {

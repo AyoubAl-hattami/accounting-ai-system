@@ -148,16 +148,26 @@ export default function PlatformSubscriptionsPage() {
     );
   };
 
+  /**
+   * Three labelled controls, then the rest as icons behind a divider.
+   *
+   * Six equally weighted buttons made the action cell wider than the data it
+   * belonged to, so the row read as a toolbar with a company name attached.
+   * Activate is the one action that is conditional: on an already-active
+   * subscription it does nothing a reader would expect, so it is not offered.
+   */
   const renderActions = (entry: CompanySubscription) => (
-    <div className="flex flex-wrap items-center justify-end gap-1.5">
-      <button
-        type="button"
-        onClick={() => setConfirming({ action: 'activate', entry })}
-        className="btn btn-secondary btn-sm"
-      >
-        <PlayCircle aria-hidden className="h-3.5 w-3.5" />
-        {t.platformSubscriptions.actionActivate}
-      </button>
+    <div className="flex flex-wrap items-center justify-end gap-1">
+      {entry.effective_status !== 'active' && (
+        <button
+          type="button"
+          onClick={() => setConfirming({ action: 'activate', entry })}
+          className="btn btn-secondary btn-sm"
+        >
+          <PlayCircle aria-hidden className="h-3.5 w-3.5" />
+          {t.platformSubscriptions.actionActivate}
+        </button>
+      )}
       <button
         type="button"
         onClick={() => void handleExtend(entry, 'month')}
@@ -169,36 +179,42 @@ export default function PlatformSubscriptionsPage() {
       </button>
       <button
         type="button"
-        onClick={() => void handleExtend(entry, 'year')}
-        disabled={isSubmitting}
-        className="btn btn-secondary btn-sm"
-      >
-        <CalendarClock aria-hidden className="h-3.5 w-3.5" />
-        {t.platformSubscriptions.actionExtendYear}
-      </button>
-      <button
-        type="button"
         onClick={() => setEditing(entry)}
         className="btn btn-secondary btn-sm"
       >
         <Pencil aria-hidden className="h-3.5 w-3.5" />
         {t.platformSubscriptions.actionEdit}
       </button>
+
+      <span aria-hidden className="mx-0.5 h-5 w-px bg-border" />
+
+      <button
+        type="button"
+        onClick={() => void handleExtend(entry, 'year')}
+        disabled={isSubmitting}
+        title={t.platformSubscriptions.actionExtendYear}
+        aria-label={t.platformSubscriptions.actionExtendYear}
+        className="btn-icon btn-icon-sm"
+      >
+        <CalendarClock aria-hidden className="h-4 w-4" />
+      </button>
       <button
         type="button"
         onClick={() => setConfirming({ action: 'suspend', entry })}
-        className="btn btn-tone tone-warning btn-sm"
+        title={t.platformSubscriptions.actionSuspend}
+        aria-label={t.platformSubscriptions.actionSuspend}
+        className="btn-icon btn-icon-sm hover:text-warning"
       >
-        <PauseCircle aria-hidden className="h-3.5 w-3.5" />
-        {t.platformSubscriptions.actionSuspend}
+        <PauseCircle aria-hidden className="h-4 w-4" />
       </button>
       <button
         type="button"
         onClick={() => setConfirming({ action: 'cancel', entry })}
-        className="btn btn-danger btn-sm"
+        title={t.platformSubscriptions.actionCancel}
+        aria-label={t.platformSubscriptions.actionCancel}
+        className="btn-icon btn-icon-sm hover:text-danger"
       >
-        <XCircle aria-hidden className="h-3.5 w-3.5" />
-        {t.platformSubscriptions.actionCancel}
+        <XCircle aria-hidden className="h-4 w-4" />
       </button>
     </div>
   );
@@ -265,19 +281,21 @@ export default function PlatformSubscriptionsPage() {
 
       {!isLoading && !error && items.length > 0 && (
         <>
-          <div className="card hidden overflow-hidden xl:block">
+          {/* Currency and member count ride under the company name, and the
+              days remaining under the expiry date, so eight columns become
+              five. Nothing is dropped — the pairs are read together anyway,
+              and the width they gave back is what lets the row stay one
+              line. */}
+          <div className="card hidden overflow-hidden lg:block">
             <div className="table-wrap">
-              <table className="data-table">
+              <table className="data-table data-table-compact">
                 <caption className="sr-only">{t.platformSubscriptions.pageTitle}</caption>
                 <thead>
                   <tr>
                     <th scope="col">{t.platformSubscriptions.columnCompany}</th>
-                    <th scope="col">{t.platformSubscriptions.columnCurrency}</th>
                     <th scope="col">{t.platformSubscriptions.columnEffectiveStatus}</th>
                     <th scope="col">{t.platformSubscriptions.columnExpires}</th>
-                    <th scope="col">{t.platformSubscriptions.columnDaysRemaining}</th>
                     <th scope="col">{t.platformSubscriptions.columnPlan}</th>
-                    <th scope="col">{t.platformSubscriptions.columnMembers}</th>
                     <th scope="col" className="text-end">
                       {t.platformSubscriptions.columnActions}
                     </th>
@@ -286,18 +304,30 @@ export default function PlatformSubscriptionsPage() {
                 <tbody>
                   {items.map((entry) => (
                     <tr key={entry.company_id}>
-                      <th scope="row" className="text-start align-middle font-medium">
-                        {entry.company_name}
+                      <th scope="row" className="max-w-[18rem] text-start align-middle">
+                        <span className="block truncate font-medium text-foreground">
+                          {entry.company_name}
+                        </span>
+                        <span className="block text-xs font-normal text-subtle-foreground">
+                          {entry.base_currency} · {entry.member_count}{' '}
+                          {t.platformSubscriptions.columnMembers}
+                        </span>
                       </th>
-                      <td>{entry.base_currency}</td>
                       <td>
                         <SubscriptionStatusBadge status={entry.effective_status} />
                       </td>
-                      <td className="numeric">{formatDate(entry.subscription.expires_at)}</td>
-                      <td>{renderDaysRemaining(entry)}</td>
-                      <td>{entry.subscription.plan_code ?? t.platformSubscriptions.noPlan}</td>
-                      <td className="numeric">{entry.member_count}</td>
-                      <td>{renderActions(entry)}</td>
+                      <td className="whitespace-nowrap">
+                        <span className="numeric block">
+                          {formatDate(entry.subscription.expires_at)}
+                        </span>
+                        <span className="block text-xs text-subtle-foreground">
+                          {renderDaysRemaining(entry)}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap">
+                        {entry.subscription.plan_code ?? t.platformSubscriptions.noPlan}
+                      </td>
+                      <td className="cell-sticky-end">{renderActions(entry)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -305,49 +335,33 @@ export default function PlatformSubscriptionsPage() {
             </div>
           </div>
 
-          <div className="space-y-3 xl:hidden">
+          <div className="space-y-2 lg:hidden">
             {items.map((entry) => (
-              <div key={entry.company_id} className="card space-y-3 p-4">
+              <div key={entry.company_id} className="card space-y-2.5 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate font-medium text-foreground">{entry.company_name}</p>
                     <p className="text-xs text-subtle-foreground">
                       {entry.base_currency} · {entry.member_count}{' '}
-                      {t.platformSubscriptions.columnMembers}
+                      {t.platformSubscriptions.columnMembers} ·{' '}
+                      {entry.subscription.plan_code ?? t.platformSubscriptions.noPlan}
                     </p>
                   </div>
                   <SubscriptionStatusBadge status={entry.effective_status} />
                 </div>
-                <dl className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <dt className="text-subtle-foreground">
-                      {t.platformSubscriptions.columnExpires}
-                    </dt>
-                    <dd className="numeric text-foreground">
-                      {formatDate(entry.subscription.expires_at)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-subtle-foreground">
-                      {t.platformSubscriptions.columnDaysRemaining}
-                    </dt>
-                    <dd className="text-foreground">{renderDaysRemaining(entry)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-subtle-foreground">
-                      {t.platformSubscriptions.columnPlan}
-                    </dt>
-                    <dd className="text-foreground">
-                      {entry.subscription.plan_code ?? t.platformSubscriptions.noPlan}
-                    </dd>
-                  </div>
-                </dl>
+                <p className="text-xs text-subtle-foreground">
+                  {t.platformSubscriptions.columnExpires}:{' '}
+                  <span className="numeric text-foreground">
+                    {formatDate(entry.subscription.expires_at)}
+                  </span>{' '}
+                  · {renderDaysRemaining(entry)}
+                </p>
                 {renderActions(entry)}
               </div>
             ))}
           </div>
 
-          <div className="card p-4">
+          <div className="card p-3">
             <PaginationControls
               skip={skip}
               limit={pageSize}

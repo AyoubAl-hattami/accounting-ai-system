@@ -33,7 +33,12 @@ export default function OnboardingSuccess({
     adminEmail: result.admin_email,
     temporaryPassword: result.generated_password,
     expiresAt: result.expires_at,
+    loginUrl: result.public_login_url,
   });
+
+  // The server sends its placeholder when APP_PUBLIC_URL is unset, which is the
+  // one thing an operator must fix before the message is worth sending.
+  const urlConfigured = !result.public_login_url.startsWith('[');
 
   const handleCopy = async () => {
     try {
@@ -61,6 +66,7 @@ export default function OnboardingSuccess({
       label: copy.summaryExpiry,
       value: formatHandoverDate(result.expires_at) ?? copy.reviewNoExpiry,
     },
+    { label: copy.handoverLoginUrl, value: result.public_login_url },
   ];
 
   return (
@@ -107,6 +113,13 @@ export default function OnboardingSuccess({
         </div>
       )}
 
+      {!urlConfigured && (
+        <div className="callout tone-warning">
+          <ShieldAlert aria-hidden className="mt-0.5 h-4 w-4 flex-shrink-0" />
+          <p>{copy.handoverUrlNotConfigured}</p>
+        </div>
+      )}
+
       <section className="card p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -130,9 +143,9 @@ export default function OnboardingSuccess({
           {message}
         </pre>
 
-        {result.generated_password && (
-          <p className="mt-3 flex items-center gap-1.5 text-xs text-subtle-foreground">
-            <KeyRound aria-hidden className="h-3.5 w-3.5" />
+        {result.must_change_password && (
+          <p className="mt-3 flex items-start gap-1.5 text-xs text-subtle-foreground">
+            <KeyRound aria-hidden className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
             {copy.changePasswordWarning}
           </p>
         )}

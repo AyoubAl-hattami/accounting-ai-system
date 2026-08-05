@@ -1,9 +1,10 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.password_change_gate import ensure_password_change_completed
 from app.core.security import decode_access_token
 from app.modules.accounting.models.user import User
 from app.modules.accounting.services.auth_service import get_user_by_id
@@ -13,6 +14,7 @@ bearer_scheme = HTTPBearer()
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
@@ -49,6 +51,8 @@ def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Inactive user",
         )
+
+    ensure_password_change_completed(user, request.url.path)
 
     return user
 

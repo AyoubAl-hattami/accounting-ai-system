@@ -25,9 +25,42 @@ BUSINESS_ENDPOINT = "/accounts"
 DEFAULT_ACCOUNT_COUNT = 13
 MONTHS_IN_YEAR = 12
 
+# What the new admin picks for itself once the handover password is spent.
+SETTLED_PASSWORD = "S3ttledClientPass"
+
 
 def _headers(user):
     return {"Authorization": f"Bearer {create_user_token(user)}"}
+
+
+def _settle_password(base_url, accounting_factory, result, temporary_password):
+    """Walk the new admin through the change the system forces on it.
+
+    Onboarding hands over a password that travelled over chat or email, so the
+    account reaches nothing until it replaces it.  Tests about what the client
+    can then do have to go through the real change first.
+    """
+    login = requests.post(
+        f"{base_url}/auth/login",
+        json={"email": result["admin_email"], "password": temporary_password},
+    )
+    assert login.status_code == 200, login.text
+
+    changed = requests.post(
+        f"{base_url}/auth/change-temporary-password",
+        json={
+            "current_password": temporary_password,
+            "new_password": SETTLED_PASSWORD,
+            "confirm_password": SETTLED_PASSWORD,
+        },
+        headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+    )
+    assert changed.status_code == 200, changed.text
+
+    accounting_factory.db.expire_all()
+    return accounting_factory.db.scalar(
+        select(User).where(User.id == result["admin_user_id"])
+    )
 
 
 def _url(base_url: str) -> str:
@@ -298,6 +331,8 @@ def test_created_client_admin_can_authenticate(base_url, onboarded):
     )
 
     assert login.status_code == 200, login.text
+    assert login.json()["must_change_password"] is True
+
     me = requests.get(
         f"{base_url}/auth/me",
         headers={"Authorization": f"Bearer {login.json()['access_token']}"},
@@ -305,6 +340,25 @@ def test_created_client_admin_can_authenticate(base_url, onboarded):
     assert me.status_code == 200
     assert me.json()["email"] == body["admin_email"]
     assert me.json()["is_superuser"] is False
+
+
+def test_the_new_admin_is_locked_to_the_password_change(accounting_factory, onboarded):
+    """The handed-over password is known to two people, so it cannot be kept."""
+    _, result = onboarded
+
+    admin = accounting_factory.db.scalar(
+        select(User).where(User.id == result["admin_user_id"])
+    )
+
+    assert result["must_change_password"] is True
+    assert admin.must_change_password is True
+
+
+def test_the_handover_carries_the_public_login_url(onboarded):
+    _, result = onboarded
+
+    assert result["public_login_url"]
+    assert f"Login URL: {result['public_login_url']}" in result["handover_message"]
 
 
 # ── what onboarding actually created ──────────────────────────────────────────
@@ -426,8 +480,8 @@ def test_created_client_admin_sees_only_its_own_company(
 ):
     _, result = onboarded
     other_company, _ = tenant
-    admin = accounting_factory.db.scalar(
-        select(User).where(User.id == result["admin_user_id"])
+    admin = _settle_password(
+        base_url, accounting_factory, result, result["generated_password"]
     )
 
     listed = requests.get(f"{base_url}/companies?limit=500", headers=_headers(admin))
@@ -438,12 +492,12 @@ def test_created_client_admin_sees_only_its_own_company(
     assert other_company.id not in visible
 
 
-def test_new_client_can_immediately_reach_the_business_api(
+def test_new_client_reaches_the_business_api_once_the_password_is_settled(
     base_url, accounting_factory, onboarded
 ):
     _, result = onboarded
-    admin = accounting_factory.db.scalar(
-        select(User).where(User.id == result["admin_user_id"])
+    admin = _settle_password(
+        base_url, accounting_factory, result, result["generated_password"]
     )
 
     response = requests.get(
@@ -459,8 +513,8 @@ def test_suspending_the_new_subscription_blocks_the_business_api(
     base_url, accounting_factory, platform_admin, onboarded
 ):
     _, result = onboarded
-    admin = accounting_factory.db.scalar(
-        select(User).where(User.id == result["admin_user_id"])
+    admin = _settle_password(
+        base_url, accounting_factory, result, result["generated_password"]
     )
 
     suspended = requests.post(
@@ -506,6 +560,13 @@ def test_reuse_existing_user_attaches_that_account(
     # No new credential exists, so none is handed over.
     assert result["generated_password"] is None
     assert "Temporary password" not in result["handover_message"]
+
+    # Nothing was handed over, so nothing has to be replaced: the account keeps
+    # the password only its owner knows.
+    accounting_factory.db.expire_all()
+    reused = accounting_factory.db.scalar(select(User).where(User.id == existing.id))
+    assert result["must_change_password"] is False
+    assert reused.must_change_password is False
 
 
 def test_reusing_a_platform_admin_as_a_client_admin_is_refused(

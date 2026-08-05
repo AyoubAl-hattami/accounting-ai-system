@@ -143,6 +143,17 @@ walk the five steps, create a throwaway company, and show the handover message
 on the success screen. Note that the temporary password is shown once and is
 dropped as soon as you leave that screen.
 
+Two things to set up before demoing it:
+
+- The handover message prints `APP_PUBLIC_URL`, and shows a warning callout when
+  that variable is unset. For a local demo, put `APP_PUBLIC_URL=http://localhost:5173`
+  in `backend/.env` — but leave it empty in anything a real client will see, so
+  a localhost address cannot ship in a handover message.
+- The admin the wizard creates is forced through a password change. Signing in
+  as it lands on `/auth/change-temporary-password` and nothing else opens until
+  the change is made, which is worth showing rather than working around. See
+  [Secure Client Handover](../product/secure-client-handover.md).
+
 ---
 
 ## 6. Demo route checklist

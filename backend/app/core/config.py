@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     APP_VERSION: str = "0.1.0"
 
+    # Where clients reach the frontend, e.g. https://accounting.example.com.
+    # Left empty the handover message falls back to a visible placeholder rather
+    # than to a localhost URL no client could ever open.
+    APP_PUBLIC_URL: str = ""
+
     DATABASE_URL: str
 
     SECRET_KEY: str = DEFAULT_SECRET_KEY
@@ -59,6 +64,11 @@ class Settings(BaseSettings):
             )
 
         return self
+
+    @property
+    def app_public_url(self) -> str:
+        """APP_PUBLIC_URL without its trailing slash; empty when unconfigured."""
+        return self.APP_PUBLIC_URL.strip().rstrip("/")
 
     @property
     def cors_origins_list(self) -> list[str]:
