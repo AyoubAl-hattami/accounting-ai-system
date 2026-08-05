@@ -7,6 +7,11 @@ minutes, then walk a prospective user through every screen.
 > and weak. Never seed a production database and never reuse these credentials
 > outside your machine.
 
+To demo this to someone who is not at your machine, see
+[Free Public Local Demo Tunnel](free-public-local-demo-tunnel.md) — one command
+puts everything behind a single temporary public URL. Set the local demo up
+first with the steps below.
+
 ---
 
 ## 1. Prerequisites
@@ -101,6 +106,12 @@ cd C:\ayoub\accounting-ai-system
 Installs `frontend\node_modules` if missing, then starts Vite on
 <http://127.0.0.1:5173>.
 
+The browser calls the backend directly at the `VITE_API_BASE_URL` in
+`frontend\.env` (`http://127.0.0.1:8010`), which is why `CORS_ORIGINS` has to
+list the frontend origin. The dev server also exposes a `/api` proxy that
+forwards to the backend with the prefix stripped; it is unused here and exists
+for the single-origin [public demo tunnel](free-public-local-demo-tunnel.md).
+
 ---
 
 ## 5. Log in
@@ -148,7 +159,9 @@ Two things to set up before demoing it:
 - The handover message prints `APP_PUBLIC_URL`, and shows a warning callout when
   that variable is unset. For a local demo, put `APP_PUBLIC_URL=http://localhost:5173`
   in `backend/.env` — but leave it empty in anything a real client will see, so
-  a localhost address cannot ship in a handover message.
+  a localhost address cannot ship in a handover message. Over the
+  [public demo tunnel](free-public-local-demo-tunnel.md) the start script sets it
+  to the tunnel URL for you, without touching `backend/.env`.
 - The admin the wizard creates is forced through a password change. Signing in
   as it lands on `/auth/change-temporary-password` and nothing else opens until
   the change is made, which is worth showing rather than working around. See
