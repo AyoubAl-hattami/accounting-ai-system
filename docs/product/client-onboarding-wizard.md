@@ -82,10 +82,21 @@ submit — the backend refuses it with 422 regardless.
 
 ### Step 4: what gets created
 
-All three toggles default to on, and all three are idempotent:
+The chart is a three-way choice; the two calendar toggles default to on. All are
+idempotent:
 
-- **Chart of accounts** — reuses the same `DEFAULT_ACCOUNTS` list as
-  `POST /accounts/seed-defaults`. Existing codes are skipped, never duplicated.
+- **Chart of accounts** — one of three starting points:
+
+  | Choice | Result |
+  | --- | --- |
+  | Standard chart *(default)* | The same `DEFAULT_ACCOUNTS` list as `POST /accounts/seed-defaults` |
+  | Blank chart | No accounts at all; the client builds the chart themselves |
+  | Regional starter | An opt-in template, e.g. `yemen_cash_wallet` |
+
+  Existing codes are skipped, never duplicated. A regional template is never the
+  default, and its payment accounts are ordinary editable accounts — see
+  [Custom Chart of Accounts](custom-chart-of-accounts.md).
+
 - **Fiscal year** — the current calendar year, 1 January to 31 December, `open`.
   Skipped if a year already covers today.
 - **Monthly periods** — twelve `open` periods inside that year. Each is guarded
@@ -229,6 +240,7 @@ The 201 response carries `generated_password` (once), `must_change_password`,
   "subscription_expires_at": "2026-09-30T23:59:59Z",
   "trial_ends_at": null,
   "seed_default_accounts": true,
+  "chart_template": "default",
   "create_fiscal_year": true,
   "open_monthly_periods": true,
   "onboarding_note": "Signed 12-month agreement"
