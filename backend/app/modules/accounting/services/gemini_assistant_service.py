@@ -71,6 +71,7 @@ from app.modules.accounting.services.assistant_intent_orchestrator import (
     orchestrate_assistant_intent,
 )
 from app.modules.accounting.services.gemini_transaction_parser import (
+    build_followup_message,
     looks_like_accounting_message_with_amount,
     parse_transaction_message,
 )
@@ -281,7 +282,9 @@ def _tool_get_accounts(db: Session, company_id: int) -> list[dict]:
         accounts = list_accounts(db=db, company_id=company_id, limit=500)
         return [
             {"id": a.id, "code": a.code, "name": a.name,
-             "account_type": a.account_type, "is_active": a.is_active}
+             "account_type": a.account_type,
+             "account_subtype": a.account_subtype,
+             "is_active": a.is_active}
             for a in accounts
         ]
     except Exception:
@@ -2066,12 +2069,41 @@ def _handle_pending_transaction_answer(
     return ActionRequestResult(reply=reply, suggested_action=suggested_action)
 
 
+def _is_actionable_parse(parsed: ParsedTransaction | None) -> bool:
+    return (
+        parsed is not None
+        and parsed.intent == "create_journal_entry"
+        and parsed.transaction_type != "unknown"
+        and parsed.amount is not None
+    )
+
+
+def _is_memory_actionable_followup(
+    message: str,
+    history: list[ConversationTurn] | None,
+) -> bool:
+    """True when the previous user turns turn this message into a transaction.
+
+    "it was 300 from the bank" is meaningless alone, so the intent orchestrator
+    classifies it as unknown and asks which question the user means.  Asking that
+    right after the user named the transaction is what makes the assistant feel
+    forgetful, so this reopens the action path instead.
+    """
+    followup_message = build_followup_message(message, history)
+    return bool(
+        followup_message
+        and followup_message != message
+        and looks_like_accounting_message_with_amount(followup_message)
+    )
+
+
 def _handle_action_request(
     db: Session,
     company_id: int,
     message: str,
     language: str,
     runtime_context: AgentRuntimeContext | None = None,
+    history: list[ConversationTurn] | None = None,
 ) -> ActionRequestResult:
     """Handle action requests using Gemini semantic parser with rules fallback."""
     accounts_raw = _tool_get_accounts(db, company_id)
@@ -2093,7 +2125,23 @@ def _handle_action_request(
         accounts_context=active_accounts,
         language=language,
         runtime_context=runtime_context,
+        conversation_history=history,
     )
+
+    # A follow-up such as "it was 300 from the bank" only becomes a transaction
+    # once the subject from the preceding turn is merged back in.
+    if not _is_actionable_parse(parsed):
+        followup_message = build_followup_message(message, history)
+        if followup_message and followup_message != message:
+            followup_parsed = parse_transaction_message(
+                message=followup_message,
+                accounts_context=active_accounts,
+                language=language,
+                runtime_context=runtime_context,
+                conversation_history=history,
+            )
+            if _is_actionable_parse(followup_parsed):
+                parsed = followup_parsed
 
     if parsed is not None:
         # Gemini returned a structured result
@@ -3486,7 +3534,9 @@ def dispatch_gemini_assistant(
     legacy_structured_followup = _is_generic_structured_followup(message)
     legacy_structured_kind = _structured_report_kind(message)
     if intent_decision.target_handler == "safe_clarification" and not (
-        legacy_structured_followup or legacy_structured_kind
+        legacy_structured_followup
+        or legacy_structured_kind
+        or _is_memory_actionable_followup(message, history)
     ):
         return _intent_clarification_reply(intent_decision)
 
@@ -3863,6 +3913,7 @@ def dispatch_gemini_assistant(
             message,
             language,
             runtime_context,
+            history=history,
         )
         return GeminiAssistantReply(
             reply=result.reply,
@@ -3874,6 +3925,37 @@ def dispatch_gemini_assistant(
             clarification_options=result.clarification_options,
             pending_context_token=result.pending_context_token,
         )
+
+    # ── Conversation-aware retry ─────────────────────────────────────────────
+    # A follow-up like "it was 300 from the bank" classifies as unknown on its
+    # own.  Merged with the preceding turn it becomes a real transaction, so it
+    # is worth one action-handler attempt before falling back to a clarification
+    # question — asking "which transaction?" when the user just said so is the
+    # exact behaviour that makes the assistant feel forgetful.
+    if _is_memory_actionable_followup(message, history):
+        followup_result = _handle_action_request(
+            db,
+            company_id,
+            message,
+            language,
+            runtime_context,
+            history=history,
+        )
+        if followup_result.suggested_action or followup_result.pending_transaction:
+            return GeminiAssistantReply(
+                reply=followup_result.reply,
+                intent=(
+                    "create_journal_draft"
+                    if followup_result.suggested_action
+                    else "clarification"
+                ),
+                confidence="high" if followup_result.suggested_action else "medium",
+                data_sources=["accounts", "semantic_parser"],
+                suggested_action=followup_result.suggested_action,
+                pending_transaction=followup_result.pending_transaction,
+                clarification_options=followup_result.clarification_options,
+                pending_context_token=followup_result.pending_context_token,
+            )
 
     standalone_reply = _standalone_clarification_answer_reply(message, language)
     if standalone_reply:

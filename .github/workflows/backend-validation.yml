@@ -199,6 +199,7 @@ jobs:
             tests/test_invitation_lifecycle_integrity.py \
             tests/test_gemini_assistant.py \
             tests/test_assistant_conversations.py \
+            tests/test_assistant_conversation_memory.py \
             tests/test_gemini_assistant_explain.py \
             tests/test_gemini_assistant_profit.py \
             tests/test_semantic_transaction.py \

@@ -34,6 +34,7 @@ EXPECTED_HTTP_INTEGRATION_FILES = frozenset(
         "api/test_company_user_invitations.py",
         "test_ai_status.py",
         "test_ai_suggestions.py",
+        "test_assistant_conversation_memory.py",
         "test_assistant_conversations.py",
         "test_auth.py",
         "test_auth_rate_limit.py",
@@ -117,11 +118,13 @@ EXPECTED_FACTORY_BACKED_HTTP_FILES = frozenset(
         "test_client_onboarding.py",
         "test_onboard_client_script.py",
         "test_forced_password_change.py",
+        "test_assistant_conversation_memory.py",
     }
 )
 
 EXPECTED_DIRECT_SESSION_FILES = frozenset(
     {
+        "test_assistant_conversation_memory.py",
         "test_assistant_conversations.py",
         "test_invitation_lifecycle_integrity.py",
         "test_protected_accounts.py",

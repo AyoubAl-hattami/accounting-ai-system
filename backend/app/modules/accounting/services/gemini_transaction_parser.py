@@ -15,7 +15,10 @@ import re
 from typing import Any
 
 from app.core.config import settings
-from app.modules.accounting.schemas.gemini_assistant_schemas import ParsedTransaction
+from app.modules.accounting.schemas.gemini_assistant_schemas import (
+    ConversationTurn,
+    ParsedTransaction,
+)
 from app.modules.accounting.services.account_mapper import ACCOUNT_ALIASES
 from app.modules.accounting.services.gemini_agent_contract import (
     AGENT_CONTRACT_VERSION,
@@ -208,6 +211,41 @@ def _parse_transaction_locally(message: str, language: str) -> ParsedTransaction
     return None
 
 
+MAX_FOLLOWUP_TURNS = 2
+MAX_FOLLOWUP_TURN_CHARS = 500
+MAX_CONTEXT_TURNS = 8
+
+_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+def _sanitized_turn_content(content: str, limit: int = MAX_FOLLOWUP_TURN_CHARS) -> str:
+    return _CONTROL_CHARS.sub(" ", content).strip()[:limit]
+
+
+def build_followup_message(
+    message: str,
+    conversation_history: list[ConversationTurn] | None,
+) -> str | None:
+    """Merge the newest user turns with the current message.
+
+    A follow-up such as "it was 300 from the bank" carries no transaction on its
+    own; the subject lives in the preceding turn.  Only user turns are merged —
+    assistant replies quote amounts from earlier drafts and would poison the
+    amount extraction.
+    """
+    if not conversation_history:
+        return None
+    previous = [
+        _sanitized_turn_content(turn.content)
+        for turn in conversation_history
+        if turn.role == "user"
+    ]
+    previous = [content for content in previous if content][-MAX_FOLLOWUP_TURNS:]
+    if not previous:
+        return None
+    return ". ".join([*previous, _sanitized_turn_content(message)])
+
+
 def _is_reasonable_local_parse(parsed: ParsedTransaction | None) -> bool:
     return (
         parsed is not None
@@ -271,6 +309,7 @@ def _build_parser_prompt(
     accounts_context: list[dict[str, Any]],
     language: str,
     runtime_context: AgentRuntimeContext | None = None,
+    conversation_history: list[ConversationTurn] | None = None,
 ) -> AgentPrompt:
     """Build separated contract, account data, and untrusted user content."""
     account_data = [
@@ -278,16 +317,24 @@ def _build_parser_prompt(
             "code": account.get("code"),
             "name": account.get("name"),
             "account_type": account.get("account_type"),
+            "account_subtype": account.get("account_subtype"),
         }
         for account in accounts_context
         if account.get("is_active", True)
+    ]
+    history_data = [
+        {"role": turn.role, "content": _sanitized_turn_content(turn.content)}
+        for turn in (conversation_history or [])[-MAX_CONTEXT_TURNS:]
     ]
     return build_agent_prompt(
         runtime_context=runtime_context
         or default_runtime_context(language=language, provider_name="gemini"),
         task_instructions=transaction_parser_task_instructions(language),
         user_message=message,
-        trusted_backend_data={"current_company_chart_of_accounts": account_data},
+        trusted_backend_data={
+            "current_company_chart_of_accounts": account_data,
+            "bounded_recent_conversation": history_data,
+        },
     )
 
 # ── Parser function ───────────────────────────────────────────────────────────
@@ -297,6 +344,7 @@ def parse_transaction_message(
     accounts_context: list[dict[str, Any]],
     language: str = "ar",
     runtime_context: AgentRuntimeContext | None = None,
+    conversation_history: list[ConversationTurn] | None = None,
 ) -> ParsedTransaction | None:
     """
     Use Gemini to semantically parse a user message into a structured transaction.
@@ -319,6 +367,7 @@ def parse_transaction_message(
         accounts_context,
         language,
         runtime_context,
+        conversation_history,
     )
 
     try:
