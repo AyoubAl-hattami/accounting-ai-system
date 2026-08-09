@@ -6,7 +6,8 @@
  * lets report pages and journal pages render account-type labels without
  * creating cross-feature imports inside features/.
  */
-export type { Account } from '../../api/types';
+export type { Account, AccountSubtype } from '../../api/types';
 export type { AccountSeedResult } from '../../api/types';
+export type { CreateAccountInput } from './useAccounts';
 export { AccountTypeBadge } from './AccountTypeBadge';
 export { useAccounts } from './useAccounts';

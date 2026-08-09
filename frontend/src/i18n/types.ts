@@ -262,6 +262,36 @@ export interface Translations {
     seedFailed: string;
     noMatchTitle: string;
     noMatchDescription: string;
+    // Create-account dialog.  The company owns its chart, so every field is
+    // free text and the helper copy only ever offers examples.
+    addAccount: string;
+    addAccountTitle: string;
+    addAccountDescription: string;
+    codeHelp: string;
+    codePlaceholder: string;
+    namePlaceholder: string;
+    typeHelp: string;
+    subtype: string;
+    subtypeHelp: string;
+    subtypeNone: string;
+    subtypeBank: string;
+    subtypeCash: string;
+    subtypeEWallet: string;
+    subtypeReceivable: string;
+    subtypePayable: string;
+    subtypeRevenue: string;
+    subtypeExpense: string;
+    subtypeOther: string;
+    parentAccount: string;
+    parentNone: string;
+    quickTemplates: string;
+    quickTemplatesHelp: string;
+    templateBank: string;
+    templateCashBox: string;
+    templateEWallet: string;
+    createAccount: string;
+    creating: string;
+    accountCreated: string;
   };
 
   // ── Journal Entries ──
@@ -925,8 +955,15 @@ export interface Translations {
     // Step 4 — initial accounting setup
     accountingStepTitle: string;
     accountingStepDescription: string;
-    seedAccountsLabel: string;
-    seedAccountsHelp: string;
+    // Chart setup choice. Regional templates are opt-in and never the default.
+    chartSetupLabel: string;
+    chartSetupHelp: string;
+    chartSetupDefault: string;
+    chartSetupDefaultHelp: string;
+    chartSetupBlank: string;
+    chartSetupBlankHelp: string;
+    chartSetupYemen: string;
+    chartSetupYemenHelp: string;
     createFiscalYearLabel: string;
     createFiscalYearHelp: string;
     openPeriodsLabel: string;

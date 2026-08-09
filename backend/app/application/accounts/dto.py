@@ -14,6 +14,7 @@ class CreateAccountCommand:
     description: str | None
     is_active: bool
     is_system: bool
+    account_subtype: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +23,7 @@ class UpdateAccountCommand:
     code: str | None = None
     name: str | None = None
     account_type: str | None = None
+    account_subtype: str | None = None
     parent_id: int | None = None
     description: str | None = None
     is_active: bool | None = None
@@ -37,6 +39,7 @@ class DefaultAccountDefinition:
     parent_code: str | None
     description: str | None
     is_system: bool
+    account_subtype: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +61,7 @@ class AccountDTO:
     is_system: bool
     created_at: datetime
     updated_at: datetime
+    account_subtype: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -40,6 +40,7 @@ EXPECTED_HTTP_INTEGRATION_FILES = frozenset(
         "test_auth_rate_limit.py",
         "test_balance_sheet_multi_year.py",
         "test_client_onboarding.py",
+        "test_custom_chart_of_accounts.py",
         "test_dashboard_net_income.py",
         "test_default_accounts_seed.py",
         "test_fiscal_management.py",
@@ -119,6 +120,7 @@ EXPECTED_FACTORY_BACKED_HTTP_FILES = frozenset(
         "test_onboard_client_script.py",
         "test_forced_password_change.py",
         "test_assistant_conversation_memory.py",
+        "test_custom_chart_of_accounts.py",
     }
 )
 
