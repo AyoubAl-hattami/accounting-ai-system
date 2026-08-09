@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.core.identity import normalize_email
+from app.modules.accounting.schemas.account import CHART_TEMPLATE_CODES, ChartTemplate
 from app.modules.accounting.schemas.user import validate_password_strength
 
 
@@ -47,6 +48,7 @@ class ClientOnboardingCreate(BaseModel):
     trial_ends_at: datetime | None = None
 
     seed_default_accounts: bool = True
+    chart_template: ChartTemplate = "default"
     create_fiscal_year: bool = True
     open_monthly_periods: bool = True
 
@@ -138,6 +140,8 @@ class OnboardingDefaultsRead(BaseModel):
     default_plan_code: str = DEFAULT_PLAN_CODE
     suggested_plan_codes: list[str]
     default_subscription_status: str = "active"
+    default_chart_template: str = "default"
+    chart_templates: list[str]
     expiry_presets: list[str]
     # The real URL once APP_PUBLIC_URL is set, otherwise the placeholder, so the
     # wizard never has to decide which one to show.

@@ -27,6 +27,19 @@ const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type PasswordMode = 'generate' | 'manual' | 'reuse';
 
+/** How the client's chart starts out. Regional templates are never the default. */
+type ChartSetup = 'default' | 'blank' | 'yemen_cash_wallet';
+
+const CHART_SETUP_OPTIONS = [
+  { value: 'default', label: 'chartSetupDefault', help: 'chartSetupDefaultHelp' },
+  { value: 'blank', label: 'chartSetupBlank', help: 'chartSetupBlankHelp' },
+  { value: 'yemen_cash_wallet', label: 'chartSetupYemen', help: 'chartSetupYemenHelp' },
+] as const satisfies readonly {
+  value: ChartSetup;
+  label: 'chartSetupDefault' | 'chartSetupBlank' | 'chartSetupYemen';
+  help: 'chartSetupDefaultHelp' | 'chartSetupBlankHelp' | 'chartSetupYemenHelp';
+}[];
+
 interface WizardForm {
   companyName: string;
   baseCurrency: string;
@@ -37,7 +50,7 @@ interface WizardForm {
   planCode: string;
   subscriptionStatus: 'active' | 'trial';
   expiresAt: string;
-  seedDefaultAccounts: boolean;
+  chartSetup: ChartSetup;
   createFiscalYear: boolean;
   openMonthlyPeriods: boolean;
   onboardingNote: string;
@@ -75,7 +88,7 @@ const INITIAL_FORM: WizardForm = {
   planCode: FALLBACK_PLAN_CODE,
   subscriptionStatus: 'active',
   expiresAt: dateInMonths(1),
-  seedDefaultAccounts: true,
+  chartSetup: 'default',
   createFiscalYear: true,
   openMonthlyPeriods: true,
   onboardingNote: '',
@@ -97,7 +110,7 @@ export default function ClientOnboardingPage() {
     status: useId(),
     expires: useId(),
     note: useId(),
-    seedAccounts: useId(),
+    chartSetup: useId(),
     fiscalYear: useId(),
     periods: useId(),
   };
@@ -231,7 +244,8 @@ export default function ClientOnboardingPage() {
       // expiry from it so the trial actually lapses.
       subscription_expires_at: isTrial ? null : instant,
       trial_ends_at: isTrial ? instant : null,
-      seed_default_accounts: form.seedDefaultAccounts,
+      seed_default_accounts: form.chartSetup !== 'blank',
+      chart_template: form.chartSetup === 'yemen_cash_wallet' ? 'yemen_cash_wallet' : 'default',
       create_fiscal_year: form.createFiscalYear,
       open_monthly_periods: form.createFiscalYear && form.openMonthlyPeriods,
       reuse_existing_user: form.passwordMode === 'reuse',
@@ -266,6 +280,10 @@ export default function ClientOnboardingPage() {
       : form.passwordMode === 'manual'
         ? copy.reviewPasswordManual
         : copy.reviewPasswordReuse;
+
+  const chartSetupOption =
+    CHART_SETUP_OPTIONS.find((option) => option.value === form.chartSetup) ??
+    CHART_SETUP_OPTIONS[0];
 
   const toggleRow = (
     id: string,
@@ -589,15 +607,45 @@ export default function ClientOnboardingPage() {
               </p>
             </header>
 
+            <fieldset>
+              <legend className="field-label">{copy.chartSetupLabel}</legend>
+              <p className="mb-2 text-xs text-subtle-foreground">{copy.chartSetupHelp}</p>
+              <div className="space-y-2">
+                {CHART_SETUP_OPTIONS.map(({ value, label, help }) => (
+                  <label
+                    key={value}
+                    className="flex cursor-pointer items-start gap-3 rounded-lg border border-border-subtle px-3.5 py-3"
+                  >
+                    <input
+                      type="radio"
+                      name="chart-setup"
+                      value={value}
+                      checked={form.chartSetup === value}
+                      onChange={() => update('chartSetup', value)}
+                      aria-labelledby={`${ids.chartSetup}-${value}-label`}
+                      aria-describedby={`${ids.chartSetup}-${value}-help`}
+                      className="mt-0.5"
+                    />
+                    <span className="min-w-0">
+                      <span
+                        id={`${ids.chartSetup}-${value}-label`}
+                        className="block text-sm font-medium text-foreground"
+                      >
+                        {copy[label]}
+                      </span>
+                      <span
+                        id={`${ids.chartSetup}-${value}-help`}
+                        className="mt-0.5 block text-xs text-muted-foreground"
+                      >
+                        {copy[help]}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
             <div className="space-y-3">
-              {toggleRow(
-                ids.seedAccounts,
-                copy.seedAccountsLabel,
-                copy.seedAccountsHelp,
-                form.seedDefaultAccounts,
-                false,
-                (next) => update('seedDefaultAccounts', next),
-              )}
               {toggleRow(
                 ids.fiscalYear,
                 copy.createFiscalYearLabel,
@@ -680,10 +728,7 @@ export default function ClientOnboardingPage() {
               <div className="panel px-3.5 py-3">
                 <p className="overline mb-1">{copy.reviewAccountingSection}</p>
                 <dl className="divide-y divide-border-subtle">
-                  {reviewRow(
-                    copy.seedAccountsLabel,
-                    form.seedDefaultAccounts ? t.common.yes : t.common.no,
-                  )}
+                  {reviewRow(copy.chartSetupLabel, copy[chartSetupOption.label])}
                   {reviewRow(
                     copy.createFiscalYearLabel,
                     form.createFiscalYear ? t.common.yes : t.common.no,

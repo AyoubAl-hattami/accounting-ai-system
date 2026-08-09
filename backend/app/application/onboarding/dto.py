@@ -25,6 +25,7 @@ class OnboardClientCommand:
     subscription_expires_at: datetime | None = None
     trial_ends_at: datetime | None = None
     seed_default_accounts: bool = True
+    chart_template: str = "default"
     create_fiscal_year: bool = True
     open_monthly_periods: bool = True
     reuse_existing_user: bool = False
