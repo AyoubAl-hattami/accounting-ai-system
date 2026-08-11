@@ -268,7 +268,10 @@ def test_conversations_are_private_to_owner_and_company(
         headers=deterministic_superuser_headers,
         params={"company_id": company_id},
     )
-    assert superuser.status_code == 404
+    assert superuser.status_code == 403
+    assert superuser.json() == {
+        "detail": "Platform administrators cannot access tenant data through company routes"
+    }
 
     other_company_list = requests.get(
         f"{base_url}/ai/conversations",

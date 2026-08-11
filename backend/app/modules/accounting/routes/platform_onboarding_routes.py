@@ -51,6 +51,7 @@ from app.infrastructure.database.sqlalchemy.repositories.user_repository import 
 )
 from app.modules.accounting.models.user import User
 from app.modules.accounting.schemas.client_onboarding import (
+    CHART_TEMPLATE_CODES,
     DEFAULT_PLAN_CODE,
     SUGGESTED_CURRENCIES,
     SUGGESTED_PLAN_CODES,
@@ -112,6 +113,7 @@ def onboarding_defaults_endpoint(
         suggested_currencies=list(SUGGESTED_CURRENCIES),
         suggested_plan_codes=list(SUGGESTED_PLAN_CODES),
         default_plan_code=DEFAULT_PLAN_CODE,
+        chart_templates=list(CHART_TEMPLATE_CODES),
         expiry_presets=["1_month", "3_months", "1_year"],
         public_login_url=public_login_url(),
         generated_password_length=TEMPORARY_PASSWORD_LENGTH,
@@ -158,6 +160,7 @@ def onboard_client_endpoint(
                 subscription_expires_at=payload.subscription_expires_at,
                 trial_ends_at=payload.trial_ends_at,
                 seed_default_accounts=payload.seed_default_accounts,
+                chart_template=payload.chart_template,
                 create_fiscal_year=payload.create_fiscal_year,
                 open_monthly_periods=payload.open_monthly_periods,
                 reuse_existing_user=payload.reuse_existing_user,

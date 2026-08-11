@@ -28,6 +28,12 @@ class Account(Base):
             "account_type IN ('asset', 'liability', 'equity', 'income', 'expense')",
             name="ck_accounts_account_type",
         ),
+        CheckConstraint(
+            "account_subtype IS NULL OR account_subtype IN ("
+            "'bank', 'cash', 'e_wallet', 'receivable', 'payable', "
+            "'revenue', 'expense', 'other')",
+            name="ck_accounts_account_subtype",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -42,6 +48,11 @@ class Account(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
 
     account_type: Mapped[str] = mapped_column(String(50), nullable=False)
+
+    # Optional presentation hint (bank / cash / e_wallet / …).  Reports classify
+    # strictly by account_type; this only groups accounts for humans and helps
+    # the assistant resolve "from the wallet" to a company-specific account.
+    account_subtype: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
     parent_id: Mapped[int | None] = mapped_column(
         ForeignKey("accounts.id", ondelete="RESTRICT"),

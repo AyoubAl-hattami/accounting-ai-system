@@ -22,12 +22,23 @@ export interface Company {
 }
 
 // ── Account ──
+export type AccountSubtype =
+  | 'bank'
+  | 'cash'
+  | 'e_wallet'
+  | 'receivable'
+  | 'payable'
+  | 'revenue'
+  | 'expense'
+  | 'other';
+
 export interface Account {
   id: number;
   company_id: number;
   code: string;
   name: string;
   account_type: string;
+  account_subtype: AccountSubtype | null;
   parent_id: number | null;
   description: string | null;
   is_active: boolean;
@@ -362,6 +373,8 @@ export interface CompanySubscriptionStatus {
 /** Statuses a brand-new tenant may be created with. */
 export type OnboardingSubscriptionStatus = Extract<SubscriptionStatus, 'trial' | 'active'>;
 
+export type ChartTemplate = 'default' | 'yemen_cash_wallet';
+
 export interface ClientOnboardingRequest {
   company_name: string;
   base_currency: string;
@@ -374,6 +387,7 @@ export interface ClientOnboardingRequest {
   subscription_expires_at: string | null;
   trial_ends_at?: string | null;
   seed_default_accounts: boolean;
+  chart_template: ChartTemplate;
   create_fiscal_year: boolean;
   open_monthly_periods: boolean;
   reuse_existing_user?: boolean;

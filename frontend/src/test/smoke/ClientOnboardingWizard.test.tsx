@@ -245,6 +245,91 @@ describe('client onboarding wizard', () => {
     expect(await screen.findByText(copy.errorAdminEmailExists)).toBeInTheDocument();
   });
 
+  // The chart is a starting point, not a policy: the operator picks it, and no
+  // country is ever the one the wizard picks on its own.
+  it('defaults to the generic chart, never a regional one', async () => {
+    mockPost.mockResolvedValueOnce({ data: RESULT } as never);
+    renderWizard();
+    advanceToReview();
+
+    expect(screen.getByText(copy.chartSetupDefault)).toBeInTheDocument();
+    expect(screen.queryByText(copy.chartSetupYemen)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: copy.createClient }));
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+    const [, payload] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
+    expect(payload.seed_default_accounts).toBe(true);
+    expect(payload.chart_template).toBe('default');
+  });
+
+  it('can hand the client a completely blank chart', async () => {
+    mockPost.mockResolvedValueOnce({ data: { ...RESULT, seeded_accounts_count: 0 } } as never);
+    renderWizard();
+
+    fireEvent.change(screen.getByLabelText(copy.companyNameLabel), {
+      target: { value: 'Northwind Trading' },
+    });
+    clickNext();
+    fireEvent.change(screen.getByLabelText(copy.adminEmailLabel), {
+      target: { value: 'admin@northwind.test' },
+    });
+    clickNext();
+    clickNext(); // → accounting
+    fireEvent.click(screen.getByLabelText(copy.chartSetupBlank));
+    clickNext(); // → review
+    fireEvent.click(screen.getByRole('button', { name: copy.createClient }));
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+    const [, payload] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
+    expect(payload.seed_default_accounts).toBe(false);
+  });
+
+  it('sends the regional starter only when it is explicitly chosen', async () => {
+    mockPost.mockResolvedValueOnce({ data: RESULT } as never);
+    renderWizard();
+
+    fireEvent.change(screen.getByLabelText(copy.companyNameLabel), {
+      target: { value: 'Northwind Trading' },
+    });
+    clickNext();
+    fireEvent.change(screen.getByLabelText(copy.adminEmailLabel), {
+      target: { value: 'admin@northwind.test' },
+    });
+    clickNext();
+    clickNext(); // → accounting
+    fireEvent.click(screen.getByLabelText(copy.chartSetupYemen));
+    clickNext(); // → review
+
+    expect(screen.getByText(copy.chartSetupYemen)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: copy.createClient }));
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+    const [, payload] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
+    expect(payload.seed_default_accounts).toBe(true);
+    expect(payload.chart_template).toBe('yemen_cash_wallet');
+  });
+
+  it('offers the three chart choices side by side', () => {
+    renderWizard();
+
+    fireEvent.change(screen.getByLabelText(copy.companyNameLabel), {
+      target: { value: 'Northwind Trading' },
+    });
+    clickNext();
+    fireEvent.change(screen.getByLabelText(copy.adminEmailLabel), {
+      target: { value: 'admin@northwind.test' },
+    });
+    clickNext();
+    clickNext(); // → accounting
+
+    expect(screen.getByLabelText(copy.chartSetupDefault)).toBeChecked();
+    expect(screen.getByLabelText(copy.chartSetupBlank)).not.toBeChecked();
+    expect(screen.getByLabelText(copy.chartSetupYemen)).not.toBeChecked();
+    expect(screen.getByText(copy.chartSetupBlankHelp)).toBeInTheDocument();
+  });
+
   it('explains an access refusal inside the page', async () => {
     mockPost.mockRejectedValueOnce({
       isAxiosError: true,

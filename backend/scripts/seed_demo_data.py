@@ -559,7 +559,10 @@ def seed_demo_data(*, reset_demo_password: bool = False) -> dict[str, int]:
     print("\n" + "-" * 64)
     print(f"  Company        : {DEMO_COMPANY_NAME} ({DEMO_COMPANY_CURRENCY})")
     print(f"  Login email    : {DEMO_ADMIN_EMAIL}")
-    print(f"  Login password : {DEMO_ADMIN_PASSWORD}   (local demo only)")
+    if summary["users_created"] or reset_demo_password:
+        print(f"  Login password : {DEMO_ADMIN_PASSWORD}   (local demo only)")
+    else:
+        print("  Login password : unchanged; use the existing password")
     print(f"  Fiscal year    : {today.year} ({year_start} to {year_end})")
     print("-" * 64)
     print("  Demo data is ready. Open the frontend and sign in.\n")

@@ -20,7 +20,7 @@ from __future__ import annotations
 import calendar
 from datetime import date, datetime
 
-from app.application.accounts.defaults import DEFAULT_ACCOUNTS
+from app.application.accounts.defaults import resolve_chart_template
 from app.application.accounts.dto import SeedDefaultAccountsCommand
 from app.application.accounts.ports import AccountRepository
 from app.application.accounts.use_cases import SeedDefaultAccounts
@@ -199,7 +199,7 @@ class OnboardClient:
                 .execute(
                     SeedDefaultAccountsCommand(
                         company_id=company.id,
-                        accounts=DEFAULT_ACCOUNTS,
+                        accounts=resolve_chart_template(command.chart_template),
                     )
                 )
                 .created_count

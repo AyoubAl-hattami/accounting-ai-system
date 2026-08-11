@@ -1,15 +1,16 @@
 import { useState, useEffect, useMemo, useId } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Receipt, Search, Sprout, Loader2, CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { Receipt, Search, Sprout, Plus, Loader2, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import PageLayout from '../../components/layout/PageLayout';
 import { AccountTypeBadge, useAccounts } from '../../entities/account';
+import NewAccountModal from './NewAccountModal';
 import PaginationControls from '../../components/ui/PaginationControls';
 import LoadingState from '../../components/feedback/LoadingState';
 import ErrorState from '../../components/feedback/ErrorState';
 import EmptyState from '../../components/feedback/EmptyState';
 import { useI18n } from '../../i18n';
 import { canManageAccounts } from '../../auth/permissions';
-import type { Account, CompanyUserRole } from '../../api/types';
+import type { Account, AccountSubtype, CompanyUserRole } from '../../api/types';
 
 const ACCOUNT_FETCH_LIMIT = 500;
 const ACCOUNT_TYPES = ['asset', 'liability', 'equity', 'income', 'expense'];
@@ -56,6 +57,7 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
     error,
     fetchAccounts,
     seedDefaults,
+    createAccount,
   } = useAccounts({
     companyId: selectedCompanyId,
     skip: 0,
@@ -65,6 +67,8 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedResult, setSeedResult] = useState<{ created: number; skipped: number } | null>(null);
   const [seedError, setSeedError] = useState<string | null>(null);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [createdNotice, setCreatedNotice] = useState(false);
 
   useEffect(() => {
     setSkip(0);
@@ -72,6 +76,7 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
     setTypeFilter('');
     setSeedResult(null);
     setSeedError(null);
+    setCreatedNotice(false);
   }, [selectedCompanyId]);
 
   useEffect(() => {
@@ -105,6 +110,18 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
     setSkip(0);
   }, [searchQuery, typeFilter]);
 
+  const subtypeLabel = (subtype: AccountSubtype): string =>
+    ({
+      bank: t.accountsPage.subtypeBank,
+      cash: t.accountsPage.subtypeCash,
+      e_wallet: t.accountsPage.subtypeEWallet,
+      receivable: t.accountsPage.subtypeReceivable,
+      payable: t.accountsPage.subtypePayable,
+      revenue: t.accountsPage.subtypeRevenue,
+      expense: t.accountsPage.subtypeExpense,
+      other: t.accountsPage.subtypeOther,
+    })[subtype];
+
   /** Parent codes are shown instead of raw ids, which are meaningless to the reader. */
   const parentCodeOf = (acc: Account): string =>
     acc.parent_id ? accounts.find((a) => a.id === acc.parent_id)?.code || `#${acc.parent_id}` : '—';
@@ -125,6 +142,13 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
     } finally {
       setIsSeeding(false);
     }
+  };
+
+  const handleAccountCreated = () => {
+    setCreatedNotice(true);
+    setSeedResult(null);
+    setSeedError(null);
+    void fetchAccounts();
   };
 
   const clearFilters = () => {
@@ -155,24 +179,56 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
             {total} {t.accountsPage.showingAccounts}
           </span>
           {canManage && (
-            <button
-              type="button"
-              onClick={handleSeed}
-              disabled={isSeeding}
-              className="btn btn-secondary btn-sm"
-            >
-              {isSeeding ? (
-                <Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Sprout aria-hidden className="h-3.5 w-3.5" />
-              )}
-              {isSeeding ? t.accountsPage.seeding : t.accountsPage.seedDefaults}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={handleSeed}
+                disabled={isSeeding}
+                className="btn btn-secondary btn-sm"
+              >
+                {isSeeding ? (
+                  <Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sprout aria-hidden className="h-3.5 w-3.5" />
+                )}
+                {isSeeding ? t.accountsPage.seeding : t.accountsPage.seedDefaults}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAddOpen(true)}
+                className="btn btn-primary btn-sm"
+              >
+                <Plus aria-hidden className="h-3.5 w-3.5" />
+                {t.accountsPage.addAccount}
+              </button>
+            </>
           )}
         </div>
       </motion.div>
 
       <AnimatePresence>
+        {createdNotice && (
+          <motion.div
+            key="create-ok"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            role="status"
+            className="callout tone-success"
+          >
+            <CheckCircle2 aria-hidden className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <p className="flex-1">{t.accountsPage.accountCreated}</p>
+            <button
+              type="button"
+              onClick={() => setCreatedNotice(false)}
+              aria-label={t.common.close}
+              className="flex-shrink-0 opacity-70 transition-opacity hover:opacity-100"
+            >
+              <X aria-hidden className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+
         {seedResult && (
           <motion.div
             key="seed-ok"
@@ -286,19 +342,29 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
           description={t.accountsPage.noAccountsDescription}
           action={
             canManage ? (
-              <button
-                type="button"
-                onClick={handleSeed}
-                disabled={isSeeding}
-                className="btn btn-primary"
-              >
-                {isSeeding ? (
-                  <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sprout aria-hidden className="h-4 w-4" />
-                )}
-                {t.accountsPage.seedDefaults}
-              </button>
+              <div className="flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSeed}
+                  disabled={isSeeding}
+                  className="btn btn-secondary"
+                >
+                  {isSeeding ? (
+                    <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sprout aria-hidden className="h-4 w-4" />
+                  )}
+                  {t.accountsPage.seedDefaults}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAddOpen(true)}
+                  className="btn btn-primary"
+                >
+                  <Plus aria-hidden className="h-4 w-4" />
+                  {t.accountsPage.addAccount}
+                </button>
+              </div>
             ) : undefined
           }
         />
@@ -347,7 +413,14 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
                           {acc.code}
                         </span>
                       </td>
-                      <td className="font-medium">{acc.name}</td>
+                      <td className="font-medium">
+                        {acc.name}
+                        {acc.account_subtype && (
+                          <span className="ms-2 text-xs font-normal text-subtle-foreground">
+                            {subtypeLabel(acc.account_subtype)}
+                          </span>
+                        )}
+                      </td>
                       <td>
                         <AccountTypeBadge type={acc.account_type} />
                       </td>
@@ -408,6 +481,9 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
                   <span className={`badge ${acc.is_system ? 'tone-info' : 'tone-neutral'}`}>
                     {acc.is_system ? t.accountsPage.systemAccount : t.accountsPage.manualAccount}
                   </span>
+                  {acc.account_subtype && (
+                    <span className="badge tone-neutral">{subtypeLabel(acc.account_subtype)}</span>
+                  )}
                   {acc.parent_id && (
                     <span className="numeric text-[11px] text-subtle-foreground">
                       {t.accountsPage.parent}: {parentCodeOf(acc)}
@@ -426,6 +502,16 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
             />
           </div>
         </motion.div>
+      )}
+
+      {canManage && (
+        <NewAccountModal
+          isOpen={isAddOpen}
+          onClose={() => setIsAddOpen(false)}
+          accounts={accounts}
+          onCreate={createAccount}
+          onCreated={handleAccountCreated}
+        />
       )}
     </div>
   );

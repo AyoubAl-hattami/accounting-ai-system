@@ -25,7 +25,7 @@ def test_inactive_user_cannot_access_company_even_as_superuser():
     assert exc.value.detail == "Inactive user"
 
 
-def test_active_superuser_receives_admin_company_context():
+def test_active_superuser_cannot_enter_tenant_routes():
     user = User(
         id=1,
         email="admin@example.test",
@@ -33,10 +33,13 @@ def test_active_superuser_receives_admin_company_context():
         is_active=True,
         is_superuser=True,
     )
-    access = ensure_company_access(Mock(), user, 42)
-    assert access.company_id == 42
-    assert access.role == "admin"
-    assert access.is_active is True
+    with pytest.raises(HTTPException) as exc:
+        ensure_company_access(Mock(), user, 42)
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == (
+        "Platform administrators cannot access tenant data through company routes"
+    )
 
 
 def test_permission_roles_are_explicit_and_non_mutating_roles_are_distinct():

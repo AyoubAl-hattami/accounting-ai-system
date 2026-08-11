@@ -57,6 +57,11 @@ ACCOUNT_ALIASES: dict[str, list[str]] = {
         "صندوق", "الصندوق", "نقد", "نقدية", "كاش",
         "cash", "petty cash", "cash box",
     ],
+    "e_wallet": [
+        "محفظة", "المحفظة", "محفظة إلكترونية", "محفظة الكترونية",
+        "wallet", "e-wallet", "e wallet", "ewallet", "mobile money",
+        "mobile wallet", "digital wallet",
+    ],
     "sales": [
         "مبيعات", "إيراد", "ايراد", "إيرادات", "ايرادات",
         "revenue", "sales", "sales revenue", "income",
@@ -90,6 +95,22 @@ ACCOUNT_ALIASES: dict[str, list[str]] = {
         "capital", "owner capital", "equity", "owner equity",
     ],
 }
+
+
+# A company is free to name its cash account "الكريمي" or "Jawali".  The optional
+# account_subtype is the only structured way to know that such an account is a
+# bank / cash / wallet, so the mapper treats it as an extra matching signal.
+SUBTYPE_ALIAS_CATEGORIES: dict[str, str] = {
+    "bank": "bank",
+    "cash": "cash",
+    "e_wallet": "e_wallet",
+    "receivable": "accounts_receivable",
+    "payable": "accounts_payable",
+    "revenue": "sales",
+}
+
+# Hints that mean "any account the company actually pays money out of".
+PAYMENT_SOURCE_CATEGORIES = ("bank", "cash", "e_wallet")
 
 
 def _normalize(text: str) -> str:
@@ -165,6 +186,11 @@ def _score_account(
             if alias in name_lower:
                 score += 8.0
                 break
+
+    # Company-declared classification match: lets "الكريمي" answer a "bank" hint.
+    subtype = account.get("account_subtype")
+    if alias_category and subtype and SUBTYPE_ALIAS_CATEGORIES.get(subtype) == alias_category:
+        score += 8.0
 
     # Partial word overlap, ignoring generic accounting type words.
     hint_words = set(hint_lower.split()) - _GENERIC_TYPE_WORDS
@@ -304,17 +330,23 @@ def _find_bank_or_cash(
     accounts: list[dict[str, Any]],
     preference: str | None = None,
 ) -> dict[str, Any] | None:
-    """Find bank or cash account by preference."""
+    """Find the asset account money moves through, honouring a free-text preference."""
     if preference == "bank":
         return _find_best_account(accounts, "bank", required_type="asset")
     if preference == "cash":
         return _find_best_account(accounts, "cash", required_type="asset")
+    if preference:
+        # "الكريمي", "Jawali" or "wallet" are all legitimate sources; try the hint
+        # verbatim before falling back to the generic ordering.
+        match = _find_best_account(accounts, preference, required_type="asset")
+        if match:
+            return match
 
-    # No explicit preference: choose the most common default order.
-    result = _find_best_account(accounts, "bank", required_type="asset")
-    if result:
-        return result
-    return _find_best_account(accounts, "cash", required_type="asset")
+    for category in PAYMENT_SOURCE_CATEGORIES:
+        result = _find_best_account(accounts, category, required_type="asset")
+        if result:
+            return result
+    return None
 
 
 # ── Main mapper ───────────────────────────────────────────────────────────────

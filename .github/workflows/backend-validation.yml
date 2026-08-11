@@ -168,42 +168,4 @@ jobs:
             exit 1
           fi
 
-          python -m pytest -p no:cacheprovider \
-            tests/test_health.py \
-            tests/test_auth.py \
-            tests/test_auth_rate_limit.py \
-            tests/test_password_policy.py \
-            tests/test_protected_reports.py \
-            tests/test_reports_smoke.py \
-            tests/test_report_csv_exports.py \
-            tests/test_report_pdf_exports.py \
-            tests/test_default_accounts_seed.py \
-            tests/test_protected_fiscal.py \
-            tests/test_protected_accounts.py \
-            tests/test_ai_status.py \
-            tests/test_ai_suggestions.py \
-            tests/test_fiscal_year_date_protection.py \
-            tests/test_non_journal_audit_logs.py \
-            tests/test_opening_balance_workflow.py \
-            tests/test_protected_companies.py \
-            tests/test_rbac_permission_matrix.py \
-            tests/test_fiscal_management.py \
-            tests/test_protected_audit_logs.py \
-            tests/test_journal_lifecycle_policy.py \
-            tests/api/test_company_user_invitations.py \
-            tests/test_reset_script.py \
-            tests/test_dashboard_net_income.py \
-            tests/test_protected_company_users.py \
-            tests/test_protected_journal_entries.py \
-            tests/test_balance_sheet_multi_year.py \
-            tests/test_invitation_lifecycle_integrity.py \
-            tests/test_gemini_assistant.py \
-            tests/test_assistant_conversations.py \
-            tests/test_gemini_assistant_explain.py \
-            tests/test_gemini_assistant_profit.py \
-            tests/test_semantic_transaction.py \
-            tests/test_platform_subscriptions.py \
-            tests/test_client_onboarding.py \
-            tests/test_onboard_client_script.py \
-            tests/test_forced_password_change.py \
-            -v
+          python -m pytest -p no:cacheprovider -v

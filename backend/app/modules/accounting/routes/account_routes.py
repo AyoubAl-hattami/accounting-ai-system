@@ -6,7 +6,7 @@ from app.application.accounts.dto import (
     SeedDefaultAccountsCommand,
     UpdateAccountCommand,
 )
-from app.application.accounts.defaults import DEFAULT_ACCOUNTS
+from app.application.accounts.defaults import resolve_chart_template
 from app.application.accounts.use_cases import (
     CreateAccount,
     GetAccount,
@@ -27,6 +27,7 @@ from app.modules.accounting.schemas.account import (
     AccountRead,
     AccountSeedResult,
     AccountUpdate,
+    ChartTemplate,
 )
 from app.modules.accounting.services.accounting_lookup_facade import (
     get_account,
@@ -105,6 +106,7 @@ def create_account_endpoint(
         code=payload.code,
         name=payload.name,
         account_type=payload.account_type,
+        account_subtype=payload.account_subtype,
         parent_id=payload.parent_id,
         description=payload.description,
         is_active=payload.is_active,
@@ -168,6 +170,7 @@ def list_accounts_endpoint(
 )
 def seed_default_accounts_endpoint(
     company_id: int = Query(..., ge=1),
+    template: ChartTemplate = Query(default="default"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -180,7 +183,7 @@ def seed_default_accounts_endpoint(
 
     command = SeedDefaultAccountsCommand(
         company_id=company_id,
-        accounts=DEFAULT_ACCOUNTS,
+        accounts=resolve_chart_template(template),
     )
     repository = SqlAlchemyAccountRepository(db)
     result = SeedDefaultAccounts(repository).execute(command)
@@ -325,6 +328,7 @@ def update_account_endpoint(
         code=update_data.get("code"),
         name=update_data.get("name"),
         account_type=update_data.get("account_type"),
+        account_subtype=update_data.get("account_subtype"),
         parent_id=update_data.get("parent_id"),
         description=update_data.get("description"),
         is_active=update_data.get("is_active"),

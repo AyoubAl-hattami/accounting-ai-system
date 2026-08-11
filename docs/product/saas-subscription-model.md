@@ -111,7 +111,8 @@ When the gate refuses, the response is **HTTP 403** with a structured detail:
 
 ### What is never blocked
 
-- Login, logout, token refresh and `/auth/me` — they are not company-scoped.
+- Login and `/auth/me` — they are not company-scoped. The frontend logout is
+  local token deletion; there is no backend logout or refresh endpoint.
 - Password changes.
 - `GET /companies/{id}` — the shell needs the company profile to explain the
   lockout, and it carries no accounting data.
@@ -131,8 +132,8 @@ and learns nothing about that tenant's commercial state.
 
 A company administrator is a tenant role. It is checked by the same
 `ensure_company_access` call and is refused exactly like every other member.
-Only `is_superuser` skips the membership lookup, and platform admins are not
-subject to the tenant gate because they never operate inside a tenant.
+Platform administrators are also refused by normal company routes; they manage
+subscriptions and onboarding only through the dedicated `/platform/*` surfaces.
 
 ### Companies with no subscription row
 

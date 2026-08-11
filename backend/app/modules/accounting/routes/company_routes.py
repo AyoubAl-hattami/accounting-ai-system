@@ -44,6 +44,12 @@ def create_company_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Platform administrators must use the client onboarding route",
+        )
+
     repo = SqlAlchemyCompanyRepository(db)
     company = CreateCompany(repo).execute(
         CreateCompanyCommand(
@@ -99,8 +105,11 @@ def list_companies_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     repo = SqlAlchemyCompanyRepository(db)
-    user_id = None if current_user.is_superuser else current_user.id
-    page = ListCompanies(repo).execute(user_id=user_id, skip=skip, limit=limit)
+    page = ListCompanies(repo).execute(
+        user_id=current_user.id,
+        skip=skip,
+        limit=limit,
+    )
     return PaginatedResponse[CompanyRead](
         items=list(page.items),
         total=page.total,
