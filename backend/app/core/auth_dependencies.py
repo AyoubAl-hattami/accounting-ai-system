@@ -77,6 +77,7 @@ def get_current_platform_admin(
 bearer_scheme_optional = HTTPBearer(auto_error=False)
 
 def get_current_user_optional(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme_optional),
     db: Session = Depends(get_db),
 ) -> User | None:
@@ -93,8 +94,9 @@ def get_current_user_optional(
         user = get_user_by_id(db=db, user_id=user_id)
         
         if user and user.is_active:
+            ensure_password_change_completed(user, request.url.path)
             return user
-    except Exception:
+    except (JWTError, ValueError, TypeError):
         return None
         
     return None

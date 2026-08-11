@@ -32,42 +32,25 @@ The backend workflow uses Ubuntu and Python 3.13. It:
 - Applies all Alembic migrations and verifies the current revision and a single
   migration head.
 - Starts FastAPI on `127.0.0.1:8010`, waits for `/health/db`, and runs the
-  self-contained health, authentication, rate-limit, password-policy, and
-  factory-backed report/export tests.
+  complete backend test suite.
 
 The workflow uses only non-secret, job-local database credentials and sets the
 backend configuration explicitly. AI providers remain in deterministic rules
 mode with no provider keys.
 
-The workflow intentionally does not run the complete backend suite. Shared
-integration fixtures assume an existing admin user, company ID 3, account IDs
-5 and 11, and fiscal data that migrations do not seed. Reproducing that state
-requires a separately reviewed, deterministic test-data bootstrap rather than
-depending on a developer database snapshot or test ordering.
+The HTTP integration tests create isolated users, companies, memberships,
+accounts, fiscal data, and journal history through deterministic factories.
+They do not depend on a developer database snapshot or fixed row IDs.
 
 ## Deterministic fixture readiness inventory
 
-`backend/tests/fixture_readiness.py` is the source-controlled inventory for the
-remaining migration work. `backend/tests/test_fixture_readiness.py` statically
-checks that inventory in CI and prevents the workflow from silently enabling
-the full suite while the fixture contract is unresolved.
+`backend/tests/fixture_readiness.py` is the source-controlled inventory for HTTP,
+direct-session, and mocked-provider tests. `backend/tests/test_fixture_readiness.py`
+checks that inventory in CI and records that the full suite is CI-ready.
 
-The current inventory identifies:
-
-- 33 modules that make live HTTP requests to the configured API server.
-- 20 modules that consume the shared admin/company/account/fiscal seed contract.
-- 4 self-contained HTTP modules that create their own state or require no seed.
-- 9 factory-backed HTTP modules that create deterministic company/accounting
-  state before calling the API.
-- 6 modules that directly use the application `SessionLocal` in addition to
-  HTTP requests.
-- Provider tests that use fake keys and mocked clients rather than external AI
-  services.
-
-Already deterministic unit, use-case, repository, architecture, and fixture-
-readiness tests can run without the historical seed snapshot. The four
-self-contained HTTP modules and nine factory-backed modules still require
-PostgreSQL and FastAPI, which CI now provides.
+The inventory has no implicit shared-seed consumers. Self-contained HTTP tests
+and factory-backed HTTP tests require PostgreSQL and FastAPI, which CI provides.
+Provider tests use fake keys and mocked clients rather than external services.
 
 `backend/tests/factories/accounting.py` provides the initial deterministic
 test-only factory layer. It creates unique users, companies, memberships,
@@ -76,36 +59,10 @@ balanced journal entries. Tests should consume returned objects or IDs from
 the `deterministic_accounting_bootstrap` fixture rather than assuming
 `admin@example.com`, company ID 3, account IDs 5 and 11, or fiscal year ID 2.
 
-Factory-backed HTTP modules now include `backend/tests/test_protected_reports.py`,
-`backend/tests/test_reports_smoke.py`, `backend/tests/test_report_csv_exports.py`,
-`backend/tests/test_report_pdf_exports.py`, `backend/tests/test_default_accounts_seed.py`,
-`backend/tests/test_protected_fiscal.py`, and `backend/tests/test_protected_accounts.py`.
-They use the generated bootstrap company, auth headers, and account IDs instead
-of shared fixture IDs.
-
-`backend/tests/test_fiscal_management.py` has been partially migrated (17 of 18
-tests). The remaining test (`test_quick_setup_enables_gemini_today_journal`)
-depends on the Gemini AI assistant endpoint and fixed account IDs from the shared
-seed; it is deferred until the Gemini assistant tests are migrated as a group.
-Because one test still consumes the shared seed, the file remains in the
-implicit-seed inventory and is not yet added to the CI subset.
-
-`backend/tests/test_ai_status.py` and `backend/tests/test_ai_suggestions.py`
-are now fully factory-backed and added to the CI subset. `test_ai_status.py`
-tests the `/ai/status` configuration endpoint with generated auth headers.
-`test_ai_suggestions.py` passes a synthetic `SAMPLE_ACCOUNTS` list as
-request-body input to `/ai/journal-suggestions`; the rules engine resolves
-debit/credit from that supplied list rather than from the database, so no shared
-seed accounts are required. The remaining Gemini assistant files
-(`test_gemini_assistant.py`, `test_gemini_assistant_explain.py`,
-`test_gemini_assistant_profit.py`) are deferred to Phase 19.
-
-Future fixture phases should migrate the remaining fixed row IDs to this
-factory pattern, adding posted journal history only where a test actually
-asserts transaction or reporting behavior. Tests must consume returned
-identifiers, isolate mutations per run, and clean up without depending on file
-order. Only after the implicit-seed inventory reaches zero should CI replace
-the subset with `pytest tests -v`.
+Factory-backed tests consume generated identifiers, isolate mutations per run,
+and add posted journal history only where a report or workflow assertion needs
+it. New HTTP tests must be registered in the inventory, while the full-suite CI
+command ensures ordinary unit and repository tests are included automatically.
 
 ### CI-equivalent database readiness locally
 

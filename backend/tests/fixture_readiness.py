@@ -10,7 +10,7 @@ TESTS_ROOT = Path(__file__).resolve().parent
 BACKEND_ROOT = TESTS_ROOT.parent
 REPOSITORY_ROOT = BACKEND_ROOT.parent
 
-FULL_SUITE_CI_READY = False
+FULL_SUITE_CI_READY = True
 
 SHARED_FIXTURE_NAMES = frozenset(
     {

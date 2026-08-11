@@ -351,8 +351,10 @@ def test_create_account_preserves_validation_errors(
         headers=deterministic_superuser_headers,
         json=_account_payload(2147483647, uuid.uuid4().hex[:12]),
     )
-    assert missing_company.status_code == 404
-    assert missing_company.json() == {"detail": "Company not found"}
+    assert missing_company.status_code == 403
+    assert missing_company.json() == {
+        "detail": "Platform administrators cannot access tenant data through company routes"
+    }
 
 
 def test_create_account_role_and_inactive_user_compatibility(

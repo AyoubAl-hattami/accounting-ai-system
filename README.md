@@ -665,14 +665,12 @@ database prerequisites, the fast architecture check, Alembic state checks, and
 the result-recording checklist. Do not treat a historical test count as the
 expected result for a new change.
 
-Pull requests and pushes to `main` run the conservative backend workflow in
+Pull requests and pushes to `main` run the backend workflow in
 `.github/workflows/backend-validation.yml`. It compiles backend sources, runs
 the architecture guards, checks for deleted accounting service references,
 applies migrations to an ephemeral PostgreSQL service, starts FastAPI, and runs
-the self-contained health/authentication test subset plus factory-backed report
-and report-export tests. It also guards the explicit fixture-readiness
-inventory. The full integration suite remains manual until the remaining
-pre-existing fixture assumptions are migrated to deterministic factories.
+the complete backend test suite. The fixture-readiness guard keeps the HTTP,
+direct-session, and external-provider test inventory explicit.
 
 ---
 
@@ -735,8 +733,12 @@ git push
 - `.env` must never be committed to Git.
 - Use `.env.example` for documentation only.
 - JWT `SECRET_KEY` must be strong and private.
+- Access tokens are stored in browser local storage and are stateless; logout
+  removes the local token, and there is no refresh or server-side revocation.
 - Most accounting endpoints require authentication.
 - Company access is controlled through `company_users`.
+- Platform administrators use dedicated `/platform/*` routes and cannot enter
+  tenant accounting routes.
 - Role-based permissions are applied on key operations.
 - Audit logs now use the current user email as actor for journal actions.
 

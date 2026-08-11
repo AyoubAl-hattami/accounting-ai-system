@@ -71,7 +71,7 @@ export default function AppLayout() {
           <SubscriptionInactiveScreen status={subscription} />
         ) : (
           <Suspense fallback={<ContentFallback />}>
-            <Outlet />
+            <Outlet key={selectedCompany?.id ?? 'no-company'} />
           </Suspense>
         )}
       </AppShell>

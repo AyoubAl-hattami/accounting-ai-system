@@ -52,11 +52,9 @@ def ensure_company_access(
         raise password_change_required_error()
 
     if current_user.is_superuser:
-        return CompanyUser(
-            company_id=company_id,
-            user_id=current_user.id,
-            role="admin",
-            is_active=True,
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Platform administrators cannot access tenant data through company routes",
         )
 
     company_user = get_user_company_role(
@@ -83,4 +81,3 @@ def ensure_company_access(
         ensure_active_subscription(db=db, company_id=company_id)
 
     return company_user
-    

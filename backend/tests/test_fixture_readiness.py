@@ -51,16 +51,11 @@ def test_external_provider_inventory_uses_test_doubles():
         assert "MagicMock" in source or "patch(" in source
 
 
-def test_ci_keeps_full_suite_disabled_until_fixture_contract_is_replaced():
+def test_ci_runs_full_suite_after_fixture_contract_is_replaced():
     workflow = (
         REPOSITORY_ROOT / ".github" / "workflows" / "backend-validation.yml"
     ).read_text(encoding="utf-8")
 
-    assert FULL_SUITE_CI_READY is False
-    assert "pytest tests -v" not in workflow
+    assert FULL_SUITE_CI_READY is True
+    assert "python -m pytest -p no:cacheprovider -v" in workflow
     assert "tests/test_fixture_readiness.py" in workflow
-    for relative_path in EXPECTED_SELF_CONTAINED_HTTP_FILES:
-        assert f"tests/{relative_path}" in workflow
-    for relative_path in EXPECTED_FACTORY_BACKED_HTTP_FILES:
-        assert f"tests/{relative_path}" in workflow
-    assert "tests/test_protected_reports.py" in workflow

@@ -1,4 +1,6 @@
 """Auth and pagination contract tests for the /companies endpoint."""
+import uuid
+
 import requests
 
 
@@ -25,9 +27,17 @@ def test_companies_work_with_token_and_pagination(
     assert data["total"] >= len(data["items"])
     assert data["skip"] == 0
     assert data["limit"] == 5
+    assert data["items"] == []
+    assert data["total"] == 0
 
-    if data["items"]:
-        first_company = data["items"][0]
-        assert "id" in first_company
-        assert "name" in first_company
-        assert "base_currency" in first_company
+
+def test_platform_admin_cannot_create_company_through_tenant_route(
+    base_url, deterministic_superuser_headers
+):
+    response = requests.post(
+        f"{base_url}/companies",
+        headers=deterministic_superuser_headers,
+        json={"name": f"Platform route boundary {uuid.uuid4().hex}"},
+    )
+    assert response.status_code == 403
+    assert "onboarding" in response.json()["detail"].lower()

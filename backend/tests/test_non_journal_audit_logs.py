@@ -4,9 +4,8 @@ import uuid
 import requests
 
 
-# All tests that create companies require a platform superuser.  The
-# deterministic_superuser_headers fixture provides that without touching
-# admin@example.com or any seeded company.
+# Company creation is a tenant self-service route. These tests use the
+# deterministic company administrator rather than a platform identity.
 
 
 def test_register_creates_audit_log(base_url):
@@ -26,8 +25,8 @@ def test_register_creates_audit_log(base_url):
     assert new_user["is_active"] is True
 
 
-def test_create_company_creates_audit_log(base_url, deterministic_superuser_headers):
-    headers = deterministic_superuser_headers
+def test_create_company_creates_audit_log(base_url, deterministic_accounting_bootstrap):
+    headers = deterministic_accounting_bootstrap.auth_headers
     unique_name = f"AuditTestCo_{uuid.uuid4().hex[:10]}"
 
     create_response = requests.post(
@@ -58,9 +57,9 @@ def test_create_company_creates_audit_log(base_url, deterministic_superuser_head
 
 
 def test_seed_default_accounts_creates_audit_log(
-    base_url, deterministic_superuser_headers
+    base_url, deterministic_accounting_bootstrap
 ):
-    headers = deterministic_superuser_headers
+    headers = deterministic_accounting_bootstrap.auth_headers
     unique_name = f"SeedAuditCo_{uuid.uuid4().hex[:10]}"
 
     create_response = requests.post(
@@ -100,8 +99,8 @@ def test_seed_default_accounts_creates_audit_log(
     )
 
 
-def test_update_company_creates_audit_log(base_url, deterministic_superuser_headers):
-    headers = deterministic_superuser_headers
+def test_update_company_creates_audit_log(base_url, deterministic_accounting_bootstrap):
+    headers = deterministic_accounting_bootstrap.auth_headers
     unique_name = f"UpdAuditCo_{uuid.uuid4().hex[:10]}"
 
     create_response = requests.post(
@@ -137,9 +136,9 @@ def test_update_company_creates_audit_log(base_url, deterministic_superuser_head
 
 
 def test_create_account_creates_exactly_one_audit_log(
-    base_url, deterministic_superuser_headers
+    base_url, deterministic_accounting_bootstrap
 ):
-    headers = deterministic_superuser_headers
+    headers = deterministic_accounting_bootstrap.auth_headers
     create_company_response = requests.post(
         f"{base_url}/companies",
         headers=headers,
@@ -186,9 +185,9 @@ def test_create_account_creates_exactly_one_audit_log(
 
 
 def test_update_account_creates_exactly_one_audit_log_with_before_and_after_values(
-    base_url, deterministic_superuser_headers
+    base_url, deterministic_accounting_bootstrap
 ):
-    headers = deterministic_superuser_headers
+    headers = deterministic_accounting_bootstrap.auth_headers
     company_response = requests.post(
         f"{base_url}/companies",
         headers=headers,

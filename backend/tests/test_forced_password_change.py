@@ -120,6 +120,21 @@ def test_company_management_is_refused_while_the_flag_is_set(base_url, flagged_a
     assert blocked.json()["detail"]["code"] == PASSWORD_CHANGE_REQUIRED_CODE
 
 
+def test_optional_authentication_does_not_bypass_the_password_gate(
+    base_url, flagged_admin
+):
+    _, user = flagged_admin
+
+    blocked = requests.post(
+        f"{base_url}/company-users/invitations/accept",
+        headers=_headers(user),
+        json={"token": "not-a-real-invitation-token"},
+    )
+
+    assert blocked.status_code == 403
+    assert blocked.json()["detail"]["code"] == PASSWORD_CHANGE_REQUIRED_CODE
+
+
 # The platform owner is the one role that could plausibly be exempted, so it is
 # the case that proves nobody is.
 def test_even_a_platform_admin_is_refused_while_the_flag_is_set(
