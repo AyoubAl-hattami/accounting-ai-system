@@ -1,6 +1,5 @@
 import { getToken } from '../auth/token';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8010';
+import { apiBaseUrl } from '../api/baseUrl';
 
 /**
  * Download a file from an authenticated API endpoint.
@@ -26,7 +25,7 @@ export async function downloadFile(
     }
   }
 
-  const url = `${API_BASE}${path}?${query.toString()}`;
+  const url = `${apiBaseUrl}${path}?${query.toString()}`;
 
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },

@@ -22,6 +22,12 @@ The seed data and its credentials are for local development only — see the
 quickstart for the full checklist, expected report figures, and troubleshooting.
 The manual setup below remains the reference for everything the helper scripts do.
 
+To show that local instance to someone who is not in the room,
+`.\scripts\start-public-demo.ps1` puts it behind a single temporary Cloudflare
+Quick Tunnel link — see the
+[free public local demo tunnel](docs/demo/free-public-local-demo-tunnel.md).
+That is a demo tunnel, not production hosting.
+
 ---
 
 ## Current Status
