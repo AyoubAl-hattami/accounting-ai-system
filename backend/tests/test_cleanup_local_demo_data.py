@@ -1,7 +1,10 @@
 from unittest.mock import Mock, patch
 
 import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
 
+from app.modules.accounting.models.user import User
 from scripts.cleanup_local_demo_data import (
     COMPANY_DEPENDENT_TABLES,
     JOURNAL_CHILD_TABLES,
@@ -9,6 +12,7 @@ from scripts.cleanup_local_demo_data import (
     _delete_company_batch,
     _delete_company_rows_if_table_exists,
     _delete_journal_children_if_tables_exist,
+    _delete_user_rows_if_table_exists,
     build_parser,
     cleanup_local_pollution,
     ensure_cleanup_environment,
@@ -240,6 +244,87 @@ def test_delete_if_table_exists_skips_missing_optional_table():
 
     assert deleted == 0
     db.execute.assert_not_called()
+
+
+def test_delete_user_rows_uses_only_columns_present_on_optional_table():
+    db = Mock()
+    db.execute.return_value = Mock(rowcount=2)
+    schema_inspector = Mock()
+    schema_inspector.has_table.return_value = True
+    schema_inspector.get_columns.return_value = [
+        {"name": "id"},
+        {"name": "invited_by_user_id"},
+        {"name": "accepted_by_user_id"},
+    ]
+
+    deleted = _delete_user_rows_if_table_exists(
+        db,
+        schema_inspector,
+        "company_user_invitations",
+        ("invited_by_user_id", "accepted_by_user_id", "missing_user_id"),
+        (10, 11),
+    )
+
+    assert deleted == 2
+    statement = str(db.execute.call_args.args[0])
+    assert '"invited_by_user_id" IN' in statement
+    assert '"accepted_by_user_id" IN' in statement
+    assert "missing_user_id" not in statement
+    assert db.execute.call_args.args[1] == {"user_ids": (10, 11)}
+
+
+def test_confirm_deletes_standalone_test_user_and_dependencies(capsys):
+    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    User.__table__.create(engine)
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+        connection.exec_driver_sql(
+            "CREATE TABLE assistant_conversations ("
+            "id INTEGER PRIMARY KEY, "
+            "user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT)"
+        )
+
+    with Session(engine) as db:
+        candidate = User(
+            email="standalone@accounting-ai-test.dev",
+            hashed_password="not-a-real-password-hash",
+            is_superuser=False,
+        )
+        retained = User(
+            email="retained@example.com",
+            hashed_password="not-a-real-password-hash",
+            is_superuser=False,
+        )
+        db.add_all((candidate, retained))
+        db.flush()
+        candidate_id = candidate.id
+        retained_id = retained.id
+        db.execute(
+            text(
+                "INSERT INTO assistant_conversations (id, user_id) "
+                "VALUES (1, :user_id)"
+            ),
+            {"user_id": candidate_id},
+        )
+        db.commit()
+
+        plan = CleanupPlan(
+            company_ids=(),
+            company_names=(),
+            user_ids=(candidate_id,),
+            user_emails=(candidate.email,),
+            row_counts={"assistant_conversations": 1},
+        )
+        deleted = execute_cleanup(db, plan, batch_size=25)
+
+        assert deleted == 1
+        assert db.get(User, candidate_id) is None
+        assert db.get(User, retained_id) is not None
+        assert db.scalar(text("SELECT count(*) FROM assistant_conversations")) == 0
+
+    output = capsys.readouterr().out
+    assert "Batch 1/1 committed: deleted 1; deleted total 1" in output
+    assert "Cleanup complete: deleted 1 of 1 candidates" in output
 
 
 def test_failed_batch_prints_foreign_key_table_and_constraint(capsys):

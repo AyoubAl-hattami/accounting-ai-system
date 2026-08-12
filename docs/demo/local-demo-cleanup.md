@@ -65,6 +65,10 @@ subscriptions, invitations, and memberships) are removed before the company.
 Legacy journal sequence rows are removed before their journal books. Tables from
 optional local migrations are skipped when they do not exist.
 
+Standalone automated-test users are also removed. The cleanup first deletes
+their test memberships, private assistant conversations, invitations, and any
+optional local token or session rows, then deletes the matching user records.
+
 If the command is interrupted or a batch fails, rerun the same confirmed
 command. Already committed rows no longer match the next plan, so cleanup
 continues with the remaining candidates. Running the dry run first is optional

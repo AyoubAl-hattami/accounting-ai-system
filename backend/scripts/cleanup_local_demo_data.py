@@ -72,6 +72,32 @@ COMPANY_DEPENDENT_TABLES = (
     "company_users",
 )
 JOURNAL_CHILD_TABLES = ("journal_sequences",)
+USER_DEPENDENT_TABLE_COLUMNS = (
+    ("assistant_conversations", ("user_id",)),
+    ("audit_logs", ("actor_user_id", "created_by_user_id", "user_id")),
+    (
+        "company_user_invitations",
+        (
+            "invited_by_user_id",
+            "accepted_by_user_id",
+            "cancelled_by_user_id",
+            "user_id",
+        ),
+    ),
+    (
+        "company_invitations",
+        ("invited_by_user_id", "accepted_by_user_id", "user_id"),
+    ),
+    ("invitations", ("invited_by_user_id", "accepted_by_user_id", "user_id")),
+    ("password_reset_tokens", ("user_id",)),
+    ("user_password_reset_tokens", ("user_id",)),
+    ("auth_tokens", ("user_id",)),
+    ("access_tokens", ("user_id",)),
+    ("refresh_tokens", ("user_id",)),
+    ("user_sessions", ("user_id",)),
+    ("sessions", ("user_id",)),
+    ("company_users", ("user_id",)),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -270,6 +296,35 @@ def _delete_journal_children_if_tables_exist(
     return int(result.rowcount or 0)
 
 
+def _delete_user_rows_if_table_exists(
+    db: Session,
+    schema_inspector,
+    table_name: str,
+    candidate_columns: tuple[str, ...],
+    user_ids: tuple[int, ...],
+) -> int:
+    """Delete rows tied to selected test users through any known user column."""
+    if not user_ids:
+        return 0
+    existing_columns = _table_columns(schema_inspector, table_name)
+    matched_columns = tuple(
+        _safe_table_name(column_name)
+        for column_name in candidate_columns
+        if column_name in existing_columns
+    )
+    if not matched_columns:
+        return 0
+    table_name = _safe_table_name(table_name)
+    predicates = " OR ".join(
+        f'"{column_name}" IN :user_ids' for column_name in matched_columns
+    )
+    statement = text(f'DELETE FROM "{table_name}" WHERE {predicates}').bindparams(
+        bindparam("user_ids", expanding=True)
+    )
+    result = db.execute(statement, {"user_ids": user_ids})
+    return int(result.rowcount or 0)
+
+
 def _clear_self_reference_if_table_exists(
     db: Session,
     schema_inspector,
@@ -293,7 +348,7 @@ def _delete_company_batch(db: Session, company_ids: tuple[int, ...]) -> int:
     if not company_ids:
         return 0
 
-    schema_inspector = inspect(db.get_bind())
+    schema_inspector = inspect(db.connection())
     _clear_self_reference_if_table_exists(
         db,
         schema_inspector,
@@ -351,21 +406,22 @@ def _foreign_key_blocker(error: Exception) -> str:
 def _delete_user_batch(db: Session, user_ids: tuple[int, ...]) -> int:
     if not user_ids:
         return 0
-    has_membership = select(CompanyUser.id).where(CompanyUser.user_id == User.id)
-    has_conversation = select(AssistantConversation.id).where(
-        AssistantConversation.user_id == User.id
-    )
-    has_invitation = select(CompanyUserInvitation.id).where(
-        CompanyUserInvitation.invited_by_user_id == User.id
-    )
+
+    schema_inspector = inspect(db.connection())
+    for table_name, candidate_columns in USER_DEPENDENT_TABLE_COLUMNS:
+        _delete_user_rows_if_table_exists(
+            db,
+            schema_inspector,
+            table_name,
+            candidate_columns,
+            user_ids,
+        )
+
     result = db.execute(
         delete(User).where(
             User.id.in_(user_ids),
             User.email.ilike(f"%{TEST_EMAIL_SUFFIX}"),
             User.is_superuser.is_(False),
-            ~has_membership.exists(),
-            ~has_conversation.exists(),
-            ~has_invitation.exists(),
         )
     )
     return int(result.rowcount or 0)
