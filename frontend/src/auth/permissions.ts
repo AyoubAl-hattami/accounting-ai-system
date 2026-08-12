@@ -100,6 +100,7 @@ export function canViewPage(role: CompanyUserRole | null, path: string): boolean
  * (which defaults unknown paths to visible) must not be consulted for them.
  */
 const PLATFORM_PAGES: readonly string[] = [
+  '/platform/dashboard',
   '/platform/subscriptions',
   '/platform/onboarding',
 ];

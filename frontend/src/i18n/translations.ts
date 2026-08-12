@@ -204,6 +204,7 @@ export const en: Translations = {
     groupReports: 'Reports',
     groupAdministration: 'Administration',
     groupPlatform: 'Platform',
+    platformDashboard: 'Platform Dashboard',
     platformSubscriptions: 'Subscriptions',
     platformOnboarding: 'Onboard Client',
     collapseSidebar: 'Collapse sidebar',
@@ -818,7 +819,7 @@ export const en: Translations = {
   platformSubscriptions: {
     pageTitle: 'Platform Subscriptions',
     pageSubtitle: 'Manage client company subscriptions and access',
-    searchPlaceholder: 'Search companies...',
+    searchPlaceholder: 'Search company or administrator email...',
     statusFilterLabel: 'Status',
     allStatuses: 'All statuses',
     columnCompany: 'Company',
@@ -871,6 +872,28 @@ export const en: Translations = {
     extendedToast: 'Subscription extended.',
     updatedToast: 'Subscription updated.',
     actionFailed: 'The action could not be completed. Please try again.',
+  },
+
+  platformDashboard: {
+    pageTitle: 'Platform Dashboard',
+    pageSubtitle: 'Client and subscription overview',
+    totalClients: 'Total clients',
+    trialSubscriptions: 'Trial subscriptions',
+    activeSubscriptions: 'Active subscriptions',
+    blockedSubscriptions: 'Past due or blocked',
+    recentClients: 'Recently onboarded clients',
+    statusDistribution: 'Subscription distribution',
+    manageSubscriptions: 'Manage subscriptions',
+    noClients: 'No clients have been onboarded yet.',
+    noAdminEmail: 'No active administrator email',
+    unknownDate: 'Unknown date',
+    loadFailed: 'Failed to load the platform overview. Please try again.',
+  },
+
+  platformAccessNotice: {
+    title: 'Company accounting requires a client account',
+    message:
+      'This account is a platform administrator. Use Platform Dashboard, Subscriptions, or Client Onboarding, or log in as a client admin to access company accounting pages.',
   },
 
   // ── Subscription statuses ──
@@ -1245,6 +1268,7 @@ export const ar: Translations = {
     groupReports: 'التقارير',
     groupAdministration: 'الإدارة',
     groupPlatform: 'المنصة',
+    platformDashboard: 'لوحة تحكم المنصة',
     platformSubscriptions: 'الاشتراكات',
     platformOnboarding: 'إضافة عميل',
     collapseSidebar: 'طي القائمة الجانبية',
@@ -1856,7 +1880,7 @@ export const ar: Translations = {
   platformSubscriptions: {
     pageTitle: 'اشتراكات المنصة',
     pageSubtitle: 'إدارة اشتراكات الشركات العميلة وصلاحية الوصول',
-    searchPlaceholder: 'ابحث عن شركة...',
+    searchPlaceholder: 'ابحث عن شركة أو بريد المسؤول...',
     statusFilterLabel: 'الحالة',
     allStatuses: 'كل الحالات',
     columnCompany: 'الشركة',
@@ -1909,6 +1933,28 @@ export const ar: Translations = {
     extendedToast: 'تم تمديد الاشتراك.',
     updatedToast: 'تم تحديث الاشتراك.',
     actionFailed: 'تعذر إتمام العملية. يرجى المحاولة مرة أخرى.',
+  },
+
+  platformDashboard: {
+    pageTitle: 'لوحة تحكم المنصة',
+    pageSubtitle: 'نظرة عامة على العملاء والاشتراكات',
+    totalClients: 'إجمالي العملاء',
+    trialSubscriptions: 'اشتراكات تجريبية',
+    activeSubscriptions: 'اشتراكات نشطة',
+    blockedSubscriptions: 'متأخرة أو موقوفة',
+    recentClients: 'العملاء المضافون حديثاً',
+    statusDistribution: 'توزيع حالات الاشتراك',
+    manageSubscriptions: 'إدارة الاشتراكات',
+    noClients: 'لم تتم إضافة أي عملاء بعد.',
+    noAdminEmail: 'لا يوجد بريد لمسؤول نشط',
+    unknownDate: 'تاريخ غير معروف',
+    loadFailed: 'تعذر تحميل نظرة عامة على المنصة. يرجى المحاولة مرة أخرى.',
+  },
+
+  platformAccessNotice: {
+    title: 'محاسبة الشركة تتطلب حساب عميل',
+    message:
+      'هذا الحساب مسؤول منصة. استخدم لوحة تحكم المنصة أو الاشتراكات أو إضافة عميل، أو سجّل الدخول كمسؤول عميل للوصول إلى صفحات محاسبة الشركة.',
   },
 
   // ── حالات الاشتراك ──

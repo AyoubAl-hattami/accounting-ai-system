@@ -35,6 +35,8 @@ class CompanySubscriptionDTO:
     effective_status: str
     days_remaining: int | None
     member_count: int
+    created_at: datetime | None = None
+    primary_admin_email: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +45,17 @@ class CompanySubscriptionPageDTO:
     total: int
     skip: int
     limit: int
+
+
+@dataclass(frozen=True, slots=True)
+class PlatformDashboardDTO:
+    total_clients: int
+    trial_subscriptions: int
+    active_subscriptions: int
+    past_due_subscriptions: int
+    suspended_subscriptions: int
+    cancelled_subscriptions: int
+    recent_clients: tuple[CompanySubscriptionDTO, ...]
 
 
 @dataclass(frozen=True, slots=True)

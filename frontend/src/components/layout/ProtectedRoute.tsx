@@ -1,10 +1,11 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { useCompanyRole } from '../../auth/useCompanyRole';
 import { useCompanies } from '../../features/companies/useCompanies';
 import { canViewPage, isPlatformPage } from '../../auth/permissions';
 import AccessDenied from '../feedback/AccessDenied';
 import { Loader2 } from 'lucide-react';
+import PlatformTenantAccessNotice from '../feedback/PlatformTenantAccessNotice';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -16,6 +17,7 @@ export default function ProtectedRoute({ children, requiredPagePath }: Protected
   const { user, isLoading } = useAuth();
   const { selectedCompanyId } = useCompanies();
   const { role, isLoading: roleLoading } = useCompanyRole(selectedCompanyId);
+  const { pathname } = useLocation();
 
   // AppLayout resolves the session before it renders the Outlet, so in practice
   // this branch no longer runs. It stays as a guard for any future route that
@@ -47,6 +49,10 @@ export default function ProtectedRoute({ children, requiredPagePath }: Protected
   // the tenant role is never consulted for a page that has no tenant.
   if (requiredPagePath && isPlatformPage(requiredPagePath)) {
     return user.is_superuser ? <>{children}</> : <AccessDenied />;
+  }
+
+  if (user.is_superuser && !isPlatformPage(pathname)) {
+    return <PlatformTenantAccessNotice />;
   }
 
   // Role-based page access check

@@ -357,6 +357,18 @@ export interface CompanySubscription {
   effective_status: SubscriptionStatus;
   days_remaining: number | null;
   member_count: number;
+  created_at: string | null;
+  primary_admin_email: string | null;
+}
+
+export interface PlatformDashboard {
+  total_clients: number;
+  trial_subscriptions: number;
+  active_subscriptions: number;
+  past_due_subscriptions: number;
+  suspended_subscriptions: number;
+  cancelled_subscriptions: number;
+  recent_clients: CompanySubscription[];
 }
 
 /** Company-facing projection: enough to explain a lockout, nothing more. */

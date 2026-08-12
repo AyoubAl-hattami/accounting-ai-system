@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.application.subscriptions.dto import (
@@ -19,6 +19,7 @@ from app.core.database import flush_or_rollback
 from app.modules.accounting.models.company import Company
 from app.modules.accounting.models.company_subscription import CompanySubscription
 from app.modules.accounting.models.company_user import CompanyUser
+from app.modules.accounting.models.user import User
 
 
 class SqlAlchemySubscriptionRepository:
@@ -57,6 +58,7 @@ class SqlAlchemySubscriptionRepository:
         company: Company,
         subscription: CompanySubscription | None,
         member_count: int,
+        primary_admin_email: str | None = None,
     ) -> CompanySubscriptionDTO:
         dto = (
             self._to_dto(subscription)
@@ -72,6 +74,8 @@ class SqlAlchemySubscriptionRepository:
             effective_status=effective_status(dto.status, dto.expires_at),
             days_remaining=days_remaining(dto.expires_at),
             member_count=member_count,
+            created_at=company.created_at,
+            primary_admin_email=primary_admin_email,
         )
 
     def _entity(self, company_id: int) -> CompanySubscription | None:
@@ -122,11 +126,38 @@ class SqlAlchemySubscriptionRepository:
         ).all()
         return {company_id: int(count) for company_id, count in rows}
 
+    def _primary_admin_emails(self, company_ids: list[int]) -> dict[int, str]:
+        if not company_ids:
+            return {}
+        rows = self._db.execute(
+            select(CompanyUser.company_id, func.min(User.email))
+            .join(User, User.id == CompanyUser.user_id)
+            .where(
+                CompanyUser.company_id.in_(company_ids),
+                CompanyUser.role == "admin",
+                CompanyUser.is_active.is_(True),
+                User.is_active.is_(True),
+            )
+            .group_by(CompanyUser.company_id)
+        ).all()
+        return {company_id: email for company_id, email in rows if email}
+
     @staticmethod
     def _apply_search(statement, search: str | None):
         if not search:
             return statement
-        return statement.where(Company.name.ilike(f"%{search.strip()}%"))
+        pattern = f"%{search.strip()}%"
+        admin_email_match = exists(
+            select(1)
+            .select_from(CompanyUser)
+            .join(User, User.id == CompanyUser.user_id)
+            .where(
+                CompanyUser.company_id == Company.id,
+                CompanyUser.role == "admin",
+                User.email.ilike(pattern),
+            )
+        )
+        return statement.where(or_(Company.name.ilike(pattern), admin_email_match))
 
     def list_companies(
         self,
@@ -134,6 +165,7 @@ class SqlAlchemySubscriptionRepository:
         search: str | None = None,
         skip: int = 0,
         limit: int = 100,
+        newest_first: bool = False,
     ) -> list[CompanySubscriptionDTO]:
         statement = self._apply_search(
             select(Company, CompanySubscription).outerjoin(
@@ -142,13 +174,23 @@ class SqlAlchemySubscriptionRepository:
             ),
             search,
         )
-        rows = self._db.execute(
-            statement.order_by(Company.id.asc()).offset(skip).limit(limit)
-        ).all()
+        ordering = (
+            (Company.created_at.desc(), Company.id.desc())
+            if newest_first
+            else (Company.id.asc(),)
+        )
+        rows = self._db.execute(statement.order_by(*ordering).offset(skip).limit(limit)).all()
 
-        counts = self._member_counts([company.id for company, _ in rows])
+        company_ids = [company.id for company, _ in rows]
+        counts = self._member_counts(company_ids)
+        admin_emails = self._primary_admin_emails(company_ids)
         return [
-            self._summary(company, subscription, counts.get(company.id, 0))
+            self._summary(
+                company,
+                subscription,
+                counts.get(company.id, 0),
+                admin_emails.get(company.id),
+            )
             for company, subscription in rows
         ]
 
@@ -164,6 +206,10 @@ class SqlAlchemySubscriptionRepository:
             return None
 
         counts = self._member_counts([company_id])
+        admin_emails = self._primary_admin_emails([company_id])
         return self._summary(
-            company, self._entity(company_id), counts.get(company_id, 0)
+            company,
+            self._entity(company_id),
+            counts.get(company_id, 0),
+            admin_emails.get(company_id),
         )

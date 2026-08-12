@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import PlatformSubscriptionsPage from '../../features/subscriptions/PlatformSubscriptionsPage';
 import { ToastProvider } from '../../components/feedback/ToastProvider';
@@ -43,6 +43,8 @@ function makeEntry(
     effective_status: status,
     days_remaining: 30,
     member_count: 4,
+    created_at: '2026-08-11T10:00:00Z',
+    primary_admin_email: 'admin@northwind.test',
   };
 }
 
@@ -125,5 +127,22 @@ describe('platform subscriptions page', () => {
     renderPage();
 
     await waitFor(() => expect(screen.getByText(copy.emptyTitle)).toBeInTheDocument());
+  });
+
+  it('sends status and administrator search filters to the paginated endpoint', async () => {
+    mockGet.mockResolvedValue({ data: { items: [], total: 0 } } as never);
+    renderPage();
+
+    const search = screen.getByRole('searchbox');
+    const status = screen.getByLabelText(copy.statusFilterLabel);
+    fireEvent.change(search, { target: { value: 'admin@example.com' } });
+    fireEvent.change(status, { target: { value: 'suspended' } });
+
+    await waitFor(() => {
+      const lastUrl = mockGet.mock.calls[mockGet.mock.calls.length - 1]?.[0] as string;
+      expect(lastUrl).toContain('search=admin%40example.com');
+      expect(lastUrl).toContain('status=suspended');
+      expect(lastUrl).toContain('limit=20');
+    });
   });
 });

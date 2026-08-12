@@ -116,7 +116,7 @@ export default function AppShell({
   const displaySubtitle = pageSubtitle || t.dashboard.pageSubtitle;
 
   // Grouping turns a flat ten-item list into four short scannable blocks.
-  const navGroups: { label: string; items: NavItem[] }[] = [
+  const tenantNavGroups: { label: string; items: NavItem[] }[] = [
     {
       label: t.nav.groupOverview,
       items: [{ icon: LayoutDashboard, label: t.nav.dashboard, path: '/dashboard' }],
@@ -152,15 +152,16 @@ export default function AppShell({
   // Appended after the role filter on purpose: canViewPage answers for tenant
   // roles and lets unknown paths through, which would show this group to
   // everyone. Platform pages key off the platform flag instead.
-  if (user?.is_superuser) {
-    navGroups.push({
+  const navGroups = user?.is_superuser
+    ? [{
       label: t.nav.groupPlatform,
       items: [
-        { icon: Building2, label: t.nav.platformSubscriptions, path: '/platform/subscriptions' },
+        { icon: LayoutDashboard, label: t.nav.platformDashboard, path: '/platform/dashboard' },
         { icon: UserPlus, label: t.nav.platformOnboarding, path: '/platform/onboarding' },
+        { icon: Building2, label: t.nav.platformSubscriptions, path: '/platform/subscriptions' },
       ],
-    });
-  }
+    }]
+    : tenantNavGroups;
 
   const handleNav = (path: string) => {
     navigate(path);
@@ -311,7 +312,7 @@ export default function AppShell({
           </div>
 
           <div className="flex flex-shrink-0 items-center gap-2">
-            {selectedCompany && (
+            {!user?.is_superuser && selectedCompany && (
               <span
                 className="badge tone-neutral hidden max-w-[190px] xl:inline-flex"
                 title={selectedCompany.name}
@@ -366,11 +367,13 @@ export default function AppShell({
         </main>
       </div>
 
-      <GlobalGeminiAssistant
-        companyId={selectedCompany?.id ?? null}
-        userRole={userRole}
-        companyName={selectedCompany?.name ?? null}
-      />
+      {!user?.is_superuser && (
+        <GlobalGeminiAssistant
+          companyId={selectedCompany?.id ?? null}
+          userRole={userRole}
+          companyName={selectedCompany?.name ?? null}
+        />
+      )}
     </div>
   );
 }

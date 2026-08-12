@@ -111,6 +111,112 @@ def test_platform_admin_can_search_subscriptions_by_company_name(
     assert company.id in {item["company_id"] for item in response.json()["items"]}
 
 
+def test_platform_admin_can_search_subscriptions_by_admin_email(
+    base_url, accounting_factory, platform_admin
+):
+    company = accounting_factory.create_company()
+    admin_email = accounting_factory.unique_email("subscription-search-admin")
+    admin = accounting_factory.create_user(email=admin_email)
+    accounting_factory.add_company_user(company=company, user=admin, role="admin")
+    accounting_factory.set_subscription(company=company, status="active")
+    accounting_factory.db.commit()
+
+    response = requests.get(
+        _platform_url(base_url),
+        params={"search": admin_email},
+        headers=_headers(platform_admin),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert response.json()["items"][0]["company_id"] == company.id
+    assert response.json()["items"][0]["primary_admin_email"] == admin_email
+
+
+@pytest.mark.parametrize(
+    ("requested_status", "stored_status", "expires_delta"),
+    [
+        ("trial", "trial", 14),
+        ("active", "active", 30),
+        ("past_due", "active", -1),
+        ("suspended", "suspended", 30),
+        ("cancelled", "cancelled", 30),
+    ],
+)
+def test_platform_subscription_list_filters_by_effective_status(
+    base_url,
+    accounting_factory,
+    platform_admin,
+    requested_status,
+    stored_status,
+    expires_delta,
+):
+    company = accounting_factory.create_company(
+        name=f"Filter {requested_status} {uuid4().hex}"
+    )
+    accounting_factory.set_subscription(
+        company=company,
+        status=stored_status,
+        expires_at=datetime.now(timezone.utc) + timedelta(days=expires_delta),
+    )
+    accounting_factory.db.commit()
+
+    response = requests.get(
+        _platform_url(base_url),
+        params={"search": company.name, "status": requested_status, "limit": 1},
+        headers=_headers(platform_admin),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["company_id"] == company.id
+    assert body["items"][0]["effective_status"] == requested_status
+
+
+def test_platform_dashboard_summarizes_and_lists_recent_clients(
+    base_url, accounting_factory, platform_admin
+):
+    company = accounting_factory.create_company(name=f"Recent Client {uuid4().hex}")
+    admin = accounting_factory.create_user(
+        email=accounting_factory.unique_email("recent-client-admin")
+    )
+    accounting_factory.add_company_user(company=company, user=admin, role="admin")
+    accounting_factory.set_subscription(company=company, status="trial")
+    accounting_factory.db.commit()
+
+    response = requests.get(
+        f"{base_url}/platform/dashboard?recent_limit=20",
+        headers=_headers(platform_admin),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_clients"] >= 1
+    assert body["trial_subscriptions"] >= 1
+    assert sum(
+        body[key]
+        for key in (
+            "trial_subscriptions",
+            "active_subscriptions",
+            "past_due_subscriptions",
+            "suspended_subscriptions",
+            "cancelled_subscriptions",
+        )
+    ) == body["total_clients"]
+    recent = {item["company_id"]: item for item in body["recent_clients"]}
+    assert company.id in recent
+    assert recent[company.id]["primary_admin_email"] == admin.email
+
+
+def test_company_admin_cannot_read_platform_dashboard(base_url, tenant):
+    _, company_admin = tenant
+    response = requests.get(
+        f"{base_url}/platform/dashboard", headers=_headers(company_admin)
+    )
+    assert response.status_code == 403
+
+
 @pytest.mark.parametrize(
     "path,method,payload",
     [

@@ -6,6 +6,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { useI18n } from '../../i18n';
 import apiClient from '../../api/client';
 import { ThemeToggleButton } from '../../components/ui/ThemeToggle';
+import { defaultAuthenticatedRoute } from '../../auth/defaultRoute';
 
 /**
  * The screen a handed-over account is locked to until it replaces its password.
@@ -61,7 +62,9 @@ export default function ChangeTemporaryPasswordPage() {
       });
 
       await refreshUser();
-      navigate('/dashboard', { replace: true });
+      navigate(defaultAuthenticatedRoute({ is_superuser: Boolean(user?.is_superuser) }), {
+        replace: true,
+      });
     } catch (err: unknown) {
       setError(resolveError(err, copy));
     } finally {

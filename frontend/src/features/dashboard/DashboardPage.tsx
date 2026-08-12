@@ -91,7 +91,7 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
 
       {/* Dashboard content */}
       {!isLoading && !error && (
-        <div className="space-y-8">
+        <div className="space-y-5 sm:space-y-8">
           <section>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
@@ -123,7 +123,7 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 min-[430px]:grid-cols-2 sm:gap-4 lg:grid-cols-4">
               <DashboardMetricCard
                 label={t.dashboard.totalAssets}
                 value={formatCurrency(totalAssets)}
@@ -157,7 +157,7 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
           </section>
 
           <section>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 min-[430px]:grid-cols-2 sm:gap-4 lg:grid-cols-3">
               <DashboardMetricCard
                 label={t.dashboard.trialBalance}
                 value={isBalanced ? t.dashboard.balanced : t.dashboard.unbalanced}
@@ -184,7 +184,7 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
             </div>
           </section>
 
-          <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <section className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
             <RevenueExpensesChart pl={pl} t={t} />
             <FinancialCompositionChart bs={bs} t={t} />
 
@@ -192,7 +192,7 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.2 }}
-              className="card p-5"
+              className="card min-w-0 p-4 sm:p-5"
             >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h3 className="section-title">{t.dashboard.recentJournalEntries}</h3>
@@ -277,10 +277,10 @@ function RevenueExpensesChart({ pl, t }: { pl: DashboardContentProps['selectedCo
       height={240}
     >
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }} barSize={48}>
+        <BarChart data={chartData} margin={{ top: 8, right: 4, left: -12, bottom: 8 }} barSize={36}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
           <XAxis dataKey="name" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+          <YAxis width={44} tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
           <Tooltip content={<ChartTooltipContent />} cursor={{ fill: 'var(--surface-muted)' }} />
           <Bar dataKey="value" radius={[6, 6, 0, 0]}>
             {chartData.map((entry, index) => (
@@ -314,10 +314,10 @@ function FinancialCompositionChart({ bs, t }: { bs: ReturnType<typeof useDashboa
       height={240}
     >
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }} barSize={48}>
+        <BarChart data={chartData} margin={{ top: 8, right: 4, left: -12, bottom: 8 }} barSize={36}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
           <XAxis dataKey="name" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+          <YAxis width={44} tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} />
           <Tooltip content={<ChartTooltipContent />} cursor={{ fill: 'var(--surface-muted)' }} />
           <Bar dataKey="value" radius={[6, 6, 0, 0]}>
             {chartData.map((entry, index) => (
