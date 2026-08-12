@@ -14,7 +14,17 @@ never runs automatically.
   every commit. The default batch size is 100 candidates.
 - Automatic candidates are restricted to the test factory email domain
   `@accounting-ai-test.dev`, companies wholly owned by those test identities,
-  and known test-factory company-name prefixes.
+  and known test-factory company-name prefixes. The cleanup also recognizes
+  local `@example.com` identities beginning with `cross_tenant_`,
+  `same_company_`, `admin_a_`, `admin_b_`, `user_a_`, `user_b_`, or `test_`.
+- Known company patterns include `CrossTenant%`, `SameCompany%`, `CompanyA_%`,
+  `CompanyB_%`, `Deterministic Company%`, and `Test Company%`. An otherwise
+  arbitrary `@example.com` user is selected only when attached to one of these
+  test-pattern companies.
+- Additional allowlisted names come directly from backend test factories for
+  fiscal periods, journal authorization, account protection, invitation flows,
+  CLI onboarding, default-account seeding, and report isolation. Ordinary demo
+  and real-looking company names are not selected by these rules.
 - Platform superusers are never selected for deletion.
 - A local company that does not match those rules can be included only by an
   explicit `--company-id`. Inspect the dry run before confirming.
