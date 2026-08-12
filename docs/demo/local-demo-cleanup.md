@@ -59,9 +59,15 @@ python scripts/cleanup_local_demo_data.py --confirm --batch-size 100 --verbose
 
 Each completed batch is committed before the next starts. Progress includes the
 batch number, rows deleted in that batch, cumulative deleted count, and remaining
-candidate count. If the command is interrupted, run the dry run again and then
-repeat the confirmed command. Already committed rows no longer match the next
-plan, so cleanup continues with the remaining candidates.
+candidate count. Within each batch, dependent demo/test rows (including journal
+lines, journal entries, local journal books, accounts, fiscal records,
+subscriptions, invitations, and memberships) are removed before the company.
+Tables from optional local migrations are skipped when they do not exist.
+
+If the command is interrupted, rerun the same confirmed command. Already
+committed rows no longer match the next plan, so cleanup continues with the
+remaining candidates. Running the dry run first is optional but useful for
+reviewing the new remaining count.
 
 A failure rolls back only the current batch. The script does not weaken database
 constraints or broaden its candidate rules.

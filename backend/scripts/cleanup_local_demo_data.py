@@ -7,11 +7,12 @@ and requires --confirm. This script is never imported by application startup.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from dataclasses import dataclass
 from typing import Iterable, TypeVar
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import bindparam, delete, func, inspect, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -49,6 +50,28 @@ TEST_COMPANY_PREFIXES = (
 DEFAULT_BATCH_SIZE = 100
 SAMPLE_SIZE = 5
 T = TypeVar("T")
+IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# Fixed child-to-parent order. Some tables belong to later local phases and may
+# not exist on this branch; the deletion helper checks both table and company_id
+# column presence before issuing SQL.
+COMPANY_DEPENDENT_TABLES = (
+    "journal_lines",
+    "assistant_conversations",
+    "journal_entries",
+    "journal_sequences",
+    "journals",
+    "audit_logs",
+    "exchange_rates",
+    "fiscal_periods",
+    "fiscal_years",
+    "accounts",
+    "company_user_invitations",
+    "company_invitations",
+    "invitations",
+    "company_subscriptions",
+    "company_users",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,41 +213,106 @@ def print_plan(plan: CleanupPlan, *, verbose: bool = False) -> None:
     )
 
 
+def _safe_table_name(table_name: str) -> str:
+    if not IDENTIFIER_PATTERN.fullmatch(table_name):
+        raise ValueError(f"Unsafe internal table name: {table_name!r}")
+    return table_name
+
+
+def _table_columns(schema_inspector, table_name: str) -> set[str]:
+    table_name = _safe_table_name(table_name)
+    if not schema_inspector.has_table(table_name):
+        return set()
+    return {column["name"] for column in schema_inspector.get_columns(table_name)}
+
+
+def _delete_company_rows_if_table_exists(
+    db: Session,
+    schema_inspector,
+    table_name: str,
+    company_ids: tuple[int, ...],
+) -> int:
+    """Delete tenant rows from one known table without assuming its migration exists."""
+    if not company_ids or "company_id" not in _table_columns(
+        schema_inspector, table_name
+    ):
+        return 0
+    table_name = _safe_table_name(table_name)
+    statement = text(
+        f'DELETE FROM "{table_name}" WHERE company_id IN :company_ids'
+    ).bindparams(bindparam("company_ids", expanding=True))
+    result = db.execute(statement, {"company_ids": company_ids})
+    return int(result.rowcount or 0)
+
+
+def _clear_self_reference_if_table_exists(
+    db: Session,
+    schema_inspector,
+    table_name: str,
+    column_name: str,
+    company_ids: tuple[int, ...],
+) -> None:
+    columns = _table_columns(schema_inspector, table_name)
+    if "company_id" not in columns or column_name not in columns:
+        return
+    table_name = _safe_table_name(table_name)
+    column_name = _safe_table_name(column_name)
+    statement = text(
+        f'UPDATE "{table_name}" SET "{column_name}" = NULL '
+        "WHERE company_id IN :company_ids"
+    ).bindparams(bindparam("company_ids", expanding=True))
+    db.execute(statement, {"company_ids": company_ids})
+
+
 def _delete_company_batch(db: Session, company_ids: tuple[int, ...]) -> int:
-    if company_ids:
-        db.execute(
-            delete(AssistantConversation).where(
-                AssistantConversation.company_id.in_(company_ids)
-            )
+    if not company_ids:
+        return 0
+
+    schema_inspector = inspect(db.get_bind())
+    _clear_self_reference_if_table_exists(
+        db,
+        schema_inspector,
+        "journal_entries",
+        "reversal_of_id",
+        company_ids,
+    )
+    _clear_self_reference_if_table_exists(
+        db,
+        schema_inspector,
+        "accounts",
+        "parent_id",
+        company_ids,
+    )
+    for table_name in COMPANY_DEPENDENT_TABLES:
+        _delete_company_rows_if_table_exists(
+            db,
+            schema_inspector,
+            table_name,
+            company_ids,
         )
-        db.execute(delete(JournalLine).where(JournalLine.company_id.in_(company_ids)))
-        db.execute(
-            update(JournalEntry)
-            .where(JournalEntry.company_id.in_(company_ids))
-            .values(reversal_of_id=None)
-        )
-        db.execute(delete(JournalEntry).where(JournalEntry.company_id.in_(company_ids)))
-        db.execute(delete(AuditLog).where(AuditLog.company_id.in_(company_ids)))
-        db.execute(delete(FiscalPeriod).where(FiscalPeriod.company_id.in_(company_ids)))
-        db.execute(delete(FiscalYear).where(FiscalYear.company_id.in_(company_ids)))
-        db.execute(
-            update(Account).where(Account.company_id.in_(company_ids)).values(parent_id=None)
-        )
-        db.execute(delete(Account).where(Account.company_id.in_(company_ids)))
-        db.execute(
-            delete(CompanyUserInvitation).where(
-                CompanyUserInvitation.company_id.in_(company_ids)
-            )
-        )
-        db.execute(
-            delete(CompanySubscription).where(
-                CompanySubscription.company_id.in_(company_ids)
-            )
-        )
-        db.execute(delete(CompanyUser).where(CompanyUser.company_id.in_(company_ids)))
-        result = db.execute(delete(Company).where(Company.id.in_(company_ids)))
-        return int(result.rowcount or 0)
-    return 0
+
+    result = db.execute(delete(Company).where(Company.id.in_(company_ids)))
+    return int(result.rowcount or 0)
+
+
+def _foreign_key_blocker(error: Exception) -> str:
+    original = getattr(error, "orig", None)
+    diagnostics = getattr(original, "diag", None)
+    table_name = getattr(diagnostics, "table_name", None)
+    constraint_name = getattr(diagnostics, "constraint_name", None)
+    detail = getattr(diagnostics, "message_detail", None)
+    parts = ["foreign-key restriction"]
+    if table_name:
+        parts.append(f"table={table_name}")
+    if constraint_name:
+        parts.append(f"constraint={constraint_name}")
+    if detail:
+        parts.append(f"detail={detail}")
+    elif original:
+        parts.append(str(original).strip())
+    else:
+        parts.append(str(error).strip())
+    return "; ".join(parts)
 
 
 def _delete_user_batch(db: Session, user_ids: tuple[int, ...]) -> int:
@@ -288,8 +376,12 @@ def execute_cleanup(
             try:
                 batch_deleted = delete_batch(db, batch)
                 db.commit()
-            except Exception:
+            except Exception as error:
                 db.rollback()
+                _emit(
+                    f"Batch {batch_number}/{total_batches} rolled back; "
+                    f"blocker: {_foreign_key_blocker(error)}"
+                )
                 raise
             processed += len(batch)
             deleted += batch_deleted

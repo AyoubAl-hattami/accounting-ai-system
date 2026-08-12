@@ -3,7 +3,10 @@ from unittest.mock import Mock, patch
 import pytest
 
 from scripts.cleanup_local_demo_data import (
+    COMPANY_DEPENDENT_TABLES,
     CleanupPlan,
+    _delete_company_batch,
+    _delete_company_rows_if_table_exists,
     build_parser,
     cleanup_local_pollution,
     ensure_cleanup_environment,
@@ -110,6 +113,102 @@ def test_execute_cleanup_rolls_back_only_the_failed_batch():
             execute_cleanup(db, plan, batch_size=2)
 
     assert db.commit.call_count == 1
+    db.rollback.assert_called_once_with()
+
+
+def test_company_batch_deletes_legacy_journals_before_company_rows():
+    db = Mock()
+    company_delete_result = Mock(rowcount=2)
+    db.execute.return_value = company_delete_result
+    deletion_order: list[str] = []
+
+    def record_table(_db, _inspector, table_name, _company_ids):
+        deletion_order.append(table_name)
+        return 0
+
+    with (
+        patch("scripts.cleanup_local_demo_data.inspect", return_value=Mock()),
+        patch("scripts.cleanup_local_demo_data._clear_self_reference_if_table_exists"),
+        patch(
+            "scripts.cleanup_local_demo_data._delete_company_rows_if_table_exists",
+            side_effect=record_table,
+        ),
+    ):
+        deleted = _delete_company_batch(db, (4, 5))
+
+    assert deleted == 2
+    assert deletion_order == list(COMPANY_DEPENDENT_TABLES)
+    assert deletion_order.index("journal_entries") < deletion_order.index("journals")
+    assert deletion_order.index("journal_sequences") < deletion_order.index("journals")
+    db.execute.assert_called_once()
+
+
+def test_delete_if_table_exists_handles_legacy_journals_table():
+    db = Mock()
+    db.execute.return_value = Mock(rowcount=3)
+    schema_inspector = Mock()
+    schema_inspector.has_table.return_value = True
+    schema_inspector.get_columns.return_value = [
+        {"name": "id"},
+        {"name": "company_id"},
+    ]
+
+    deleted = _delete_company_rows_if_table_exists(
+        db,
+        schema_inspector,
+        "journals",
+        (4, 5),
+    )
+
+    assert deleted == 3
+    statement = str(db.execute.call_args.args[0])
+    assert 'DELETE FROM "journals"' in statement
+    assert db.execute.call_args.args[1] == {"company_ids": (4, 5)}
+
+
+def test_delete_if_table_exists_skips_missing_optional_table():
+    db = Mock()
+    schema_inspector = Mock()
+    schema_inspector.has_table.return_value = False
+
+    deleted = _delete_company_rows_if_table_exists(
+        db,
+        schema_inspector,
+        "journals",
+        (4,),
+    )
+
+    assert deleted == 0
+    db.execute.assert_not_called()
+
+
+def test_failed_batch_prints_foreign_key_table_and_constraint(capsys):
+    plan = CleanupPlan(
+        company_ids=(4,),
+        company_names=("Blocked Company",),
+        user_ids=(),
+        user_emails=(),
+        row_counts={},
+    )
+    diagnostics = Mock(
+        table_name="journals",
+        constraint_name="journals_company_id_fkey",
+        message_detail="Key (id)=(4) is referenced from table journals.",
+    )
+    blocker = RuntimeError("restricted")
+    blocker.orig = Mock(diag=diagnostics)
+    db = Mock()
+
+    with patch(
+        "scripts.cleanup_local_demo_data._delete_company_batch",
+        side_effect=blocker,
+    ):
+        with pytest.raises(RuntimeError, match="restricted"):
+            execute_cleanup(db, plan, batch_size=1)
+
+    output = capsys.readouterr().out
+    assert "table=journals" in output
+    assert "constraint=journals_company_id_fkey" in output
     db.rollback.assert_called_once_with()
 
 
