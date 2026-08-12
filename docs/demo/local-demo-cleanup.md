@@ -25,6 +25,10 @@ never runs automatically.
   fiscal periods, journal authorization, account protection, invitation flows,
   CLI onboarding, default-account seeding, and report isolation. Ordinary demo
   and real-looking company names are not selected by these rules.
+- The exact name `Other Co` is selected only for the known subscription-test
+  fixture shape: it has a subscription and has no memberships, accounts, or
+  journal entries. Prefix variants such as `Other Co ABC`, populated companies,
+  and unsubscribed companies are protected.
 - Platform superusers are never selected for deletion.
 - A local company that does not match those rules can be included only by an
   explicit `--company-id`. Inspect the dry run before confirming.

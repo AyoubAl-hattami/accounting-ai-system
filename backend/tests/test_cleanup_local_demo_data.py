@@ -39,6 +39,23 @@ def candidate_db():
     Company.__table__.create(engine)
     User.__table__.create(engine)
     CompanyUser.__table__.create(engine)
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE accounts ("
+            "id INTEGER PRIMARY KEY, company_id INTEGER NOT NULL "
+            "REFERENCES companies(id) ON DELETE RESTRICT)"
+        )
+        connection.exec_driver_sql(
+            "CREATE TABLE journal_entries ("
+            "id INTEGER PRIMARY KEY, company_id INTEGER NOT NULL "
+            "REFERENCES companies(id) ON DELETE RESTRICT)"
+        )
+        connection.exec_driver_sql(
+            "CREATE TABLE company_subscriptions ("
+            "id INTEGER PRIMARY KEY, company_id INTEGER NOT NULL UNIQUE "
+            "REFERENCES companies(id) ON DELETE RESTRICT, "
+            "status VARCHAR(20) NOT NULL)"
+        )
     with Session(engine) as db:
         yield db
 
@@ -51,6 +68,16 @@ def _add_user(db: Session, email: str, *, is_superuser: bool = False) -> User:
     )
     db.add(user)
     return user
+
+
+def _add_subscription(db: Session, company_id: int) -> None:
+    db.execute(
+        text(
+            "INSERT INTO company_subscriptions (company_id, status) "
+            "VALUES (:company_id, 'active')"
+        ),
+        {"company_id": company_id},
+    )
 
 
 @pytest.mark.parametrize(
@@ -76,6 +103,64 @@ def test_candidate_company_patterns_include_remaining_test_clients(
     companies = _candidate_companies(candidate_db, ())
 
     assert [company.id for company in companies] == [candidate.id]
+
+
+def test_empty_subscribed_other_co_is_cleanup_candidate(candidate_db):
+    company = Company(name="Other Co")
+    candidate_db.add(company)
+    candidate_db.flush()
+    _add_subscription(candidate_db, company.id)
+
+    companies = _candidate_companies(candidate_db, ())
+
+    assert [candidate.id for candidate in companies] == [company.id]
+
+
+def test_other_co_with_membership_is_protected(candidate_db):
+    company = Company(name="Other Co")
+    user = _add_user(candidate_db, "owner@local.invalid")
+    candidate_db.add(company)
+    candidate_db.flush()
+    candidate_db.add(CompanyUser(company_id=company.id, user_id=user.id, role="admin"))
+    _add_subscription(candidate_db, company.id)
+    candidate_db.flush()
+
+    assert _candidate_companies(candidate_db, ()) == []
+
+
+@pytest.mark.parametrize("dependent_table", ["accounts", "journal_entries"])
+def test_other_co_with_accounting_data_is_protected(candidate_db, dependent_table):
+    company = Company(name="Other Co")
+    candidate_db.add(company)
+    candidate_db.flush()
+    _add_subscription(candidate_db, company.id)
+    candidate_db.execute(
+        text(f"INSERT INTO {dependent_table} (company_id) VALUES (:company_id)"),
+        {"company_id": company.id},
+    )
+
+    assert _candidate_companies(candidate_db, ()) == []
+
+
+def test_other_co_without_subscription_is_protected(candidate_db):
+    company = Company(name="Other Co")
+    candidate_db.add(company)
+    candidate_db.flush()
+
+    assert _candidate_companies(candidate_db, ()) == []
+
+
+@pytest.mark.parametrize(
+    "company_name",
+    ("Other Company", "Other Co ABC", "Demo Company Ltd", "ayoub", "ASAAS", "Alqassam"),
+)
+def test_similar_demo_and_local_company_names_are_protected(candidate_db, company_name):
+    company = Company(name=company_name)
+    candidate_db.add(company)
+    candidate_db.flush()
+    _add_subscription(candidate_db, company.id)
+
+    assert _candidate_companies(candidate_db, ()) == []
 
 
 def test_candidate_example_users_require_test_prefix_or_test_company(candidate_db):

@@ -192,7 +192,24 @@ def _candidate_companies(
         *(Company.name.startswith(prefix) for prefix in TEST_COMPANY_PREFIXES)
     )
     fully_test_owned = Company.id.in_(test_member) & ~Company.id.in_(non_test_member)
-    criteria = generated_name | fully_test_owned
+    has_membership = select(CompanyUser.id).where(
+        CompanyUser.company_id == Company.id
+    ).exists()
+    has_account = select(Account.id).where(Account.company_id == Company.id).exists()
+    has_journal_entry = select(JournalEntry.id).where(
+        JournalEntry.company_id == Company.id
+    ).exists()
+    has_subscription = select(CompanySubscription.id).where(
+        CompanySubscription.company_id == Company.id
+    ).exists()
+    empty_other_co_test_fixture = (
+        (Company.name == "Other Co")
+        & ~has_membership
+        & ~has_account
+        & ~has_journal_entry
+        & has_subscription
+    )
+    criteria = generated_name | fully_test_owned | empty_other_co_test_fixture
     if explicit_company_ids:
         criteria = criteria | Company.id.in_(explicit_company_ids)
     return list(db.scalars(select(Company).where(criteria).order_by(Company.id)))
