@@ -20,6 +20,7 @@ from sqlalchemy import text
 
 # ── Bootstrap the app so we can use SessionLocal / models ─────────────────────
 from app.core.database import SessionLocal
+from app.core.config import settings
 from app.modules.accounting.models.company import Company
 
 
@@ -163,6 +164,13 @@ def main():
     )
 
     args = parser.parse_args()
+
+    if settings.APP_ENV.strip().lower() != "development":
+        print(
+            "\n  Refusing to run: reset_company_data.py is restricted to "
+            "APP_ENV=development.\n"
+        )
+        sys.exit(1)
 
     if args.company_id is None:
         print("\n  --company-id is required.")

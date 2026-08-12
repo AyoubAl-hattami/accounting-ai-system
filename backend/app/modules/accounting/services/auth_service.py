@@ -63,5 +63,6 @@ def create_user_token(user: User) -> str:
         extra_claims={
             "email": user.email,
             "is_superuser": user.is_superuser,
+            "token_version": user.token_version,
         },
     )

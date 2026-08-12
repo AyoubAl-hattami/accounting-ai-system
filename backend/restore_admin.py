@@ -9,7 +9,17 @@ from app.core.config import settings
 from app.modules.accounting.models.user import User
 from app.modules.accounting.models.company_user import CompanyUser
 
+if settings.APP_ENV.strip().lower() == "production":
+    raise RuntimeError(
+        "restore_admin.py is a deprecated local-only recovery helper and is forbidden "
+        "in production. Use scripts/bootstrap_platform_admin.py."
+    )
+
 def restore_admin():
+    print(
+        "WARNING: deprecated local-only helper. Never use this in production; "
+        "use scripts/bootstrap_platform_admin.py instead."
+    )
     engine = create_engine(settings.DATABASE_URL)
     with Session(engine) as session:
         # Find the locked out user

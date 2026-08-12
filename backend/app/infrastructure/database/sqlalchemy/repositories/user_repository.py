@@ -40,6 +40,7 @@ class SqlAlchemyUserRepository:
             created_at=user.created_at,
             updated_at=user.updated_at,
             must_change_password=user.must_change_password,
+            token_version=user.token_version,
         )
 
     def get_by_email(self, email: str) -> UserDTO | None:
@@ -82,7 +83,9 @@ class SqlAlchemyUserRepository:
         user = self._db.scalar(select(User).where(User.id == command.user_id))
         if user is None:
             raise ValueError(f"User {command.user_id} not found")
-        user.is_active = command.is_active
+        if user.is_active != command.is_active:
+            user.is_active = command.is_active
+            user.token_version += 1
         self._db.add(user)
         flush_or_rollback(self._db)
         return self._to_dto(user)
@@ -106,6 +109,7 @@ class SqlAlchemyUserRepository:
 
         user.hashed_password = hash_password(command.new_password)
         user.must_change_password = False
+        user.token_version += 1
         self._db.add(user)
         flush_or_rollback(self._db)
         return self._to_dto(user)

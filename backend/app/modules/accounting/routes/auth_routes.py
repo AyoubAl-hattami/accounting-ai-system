@@ -76,6 +76,12 @@ def register_endpoint(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    if not settings.public_registration_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Public registration is not available",
+        )
+
     register_key = make_rate_limit_key("register", request)
 
     if _registration_rate_limit_enabled():
@@ -223,8 +229,8 @@ def change_temporary_password_endpoint(
     Reachable whether or not the change is forced, so an account that already
     cleared the flag can still rotate its own credential through the same path.
 
-    Existing access tokens stay valid until they expire: the tokens are stateless
-    JWTs and the system keeps no revocation list, so there is nothing to revoke.
+    Changing the password increments the account token version. All tokens issued
+    before this transaction are rejected on their next authenticated request.
     """
     user_repo = SqlAlchemyUserRepository(db)
 

@@ -15,6 +15,7 @@ from scripts.seed_demo_data import (
     monthly_period_bounds,
     shift_month,
 )
+from scripts import seed_demo_data as seed_module
 
 
 SAMPLE_TODAY_DATES = [
@@ -93,3 +94,8 @@ def test_demo_plan_is_stable_for_a_given_day():
     first = build_demo_entries(date(2026, 8, 3))
     second = build_demo_entries(date(2026, 8, 3))
     assert first == second
+
+
+def test_demo_seed_identifies_production_as_forbidden(monkeypatch):
+    monkeypatch.setattr(seed_module.settings, "APP_ENV", "production")
+    assert seed_module.is_production_environment() is True

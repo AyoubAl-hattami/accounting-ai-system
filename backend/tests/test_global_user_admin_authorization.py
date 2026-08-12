@@ -56,6 +56,7 @@ def _user(user_id, *, active=True, superuser=False, email=None):
         full_name=f'User {user_id}',
         is_active=active,
         is_superuser=superuser,
+        token_version=0,
     )
 
 
