@@ -84,4 +84,21 @@ describe('platform route guard', () => {
     expect(screen.queryByText(PLATFORM_CONTENT)).not.toBeInTheDocument();
     expect(screen.queryByText(en.permissions.accessDenied)).not.toBeInTheDocument();
   });
+
+  it('shows platform guidance instead of rendering a tenant page', () => {
+    authState.user = makeUser(true);
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <I18nProvider>
+          <ProtectedRoute>
+            <p>tenant-dashboard-content</p>
+          </ProtectedRoute>
+        </I18nProvider>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(en.platformAccessNotice.title)).toBeInTheDocument();
+    expect(screen.getByText(en.platformAccessNotice.message)).toBeInTheDocument();
+    expect(screen.queryByText('tenant-dashboard-content')).not.toBeInTheDocument();
+  });
 });

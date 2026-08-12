@@ -34,6 +34,20 @@ class CompanySubscriptionRead(BaseModel):
     effective_status: SubscriptionStatus
     days_remaining: int | None = None
     member_count: int = 0
+    created_at: datetime | None = None
+    primary_admin_email: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlatformDashboardRead(BaseModel):
+    total_clients: int
+    trial_subscriptions: int
+    active_subscriptions: int
+    past_due_subscriptions: int
+    suspended_subscriptions: int
+    cancelled_subscriptions: int
+    recent_clients: list[CompanySubscriptionRead]
 
     model_config = ConfigDict(from_attributes=True)
 

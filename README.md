@@ -28,6 +28,12 @@ Quick Tunnel link — see the
 [free public local demo tunnel](docs/demo/free-public-local-demo-tunnel.md).
 That is a demo tunnel, not production hosting.
 
+If a local database has accumulated automated-test records or accidental client
+onboarding, use the dry-run-first
+[local demo cleanup workflow](docs/demo/local-demo-cleanup.md). It never runs
+from startup or tests and requires both `APP_ENV=development` and an explicit
+`--confirm` flag before deleting anything.
+
 ---
 
 ## Current Status

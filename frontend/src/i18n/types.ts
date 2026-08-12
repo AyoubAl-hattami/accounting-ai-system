@@ -202,6 +202,7 @@ export interface Translations {
     groupReports: string;
     groupAdministration: string;
     groupPlatform: string;
+    platformDashboard: string;
     platformSubscriptions: string;
     platformOnboarding: string;
     collapseSidebar: string;
@@ -875,6 +876,27 @@ export interface Translations {
     extendedToast: string;
     updatedToast: string;
     actionFailed: string;
+  };
+
+  platformDashboard: {
+    pageTitle: string;
+    pageSubtitle: string;
+    totalClients: string;
+    trialSubscriptions: string;
+    activeSubscriptions: string;
+    blockedSubscriptions: string;
+    recentClients: string;
+    statusDistribution: string;
+    manageSubscriptions: string;
+    noClients: string;
+    noAdminEmail: string;
+    unknownDate: string;
+    loadFailed: string;
+  };
+
+  platformAccessNotice: {
+    title: string;
+    message: string;
   };
 
   // ── Subscription statuses ──

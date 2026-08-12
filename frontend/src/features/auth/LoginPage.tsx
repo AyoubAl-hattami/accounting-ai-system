@@ -5,6 +5,7 @@ import { AlertCircle, Eye, EyeOff, Loader2, Scale } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { useI18n } from '../../i18n';
 import { ThemeToggleButton } from '../../components/ui/ThemeToggle';
+import { defaultAuthenticatedRoute } from '../../auth/defaultRoute';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -25,7 +26,9 @@ export default function LoginPage() {
     try {
       const signedIn = await login(email, password);
       navigate(
-        signedIn.must_change_password ? '/auth/change-temporary-password' : '/dashboard',
+        signedIn.must_change_password
+          ? '/auth/change-temporary-password'
+          : defaultAuthenticatedRoute(signedIn),
         { replace: true },
       );
     } catch (err: unknown) {

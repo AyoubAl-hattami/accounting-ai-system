@@ -28,6 +28,7 @@ class SubscriptionRepository(Protocol):
         search: str | None = None,
         skip: int = 0,
         limit: int = 100,
+        newest_first: bool = False,
     ) -> list[CompanySubscriptionDTO]: ...
 
     def count_companies(self, *, search: str | None = None) -> int: ...

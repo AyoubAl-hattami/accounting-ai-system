@@ -23,6 +23,9 @@ from app.modules.accounting.routes.platform_onboarding_routes import (
 from app.modules.accounting.routes.platform_subscription_routes import (
     router as platform_subscription_router,
 )
+from app.modules.accounting.routes.platform_dashboard_routes import (
+    router as platform_dashboard_router,
+)
 
 
 app = FastAPI(
@@ -54,6 +57,7 @@ app.include_router(audit_router)
 app.include_router(ai_router)
 app.include_router(assistant_conversation_router)
 app.include_router(platform_subscription_router)
+app.include_router(platform_dashboard_router)
 app.include_router(platform_onboarding_router)
 
 

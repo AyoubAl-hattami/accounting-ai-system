@@ -312,6 +312,11 @@ export default function PlatformSubscriptionsPage() {
                           {entry.base_currency} · {entry.member_count}{' '}
                           {t.platformSubscriptions.columnMembers}
                         </span>
+                        {entry.primary_admin_email && (
+                          <span className="block truncate text-xs font-normal text-subtle-foreground">
+                            {entry.primary_admin_email}
+                          </span>
+                        )}
                       </th>
                       <td>
                         <SubscriptionStatusBadge status={entry.effective_status} />
@@ -346,6 +351,11 @@ export default function PlatformSubscriptionsPage() {
                       {t.platformSubscriptions.columnMembers} ·{' '}
                       {entry.subscription.plan_code ?? t.platformSubscriptions.noPlan}
                     </p>
+                    {entry.primary_admin_email && (
+                      <p className="truncate text-xs text-subtle-foreground">
+                        {entry.primary_admin_email}
+                      </p>
+                    )}
                   </div>
                   <SubscriptionStatusBadge status={entry.effective_status} />
                 </div>

@@ -55,9 +55,10 @@ export function CompaniesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Signed out there is nothing to ask for, and asking would only earn a 401.
     // Holding a temporary password earns a 403 for the same reason.
-    if (!user || user.must_change_password) {
+    if (!user || user.must_change_password || user.is_superuser) {
       setCompanies([]);
       setSelectedCompanyId(null);
+      if (user?.is_superuser) localStorage.removeItem(STORAGE_KEY);
       setIsLoading(false);
       return;
     }

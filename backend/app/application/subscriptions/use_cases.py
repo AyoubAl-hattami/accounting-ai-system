@@ -12,6 +12,7 @@ from app.application.subscriptions.dto import (
     CompanySubscriptionDTO,
     CompanySubscriptionPageDTO,
     SubscriptionDTO,
+    PlatformDashboardDTO,
     UpdateSubscriptionCommand,
 )
 from app.application.subscriptions.policy import (
@@ -24,9 +25,31 @@ from app.application.subscriptions.policy import (
 )
 from app.application.subscriptions.ports import SubscriptionRepository
 
-# The platform tenant list is small by nature; scanning it in one page keeps the
-# derived-status filter correct without a materialised status column.
-_UNFILTERED_SCAN_LIMIT = 1000
+_SCAN_PAGE_SIZE = 500
+
+
+def _all_company_summaries(
+    repository: SubscriptionRepository,
+    *,
+    search: str | None = None,
+) -> list[CompanySubscriptionDTO]:
+    """Read every matching company in bounded pages.
+
+    Effective status depends on expiry as well as the stored status. Keeping
+    that rule in the policy layer avoids a second SQL implementation while the
+    bounded reads keep filtering correct for installations above 1,000 clients.
+    """
+    total = repository.count_companies(search=search)
+    items: list[CompanySubscriptionDTO] = []
+    for offset in range(0, total, _SCAN_PAGE_SIZE):
+        items.extend(
+            repository.list_companies(
+                search=search,
+                skip=offset,
+                limit=_SCAN_PAGE_SIZE,
+            )
+        )
+    return items
 
 
 class ListCompanySubscriptions:
@@ -52,9 +75,7 @@ class ListCompanySubscriptions:
 
         matched = [
             item
-            for item in self._repository.list_companies(
-                search=search, skip=0, limit=_UNFILTERED_SCAN_LIMIT
-            )
+            for item in _all_company_summaries(self._repository, search=search)
             if item.effective_status == status
         ]
         return CompanySubscriptionPageDTO(
@@ -62,6 +83,32 @@ class ListCompanySubscriptions:
             total=len(matched),
             skip=skip,
             limit=limit,
+        )
+
+
+class GetPlatformDashboard:
+    def __init__(self, repository: SubscriptionRepository) -> None:
+        self._repository = repository
+
+    def execute(self, *, recent_limit: int = 5) -> PlatformDashboardDTO:
+        items = _all_company_summaries(self._repository)
+        counts = {
+            status: sum(item.effective_status == status for item in items)
+            for status in ("trial", "active", "past_due", "suspended", "cancelled")
+        }
+        recent = self._repository.list_companies(
+            skip=0,
+            limit=recent_limit,
+            newest_first=True,
+        )
+        return PlatformDashboardDTO(
+            total_clients=len(items),
+            trial_subscriptions=counts["trial"],
+            active_subscriptions=counts["active"],
+            past_due_subscriptions=counts["past_due"],
+            suspended_subscriptions=counts["suspended"],
+            cancelled_subscriptions=counts["cancelled"],
+            recent_clients=tuple(recent),
         )
 
 

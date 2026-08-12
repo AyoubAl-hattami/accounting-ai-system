@@ -5,6 +5,7 @@ import AppLayout from '../components/layout/AppLayout';
 import LoadingState from '../components/feedback/LoadingState';
 import { useAuth } from '../auth/AuthContext';
 import { CompaniesProvider } from '../features/companies/CompaniesProvider';
+import { defaultAuthenticatedRoute } from '../auth/defaultRoute';
 
 const LoginPage = lazy(() => import('../features/auth/LoginPage'));
 const ChangeTemporaryPasswordPage = lazy(
@@ -24,6 +25,9 @@ const AcceptInvitePage = lazy(() => import('../features/company-users/AcceptInvi
 const SettingsPage = lazy(() => import('../features/settings/SettingsPage'));
 const PlatformSubscriptionsPage = lazy(
   () => import('../features/subscriptions/PlatformSubscriptionsPage'),
+);
+const PlatformDashboardPage = lazy(
+  () => import('../features/platform-dashboard/PlatformDashboardPage'),
 );
 const ClientOnboardingPage = lazy(
   () => import('../features/onboarding/ClientOnboardingPage'),
@@ -54,10 +58,17 @@ function ForcedPasswordChangeRoute() {
   }
 
   if (!user.must_change_password) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={defaultAuthenticatedRoute(user)} replace />;
   }
 
   return <ChangeTemporaryPasswordPage />;
+}
+
+function HomeRedirect() {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <RouteLoader />;
+  if (!user) return <Navigate to="/login" replace />;
+  return <Navigate to={defaultAuthenticatedRoute(user)} replace />;
 }
 
 export default function AppRoutes() {
@@ -98,6 +109,14 @@ export default function AppRoutes() {
               element is the same component across these routes, React keeps the
               shell mounted and swaps only what the Outlet renders. */}
           <Route element={<AppLayout />}>
+            <Route
+              path="/platform/dashboard"
+              element={
+                <ProtectedRoute requiredPagePath="/platform/dashboard">
+                  <PlatformDashboardPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/dashboard"
               element={
@@ -204,8 +223,8 @@ export default function AppRoutes() {
             />
           </Route>
 
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<HomeRedirect />} />
+          <Route path="*" element={<HomeRedirect />} />
         </Routes>
       </CompaniesProvider>
     </BrowserRouter>

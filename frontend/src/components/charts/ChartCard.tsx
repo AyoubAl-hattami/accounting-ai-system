@@ -24,9 +24,9 @@ export default function ChartCard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay, ease: [0.16, 1, 0.3, 1] }}
-      className="card card-lift p-5"
+      className="card card-lift min-w-0 overflow-hidden p-4 sm:p-5"
     >
-      <div className="mb-5">
+      <div className="mb-4 sm:mb-5">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
       </div>
@@ -39,7 +39,7 @@ export default function ChartCard({
           <p className="text-sm text-muted-foreground">{emptyMessage}</p>
         </div>
       ) : (
-        <div style={{ width: '100%', height }}>{children}</div>
+        <div className="min-w-0 overflow-hidden" style={{ width: '100%', height }}>{children}</div>
       )}
     </motion.div>
   );
