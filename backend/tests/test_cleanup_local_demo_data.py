@@ -1,11 +1,22 @@
 from unittest.mock import Mock, patch
 
 import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
 
+from app.modules.accounting.models.user import User
 from scripts.cleanup_local_demo_data import (
+    COMPANY_DEPENDENT_TABLES,
+    JOURNAL_CHILD_TABLES,
     CleanupPlan,
+    _delete_company_batch,
+    _delete_company_rows_if_table_exists,
+    _delete_journal_children_if_tables_exist,
+    _delete_user_rows_if_table_exists,
+    build_parser,
     cleanup_local_pollution,
     ensure_cleanup_environment,
+    execute_cleanup,
 )
 
 
@@ -41,15 +52,350 @@ def test_cleanup_dry_run_never_executes_deletes(capsys):
     assert "DRY RUN" in capsys.readouterr().out
 
 
-def test_cleanup_requires_explicit_confirmation_before_execution():
+def test_production_guard_blocks_confirmed_deletion():
+    db = Mock()
+    with patch("scripts.cleanup_local_demo_data.execute_cleanup") as execute:
+        with pytest.raises(RuntimeError, match="APP_ENV=development"):
+            cleanup_local_pollution(db, app_env="production", confirm=True)
+
+    execute.assert_not_called()
+    db.commit.assert_not_called()
+
+
+def test_confirm_deletes_candidates_in_committed_batches(capsys):
+    plan = CleanupPlan(
+        company_ids=(1, 2, 3),
+        company_names=("Company 1", "Company 2", "Company 3"),
+        user_ids=(10, 11),
+        user_emails=("one@accounting-ai-test.dev", "two@accounting-ai-test.dev"),
+        row_counts={},
+    )
     db = Mock()
     with (
         patch(
             "scripts.cleanup_local_demo_data.build_cleanup_plan",
-            return_value=EMPTY_PLAN,
+            return_value=plan,
         ),
-        patch("scripts.cleanup_local_demo_data.execute_cleanup") as execute,
+        patch(
+            "scripts.cleanup_local_demo_data._delete_company_batch",
+            side_effect=lambda _db, ids: len(ids),
+        ) as delete_companies,
+        patch(
+            "scripts.cleanup_local_demo_data._delete_user_batch",
+            side_effect=lambda _db, ids: len(ids),
+        ) as delete_users,
     ):
-        cleanup_local_pollution(db, app_env="development", confirm=True)
+        result = cleanup_local_pollution(
+            db,
+            app_env="development",
+            confirm=True,
+            batch_size=2,
+        )
 
-    execute.assert_called_once_with(db, EMPTY_PLAN)
+    assert result is plan
+    assert [call.args[1] for call in delete_companies.call_args_list] == [(1, 2), (3,)]
+    assert [call.args[1] for call in delete_users.call_args_list] == [(10, 11)]
+    assert db.commit.call_count == 3
+    output = capsys.readouterr().out
+    assert "Starting confirmed cleanup: 5 candidates in 3 batches" in output
+    assert "Batch 1/3 committed: deleted 2; deleted total 2; remaining candidates 3" in output
+    assert "Cleanup complete: deleted 5 of 5 candidates" in output
+
+
+def test_execute_cleanup_rolls_back_only_the_failed_batch():
+    plan = CleanupPlan(
+        company_ids=(1, 2, 3),
+        company_names=("One", "Two", "Three"),
+        user_ids=(),
+        user_emails=(),
+        row_counts={},
+    )
+    db = Mock()
+    with patch(
+        "scripts.cleanup_local_demo_data._delete_company_batch",
+        side_effect=[2, RuntimeError("delete failed")],
+    ):
+        with pytest.raises(RuntimeError, match="delete failed"):
+            execute_cleanup(db, plan, batch_size=2)
+
+    assert db.commit.call_count == 1
+    db.rollback.assert_called_once_with()
+
+
+def test_company_batch_deletes_legacy_journals_before_company_rows():
+    db = Mock()
+    company_delete_result = Mock(rowcount=2)
+    db.execute.return_value = company_delete_result
+    deletion_order: list[str] = []
+
+    def record_table(_db, _inspector, table_name, _company_ids):
+        deletion_order.append(table_name)
+        return 0
+
+    def record_journal_child(_db, _inspector, table_name, _company_ids):
+        deletion_order.append(table_name)
+        return 0
+
+    with (
+        patch("scripts.cleanup_local_demo_data.inspect", return_value=Mock()),
+        patch("scripts.cleanup_local_demo_data._clear_self_reference_if_table_exists"),
+        patch(
+            "scripts.cleanup_local_demo_data._delete_company_rows_if_table_exists",
+            side_effect=record_table,
+        ),
+        patch(
+            "scripts.cleanup_local_demo_data._delete_journal_children_if_tables_exist",
+            side_effect=record_journal_child,
+        ),
+    ):
+        deleted = _delete_company_batch(db, (4, 5))
+
+    assert deleted == 2
+    expected_order = list(COMPANY_DEPENDENT_TABLES)
+    journals_index = expected_order.index("journals")
+    expected_order[journals_index:journals_index] = JOURNAL_CHILD_TABLES
+    assert deletion_order == expected_order
+    assert deletion_order.index("journal_entries") < deletion_order.index("journals")
+    assert deletion_order.index("journal_sequences") < deletion_order.index("journals")
+    db.execute.assert_called_once()
+
+
+def test_delete_journal_sequences_through_legacy_journals():
+    db = Mock()
+    db.execute.return_value = Mock(rowcount=4)
+    schema_inspector = Mock()
+    schema_inspector.has_table.return_value = True
+    schema_inspector.get_columns.side_effect = lambda table_name: {
+        "journal_sequences": [{"name": "id"}, {"name": "journal_id"}],
+        "journals": [{"name": "id"}, {"name": "company_id"}],
+    }[table_name]
+
+    deleted = _delete_journal_children_if_tables_exist(
+        db,
+        schema_inspector,
+        "journal_sequences",
+        (6904, 6905),
+    )
+
+    assert deleted == 4
+    statement = str(db.execute.call_args.args[0])
+    assert 'DELETE FROM "journal_sequences" WHERE journal_id IN' in statement
+    assert 'SELECT id FROM "journals" WHERE company_id IN' in statement
+    assert db.execute.call_args.args[1] == {"company_ids": (6904, 6905)}
+
+
+@pytest.mark.parametrize("missing_table", ["journal_sequences", "journals"])
+def test_delete_journal_sequences_skips_missing_optional_tables(missing_table):
+    db = Mock()
+    schema_inspector = Mock()
+    schema_inspector.has_table.side_effect = lambda table_name: (
+        table_name != missing_table
+    )
+    schema_inspector.get_columns.side_effect = lambda table_name: {
+        "journal_sequences": [{"name": "journal_id"}],
+        "journals": [{"name": "id"}, {"name": "company_id"}],
+    }[table_name]
+
+    deleted = _delete_journal_children_if_tables_exist(
+        db,
+        schema_inspector,
+        "journal_sequences",
+        (6904,),
+    )
+
+    assert deleted == 0
+    db.execute.assert_not_called()
+
+
+def test_delete_if_table_exists_handles_legacy_journals_table():
+    db = Mock()
+    db.execute.return_value = Mock(rowcount=3)
+    schema_inspector = Mock()
+    schema_inspector.has_table.return_value = True
+    schema_inspector.get_columns.return_value = [
+        {"name": "id"},
+        {"name": "company_id"},
+    ]
+
+    deleted = _delete_company_rows_if_table_exists(
+        db,
+        schema_inspector,
+        "journals",
+        (4, 5),
+    )
+
+    assert deleted == 3
+    statement = str(db.execute.call_args.args[0])
+    assert 'DELETE FROM "journals"' in statement
+    assert db.execute.call_args.args[1] == {"company_ids": (4, 5)}
+
+
+def test_delete_if_table_exists_skips_missing_optional_table():
+    db = Mock()
+    schema_inspector = Mock()
+    schema_inspector.has_table.return_value = False
+
+    deleted = _delete_company_rows_if_table_exists(
+        db,
+        schema_inspector,
+        "journals",
+        (4,),
+    )
+
+    assert deleted == 0
+    db.execute.assert_not_called()
+
+
+def test_delete_user_rows_uses_only_columns_present_on_optional_table():
+    db = Mock()
+    db.execute.return_value = Mock(rowcount=2)
+    schema_inspector = Mock()
+    schema_inspector.has_table.return_value = True
+    schema_inspector.get_columns.return_value = [
+        {"name": "id"},
+        {"name": "invited_by_user_id"},
+        {"name": "accepted_by_user_id"},
+    ]
+
+    deleted = _delete_user_rows_if_table_exists(
+        db,
+        schema_inspector,
+        "company_user_invitations",
+        ("invited_by_user_id", "accepted_by_user_id", "missing_user_id"),
+        (10, 11),
+    )
+
+    assert deleted == 2
+    statement = str(db.execute.call_args.args[0])
+    assert '"invited_by_user_id" IN' in statement
+    assert '"accepted_by_user_id" IN' in statement
+    assert "missing_user_id" not in statement
+    assert db.execute.call_args.args[1] == {"user_ids": (10, 11)}
+
+
+def test_confirm_deletes_standalone_test_user_and_dependencies(capsys):
+    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    User.__table__.create(engine)
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+        connection.exec_driver_sql(
+            "CREATE TABLE assistant_conversations ("
+            "id INTEGER PRIMARY KEY, "
+            "user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT)"
+        )
+
+    with Session(engine) as db:
+        candidate = User(
+            email="standalone@accounting-ai-test.dev",
+            hashed_password="not-a-real-password-hash",
+            is_superuser=False,
+        )
+        retained = User(
+            email="retained@example.com",
+            hashed_password="not-a-real-password-hash",
+            is_superuser=False,
+        )
+        db.add_all((candidate, retained))
+        db.flush()
+        candidate_id = candidate.id
+        retained_id = retained.id
+        db.execute(
+            text(
+                "INSERT INTO assistant_conversations (id, user_id) "
+                "VALUES (1, :user_id)"
+            ),
+            {"user_id": candidate_id},
+        )
+        db.commit()
+
+        plan = CleanupPlan(
+            company_ids=(),
+            company_names=(),
+            user_ids=(candidate_id,),
+            user_emails=(candidate.email,),
+            row_counts={"assistant_conversations": 1},
+        )
+        deleted = execute_cleanup(db, plan, batch_size=25)
+
+        assert deleted == 1
+        assert db.get(User, candidate_id) is None
+        assert db.get(User, retained_id) is not None
+        assert db.scalar(text("SELECT count(*) FROM assistant_conversations")) == 0
+
+    output = capsys.readouterr().out
+    assert "Batch 1/1 committed: deleted 1; deleted total 1" in output
+    assert "Cleanup complete: deleted 1 of 1 candidates" in output
+
+
+def test_failed_batch_prints_foreign_key_table_and_constraint(capsys):
+    plan = CleanupPlan(
+        company_ids=(4,),
+        company_names=("Blocked Company",),
+        user_ids=(),
+        user_emails=(),
+        row_counts={},
+    )
+    diagnostics = Mock(
+        table_name="journals",
+        constraint_name="journals_company_id_fkey",
+        message_detail="Key (id)=(4) is referenced from table journals.",
+    )
+    blocker = RuntimeError("restricted")
+    blocker.orig = Mock(diag=diagnostics)
+    db = Mock()
+
+    with patch(
+        "scripts.cleanup_local_demo_data._delete_company_batch",
+        side_effect=blocker,
+    ):
+        with pytest.raises(RuntimeError, match="restricted"):
+            execute_cleanup(db, plan, batch_size=1)
+
+    output = capsys.readouterr().out
+    assert "table=journals" in output
+    assert "constraint=journals_company_id_fkey" in output
+    db.rollback.assert_called_once_with()
+
+
+def test_batch_size_cli_option_works():
+    args = build_parser().parse_args(["--confirm", "--batch-size", "250"])
+    assert args.confirm is True
+    assert args.batch_size == 250
+
+
+@pytest.mark.parametrize("value", ["0", "-1"])
+def test_batch_size_cli_option_rejects_non_positive_values(value):
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["--batch-size", value])
+
+
+def test_verbose_mode_prints_individual_identifiers(capsys):
+    plan = CleanupPlan(
+        company_ids=tuple(range(1, 13)),
+        company_names=tuple(f"Company {index}" for index in range(1, 13)),
+        user_ids=(),
+        user_emails=(),
+        row_counts={},
+    )
+    db = Mock()
+    with (
+        patch(
+            "scripts.cleanup_local_demo_data.build_cleanup_plan",
+            return_value=plan,
+        ),
+        patch(
+            "scripts.cleanup_local_demo_data._delete_company_batch",
+            side_effect=lambda _db, ids: len(ids),
+        ),
+    ):
+        cleanup_local_pollution(
+            db,
+            app_env="development",
+            confirm=True,
+            batch_size=12,
+            verbose=True,
+        )
+
+    output = capsys.readouterr().out
+    assert "[6] Company 6" in output
+    assert "more (use --verbose" not in output

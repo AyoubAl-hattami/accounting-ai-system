@@ -7,9 +7,11 @@ never runs automatically.
 ## Safety model
 
 - `APP_ENV` must be exactly `development`; production, staging, and test are refused.
-- The default is a dry run. It prints candidate companies, automated-test users,
-  and dependent-row counts without changing the database.
+- The default is a dry run. It prints candidate counts, dependent-row counts,
+  and a short first/last sample without changing the database.
 - Deletion requires the explicit `--confirm` flag.
+- Confirmed cleanup commits in restart-safe batches and prints progress after
+  every commit. The default batch size is 100 candidates.
 - Automatic candidates are restricted to the test factory email domain
   `@accounting-ai-test.dev`, companies wholly owned by those test identities,
   and known test-factory company-name prefixes.
@@ -36,12 +38,41 @@ python scripts/cleanup_local_demo_data.py --company-id 123
 
 ## Confirmed cleanup
 
-Run the same command with `--confirm` only after reviewing every printed ID and
-count:
+Run with `--confirm` only after reviewing the dry-run counts and sample:
 
 ```powershell
-python scripts/cleanup_local_demo_data.py --company-id 123 --confirm
+python scripts/cleanup_local_demo_data.py --confirm
 ```
 
-The cleanup is transactional. A foreign-key refusal rolls the operation back;
-the script does not weaken constraints or broaden its candidate rules.
+Choose a different number of candidates per transaction when needed:
+
+```powershell
+python scripts/cleanup_local_demo_data.py --confirm --batch-size 250
+```
+
+Use `--verbose` to print every company and user identifier. Without it, confirm
+mode prints batch progress rather than thousands of individual rows:
+
+```powershell
+python scripts/cleanup_local_demo_data.py --confirm --batch-size 100 --verbose
+```
+
+Each completed batch is committed before the next starts. Progress includes the
+batch number, rows deleted in that batch, cumulative deleted count, and remaining
+candidate count. Within each batch, dependent demo/test rows (including journal
+lines, journal entries, local journal books, accounts, fiscal records,
+subscriptions, invitations, and memberships) are removed before the company.
+Legacy journal sequence rows are removed before their journal books. Tables from
+optional local migrations are skipped when they do not exist.
+
+Standalone automated-test users are also removed. The cleanup first deletes
+their test memberships, private assistant conversations, invitations, and any
+optional local token or session rows, then deletes the matching user records.
+
+If the command is interrupted or a batch fails, rerun the same confirmed
+command. Already committed rows no longer match the next plan, so cleanup
+continues with the remaining candidates. Running the dry run first is optional
+but useful for reviewing the new remaining count.
+
+A failure rolls back only the current batch. The script does not weaken database
+constraints or broaden its candidate rules.
