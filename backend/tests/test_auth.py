@@ -1,6 +1,11 @@
 import time
 
 import requests
+import pytest
+from fastapi import HTTPException
+
+from app.modules.accounting.routes import auth_routes
+from app.modules.accounting.schemas.user import UserCreate
 
 
 def test_register_login_and_me(base_url):
@@ -56,3 +61,21 @@ def test_register_login_and_me(base_url):
     assert me_data["email"] == unique_email
     assert me_data["full_name"] == "Test User"
     assert me_data["is_active"] is True
+
+
+def test_registration_is_rejected_when_public_enrollment_is_disabled(monkeypatch):
+    monkeypatch.setattr(auth_routes.settings, "PUBLIC_REGISTRATION_ENABLED", False)
+
+    with pytest.raises(HTTPException) as exc_info:
+        auth_routes.register_endpoint(
+            UserCreate(
+                email="blocked-registration@accounting-ai-test.dev",
+                password="Password123",
+                full_name="Blocked Registration",
+            ),
+            request=None,
+            db=None,
+        )
+
+    assert exc_info.value.status_code == 404
+    assert "not available" in exc_info.value.detail

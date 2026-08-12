@@ -1,5 +1,11 @@
 # Accounting AI System
 
+Production operators must start with
+[`docs/production/production-readiness-audit.md`](docs/production/production-readiness-audit.md)
+and [`docs/production/deployment-runbook.md`](docs/production/deployment-runbook.md).
+The repository currently remains **NO-GO** until the external security,
+infrastructure, restore-drill, monitoring, and legal evidence listed there is complete.
+
 A FastAPI + PostgreSQL backend for a multi-company double-entry accounting system.
 
 The system currently includes authentication, company access control, role-based permissions, chart of accounts, fiscal years and periods, journal entry workflows, financial reports, audit logs, default account seeding, opening balances, pagination, and backend smoke tests.

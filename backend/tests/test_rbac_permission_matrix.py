@@ -160,6 +160,18 @@ def test_preissued_token_is_rejected_after_global_deactivation(
         )
         assert reactivate.status_code == 200, reactivate.text
 
+    # Reactivation restores the account, not credentials issued before the
+    # security status transition.
+    rejected_after_reactivation = requests.get(
+        f"{base_url}/auth/me", headers=old_headers
+    )
+    assert rejected_after_reactivation.status_code == 401
+
+    factory.db.expire_all()
+    refreshed_user = factory.db.get(User, viewer_user.id)
+    fresh_headers = factory.auth_headers_for(refreshed_user)
+    assert requests.get(f"{base_url}/auth/me", headers=fresh_headers).status_code == 200
+
 
 def test_active_admin_still_accesses_company(
     base_url, deterministic_accounting_bootstrap

@@ -33,9 +33,11 @@ def database_health_check():
 
 @router.get("/version")
 def version_check():
-    return {
+    response = {
         "status": "ok",
         "app_name": settings.APP_NAME,
-        "environment": settings.APP_ENV,
         "version": settings.APP_VERSION,
     }
+    if settings.APP_ENV.strip().lower() != "production":
+        response["environment"] = settings.APP_ENV
+    return response

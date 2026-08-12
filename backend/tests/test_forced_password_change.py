@@ -235,6 +235,33 @@ def test_the_change_clears_the_flag_and_replaces_the_hash(
     assert NEW_PASSWORD not in stored.hashed_password
 
 
+def test_password_change_invalidates_the_token_used_for_the_change(
+    base_url, flagged_admin
+):
+    _, user = flagged_admin
+    old_headers = _headers(user)
+
+    changed = requests.post(
+        f"{base_url}{CHANGE_ENDPOINT}", json=_change_body(), headers=old_headers
+    )
+    assert changed.status_code == 200, changed.text
+
+    rejected = requests.get(f"{base_url}/auth/me", headers=old_headers)
+    assert rejected.status_code == 401
+    assert "invalidated" in rejected.json()["detail"].lower()
+
+    login = requests.post(
+        f"{base_url}/auth/login",
+        json={"email": user.email, "password": NEW_PASSWORD},
+    )
+    assert login.status_code == 200, login.text
+    refreshed = requests.get(
+        f"{base_url}/auth/me",
+        headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+    )
+    assert refreshed.status_code == 200
+
+
 def test_the_business_api_opens_once_the_password_is_changed(
     base_url, accounting_factory, flagged_admin
 ):

@@ -15,14 +15,20 @@ export const DEFAULT_API_BASE_URL = 'http://127.0.0.1:8010';
  * Trailing slashes are stripped because callers concatenate a leading-slash
  * path onto the result, and `/api/` + `/reports` would produce `/api//reports`.
  */
-export function resolveApiBaseUrl(configured: string | undefined): string {
+export function resolveApiBaseUrl(
+  configured: string | undefined,
+  production = false,
+): string {
   const trimmed = configured?.trim();
 
-  if (!trimmed) return DEFAULT_API_BASE_URL;
+  if (!trimmed) return production ? '/api' : DEFAULT_API_BASE_URL;
 
   const withoutTrailingSlash = trimmed.replace(/\/+$/, '');
 
-  return withoutTrailingSlash || DEFAULT_API_BASE_URL;
+  return withoutTrailingSlash || (production ? '/api' : DEFAULT_API_BASE_URL);
 }
 
-export const apiBaseUrl = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
+export const apiBaseUrl = resolveApiBaseUrl(
+  import.meta.env.VITE_API_BASE_URL,
+  import.meta.env.PROD,
+);

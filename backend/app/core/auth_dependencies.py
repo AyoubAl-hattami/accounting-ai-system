@@ -52,6 +52,12 @@ def get_current_user(
             detail="Inactive user",
         )
 
+    if payload.get("token_version") != user.token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication token has been invalidated",
+        )
+
     ensure_password_change_completed(user, request.url.path)
 
     return user
@@ -93,7 +99,11 @@ def get_current_user_optional(
         user_id = int(user_id_raw)
         user = get_user_by_id(db=db, user_id=user_id)
         
-        if user and user.is_active:
+        if (
+            user
+            and user.is_active
+            and payload.get("token_version") == user.token_version
+        ):
             ensure_password_change_completed(user, request.url.path)
             return user
     except (JWTError, ValueError, TypeError):

@@ -16,7 +16,7 @@ import { defaultAuthenticatedRoute } from '../../auth/defaultRoute';
  * here would be a menu of dead ends.
  */
 export default function ChangeTemporaryPasswordPage() {
-  const { user, logout, refreshUser } = useAuth();
+  const { user, login, logout } = useAuth();
   const { t } = useI18n();
   const navigate = useNavigate();
   const copy = t.changePassword;
@@ -61,8 +61,9 @@ export default function ChangeTemporaryPasswordPage() {
         confirm_password: confirmPassword,
       });
 
-      await refreshUser();
-      navigate(defaultAuthenticatedRoute({ is_superuser: Boolean(user?.is_superuser) }), {
+      if (!user) throw new Error('Authenticated user context is unavailable');
+      const refreshedUser = await login(user.email, newPassword);
+      navigate(defaultAuthenticatedRoute(refreshedUser), {
         replace: true,
       });
     } catch (err: unknown) {

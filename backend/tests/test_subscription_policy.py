@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from fastapi import HTTPException
 
 from app.application.subscriptions.policy import (
     add_months,
@@ -11,6 +12,7 @@ from app.application.subscriptions.policy import (
     extended_expiry,
     grants_access,
 )
+from app.core import subscription_access
 
 
 NOW = datetime(2026, 3, 15, 12, 0, tzinfo=timezone.utc)
@@ -66,3 +68,41 @@ def test_extension_of_a_lapsed_subscription_starts_from_now():
 
 def test_extension_without_an_existing_expiry_starts_from_now():
     assert extended_expiry(None, months=1, now=NOW) == add_months(NOW, 1)
+
+
+def test_missing_subscription_fails_closed_in_production(monkeypatch):
+    class MissingSubscriptionRepository:
+        def __init__(self, _db):
+            pass
+
+        def get(self, _company_id):
+            return None
+
+    monkeypatch.setattr(
+        subscription_access, "SqlAlchemySubscriptionRepository", MissingSubscriptionRepository
+    )
+    monkeypatch.setattr(subscription_access.settings, "APP_ENV", "production")
+    monkeypatch.setattr(
+        subscription_access.settings, "PRODUCTION_SUBSCRIPTION_FAIL_CLOSED", True
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        subscription_access.ensure_active_subscription(object(), 42)
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["status"] == "unmanaged"
+
+
+def test_missing_subscription_preserves_legacy_development_behavior(monkeypatch):
+    class MissingSubscriptionRepository:
+        def __init__(self, _db):
+            pass
+
+        def get(self, _company_id):
+            return None
+
+    monkeypatch.setattr(
+        subscription_access, "SqlAlchemySubscriptionRepository", MissingSubscriptionRepository
+    )
+    monkeypatch.setattr(subscription_access.settings, "APP_ENV", "development")
+    subscription_access.ensure_active_subscription(object(), 42)

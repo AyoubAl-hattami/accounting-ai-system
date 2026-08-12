@@ -9,6 +9,11 @@ describe('resolveApiBaseUrl', () => {
     expect(resolveApiBaseUrl('   ')).toBe(DEFAULT_API_BASE_URL);
   });
 
+  it('uses same-origin api routing for a production build when unset', () => {
+    expect(resolveApiBaseUrl(undefined, true)).toBe('/api');
+    expect(resolveApiBaseUrl('', true)).toBe('/api');
+  });
+
   it('keeps a relative base so the public demo stays on one origin', () => {
     expect(resolveApiBaseUrl('/api')).toBe('/api');
   });

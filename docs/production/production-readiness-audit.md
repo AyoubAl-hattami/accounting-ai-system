@@ -29,6 +29,23 @@ invoicing, payroll, attachment, or bank-reconciliation suite.
 
 **NO-GO for production v1 and customer handover.**
 
+Phase 77B implements repository-level controls for registration, token TTL and
+password-change invalidation, platform-owner bootstrap, fail-closed production
+configuration and subscriptions, deployment templates, and operating runbooks.
+The decision remains NO-GO until the external evidence in the final production
+gate exists. See the Phase 77B status table below.
+
+### Phase 77B blocker status
+
+| Blocker | Repository status | Remaining GO evidence |
+|---|---|---|
+| C1 public registration | Code control complete | Staging test showing production returns 404 and onboarding still works |
+| C2 session security | Partially complete | HttpOnly/revocable session decision, platform MFA, CSP verification, security sign-off |
+| C3 owner bootstrap | Code control complete | Witnessed production bootstrap and break-glass owner assignment |
+| C4 deployment/HTTPS | Templates complete, external pending | Real DNS/TLS/hosting/secrets, staging deployment and rollback evidence |
+| C5 recovery/monitoring | Runbooks complete, external pending | Successful restore drill meeting approved RPO/RTO and alert evidence |
+| C6 legal/governance | Checklist complete, external pending | Counsel/business-approved documents and customer acceptance |
+
 The application may continue to be demonstrated locally. A limited production
 pilot becomes a GO only after all critical blockers below are implemented,
 tested in a production-like environment, and signed off by the accountable
@@ -51,7 +68,7 @@ business owner. High-priority items marked "before pilot" are also release gates
 Validation observed during this audit:
 
 - Alembic reports exactly one head: `c9d4b7e2f813`.
-- The local PostgreSQL database is at `c9d4b7e2f813`.
+- The local PostgreSQL database is at Phase 77B head `e2a7f6c1d904`.
 - Frontend `npx tsc -b --noEmit` passed.
 - Frontend production build passed with Vite 5.4.21; temporary output was removed.
 - CI is configured to migrate a fresh PostgreSQL 16 service and run the complete
@@ -60,24 +77,23 @@ Validation observed during this audit:
 
 ## Critical blockers
 
-### C1. Public account registration is enabled in production
+### C1. Public account registration was enabled in production
 
-`POST /auth/register` is unauthenticated and has no production feature switch.
-It creates users without an approval or invitation. The in-process limiter
-reduces burst abuse but does not prevent distributed account creation or account
-name squatting.
+Phase 77B makes production registration disabled by default and rejects startup
+if it is explicitly enabled. `POST /auth/register` returns 404 while platform
+onboarding remains available. Non-production registration remains configurable.
 
-**Required before pilot:** disable public registration in production by default,
-or require a single-use invitation/approved enrollment. Keep client onboarding
-under the platform-admin boundary. Add production configuration and HTTP tests
-for the disabled path.
+**Repository control:** complete. Production registration is closed and covered
+by configuration and route tests. Staging evidence remains required.
 
 ### C2. Production session security is insufficient for financial data
 
-The SPA stores a 24-hour bearer token in `localStorage`. Tokens are stateless,
-there is no refresh rotation or server-side revocation, logout only deletes the
-browser copy, and changing a temporary password does not invalidate an already
-issued token. An XSS event or copied token therefore remains useful until expiry.
+Phase 77B requires an explicit production TTL, rejects more than 60 minutes
+without documented risk acceptance, and adds a database token version. Password
+change, deactivation, and reactivation invalidate all previously issued tokens;
+the frontend obtains a fresh token after password change. The SPA still stores
+the bearer token in `localStorage`; there is no refresh rotation, general session
+revocation UI, or platform-admin MFA.
 
 **Required before pilot:** use short-lived access tokens and a secure session
 strategy with revocation/rotation. Prefer an `HttpOnly`, `Secure`, `SameSite`
@@ -87,41 +103,34 @@ Add CSP and security headers at the serving layer. Require MFA for platform
 administrators, or record explicit risk acceptance for a tightly controlled
 single-customer pilot.
 
-### C3. No supported first-platform-admin bootstrap or recovery process
+### C3. Platform-owner bootstrap needs operational evidence
 
-Public registration always creates `is_superuser=false`. No production-safe,
-audited command creates the first platform owner. `backend/restore_admin.py` is
-a local hard-coded recovery script for `admin@example.com` and company 3; it is
-not a production bootstrap mechanism and must not be used for launch.
+Phase 77B adds a confirmed, idempotent, audited bootstrap CLI that rejects demo
+credentials, forces password change, and requires explicit promotion of an
+existing user. `backend/restore_admin.py` now refuses production execution.
 
-**Required before pilot:** provide an idempotent, production-guarded CLI that
-creates or promotes one named platform owner, requires explicit confirmation,
-hashes a strong temporary password, forces password change, refuses unsafe
-duplicates, and writes an audit record. Document break-glass recovery and test
-final-superuser protections.
+**Repository control:** complete. A witnessed production execution, named
+break-glass owners, and secure one-time credential delivery remain required.
 
-### C4. No reproducible production deployment or HTTPS topology
+### C4. Deployment templates exist; real HTTPS deployment is unproven
 
-There is no Dockerfile, process manifest, reverse-proxy configuration, production
-service definition, or deployment runbook. Backend production validation only
-enforces `SECRET_KEY`; it does not fail when `APP_PUBLIC_URL` is blank, CORS is
-localhost-only, `DATABASE_URL` is local/non-TLS, or the frontend API URL is
-omitted. A production frontend built without `VITE_API_BASE_URL` calls
-`http://127.0.0.1:8010` in the customer's browser.
+Phase 77B adds backend/frontend Dockerfiles, internal Nginx SPA/API routing,
+Caddy HTTPS/HSTS configuration, an example Compose topology, a deployment
+runbook, same-origin production API defaults, and fail-closed backend settings.
+No real DNS, certificates, hosting, secret manager, or staging deployment has
+been provisioned or verified, so C4 remains externally pending.
 
-**Required before pilot:** choose and codify one deployment target. Serve the SPA
-and API behind HTTPS, configure SPA history fallback and `/api` routing, terminate
-TLS with renewal, set trusted proxy behavior, apply HSTS/CSP/frame/referrer/content
-type headers, run multiple managed API workers, and make required production
-configuration fail closed. Cloudflare Quick Tunnel and Vite dev server are never
-production deployment options.
+**Repository control:** complete as a reference template. A staging deployment
+must prove DNS, TLS renewal, trusted proxies, security headers, `/api` routing,
+SPA fallback, secret injection, worker behavior, and rollback. Cloudflare Quick
+Tunnel and Vite dev server are never production deployment options.
 
 ### C5. No tested backup, restore, monitoring, or incident recovery
 
-Health endpoints exist, but there is no automated encrypted PostgreSQL backup,
-retention policy, restore drill, alerting, centralized structured logging, error
-tracking, uptime monitoring, runbook, recovery objectives, or practiced rollback.
-Accounting data cannot be accepted without demonstrated recoverability.
+Phase 77B defines backup/restore, reconciliation, monitoring, incident, migration,
+and deployment rollback runbooks. There is still no configured backup provider,
+approved retention/RPO/RTO, successful restore drill, alert delivery evidence,
+centralized logging/error tracking, or practiced infrastructure rollback.
 
 **Required before pilot:** define RPO/RTO; automate encrypted backups; restore a
 backup into an isolated environment and reconcile row/report checks; monitor
@@ -151,9 +160,9 @@ billing, suspension, cancellation, renewal, refund, and data-exit policies.
 These must be closed before the pilot unless the item is explicitly accepted in
 a written, time-bounded risk register.
 
-1. **Production configuration validation.** Require HTTPS `APP_PUBLIC_URL`, an
-   explicit HTTPS CORS allowlist, PostgreSQL production URL, bounded token TTL,
-   and a supported AI provider/configuration combination. Reject wildcard CORS.
+1. **Production configuration validation (code complete).** Startup now requires
+   HTTPS `APP_PUBLIC_URL`, exact HTTPS CORS, PostgreSQL, bounded explicit token
+   TTL, strong secrets, approved AI configuration, and fail-closed subscriptions.
 2. **Distributed rate limiting.** Replace process-memory counters with a shared
    store or edge/WAF limits. Honor forwarded client IP only from trusted proxies.
    Cover login, registration/invitation acceptance, AI, exports, and expensive
@@ -161,11 +170,12 @@ a written, time-bounded risk register.
 3. **Password recovery and administrator MFA.** There is no user-facing reset
    flow. Build a time-limited, single-use, hashed reset-token workflow with audit
    events and avoid support staff handling customer passwords.
-4. **Subscription fail-open behavior.** A company with no subscription row is
-   treated as active. Production onboarding creates a row, but production should
-   alert on or reject unmanaged tenants after legacy data is reconciled.
-5. **API information and error policy.** `/health/version` exposes environment
-   and version publicly. Some report routes return exception strings. Define a
+4. **Subscription fail-open behavior (code complete).** A production company
+   without a subscription row is now blocked as unmanaged; non-production legacy
+   behavior remains compatible. Reconcile rows and monitor anomalies before launch.
+5. **API information and error policy (partial).** `/health/version` no longer
+   exposes environment in production. Some report routes return domain exception
+   messages. Define a
    stable error envelope, log correlation ID, generic 5xx responses, and a policy
    for public health metadata and API documentation exposure.
 6. **Secrets and dependency operations.** Use a secret manager, rotation process,

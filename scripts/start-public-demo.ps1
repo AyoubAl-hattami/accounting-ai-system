@@ -58,6 +58,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+if ($env:APP_ENV -and $env:APP_ENV.Trim().ToLowerInvariant() -eq "production") {
+    throw "Public demo tooling is forbidden when APP_ENV=production. Start it only from an explicit development shell."
+}
+
 $CloudflaredInstallHint = "winget install -e --id Cloudflare.cloudflared --accept-package-agreements --accept-source-agreements"
 $TunnelUrlPattern = 'https://[a-z0-9-]+\.trycloudflare\.com'
 $TunnelUrlTimeoutSeconds = 60

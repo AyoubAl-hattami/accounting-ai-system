@@ -17,6 +17,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 const refreshUser = vi.fn();
+const login = vi.fn();
 const authState = {
   user: {
     id: 4,
@@ -27,7 +28,7 @@ const authState = {
     must_change_password: true,
   },
   isLoading: false,
-  login: vi.fn(),
+  login,
   logout: vi.fn(),
   refreshUser,
 };
@@ -85,8 +86,9 @@ describe('forced temporary password change', () => {
     expect(screen.getByText(ar.changePassword.description)).toBeInTheDocument();
   });
 
-  it('submits the change, refreshes the session and leaves for the dashboard', async () => {
+  it('submits the change, obtains a new session and leaves for the dashboard', async () => {
     mockPost.mockResolvedValueOnce({ data: {} } as never);
+    login.mockResolvedValueOnce({ ...authState.user, must_change_password: false });
     renderPage();
     fillForm('Temp0rary1', 'N3wStrongPass', 'N3wStrongPass');
     fireEvent.click(screen.getByRole('button', { name: copy.submit }));
@@ -98,7 +100,9 @@ describe('forced temporary password change', () => {
       confirm_password: 'N3wStrongPass',
     });
 
-    await waitFor(() => expect(refreshUser).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(login).toHaveBeenCalledWith('admin@northwind.test', 'N3wStrongPass'),
+    );
     expect(navigate).toHaveBeenCalledWith('/dashboard', { replace: true });
   });
 

@@ -545,6 +545,7 @@ def deactivate_user_account_endpoint(
 
     try:
         target.is_active = False
+        target.token_version += 1
         db.add(target)
         prepare_audit_log(
             db=db,
@@ -683,6 +684,7 @@ def reactivate_user_account_endpoint(
 
     try:
         target.is_active = True
+        target.token_version += 1
         db.add(target)
         prepare_audit_log(
             db=db,

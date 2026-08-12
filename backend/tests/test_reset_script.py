@@ -5,9 +5,11 @@ import sys
 import os
 
 import requests
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from scripts import reset_company_data as reset_module
 from scripts.reset_company_data import reset_company_data
 
 
@@ -75,3 +77,13 @@ def test_reset_clears_journals_but_preserves_structure(
     )
     assert after_fiscal.status_code == 200
     assert after_fiscal.json()["total"] >= 1
+
+
+def test_reset_cli_refuses_non_development_environment(monkeypatch):
+    monkeypatch.setattr(reset_module.settings, "APP_ENV", "production")
+    monkeypatch.setattr(sys, "argv", ["reset_company_data.py", "--company-id", "1"])
+
+    with pytest.raises(SystemExit) as exc_info:
+        reset_module.main()
+
+    assert exc_info.value.code == 1

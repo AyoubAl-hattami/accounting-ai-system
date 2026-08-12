@@ -11,6 +11,7 @@ from app.application.subscriptions.policy import effective_status, grants_access
 from app.infrastructure.database.sqlalchemy.repositories.subscription_repository import (
     SqlAlchemySubscriptionRepository,
 )
+from app.core.config import settings
 
 SUBSCRIPTION_INACTIVE_CODE = "SUBSCRIPTION_INACTIVE"
 SUBSCRIPTION_INACTIVE_MESSAGE = "Company subscription is inactive or expired."
@@ -24,7 +25,19 @@ def ensure_active_subscription(db, company_id: int) -> None:
         # No row yet means the company predates subscription management or was
         # created outside the API.  Blocking it would lock out working tenants,
         # so it is treated as unmanaged until a platform admin acts on it.
-        return
+        if not (
+            settings.APP_ENV.strip().lower() == "production"
+            and settings.PRODUCTION_SUBSCRIPTION_FAIL_CLOSED
+        ):
+            return
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": SUBSCRIPTION_INACTIVE_CODE,
+                "message": SUBSCRIPTION_INACTIVE_MESSAGE,
+                "status": "unmanaged",
+            },
+        )
 
     if grants_access(subscription.status, subscription.expires_at):
         return

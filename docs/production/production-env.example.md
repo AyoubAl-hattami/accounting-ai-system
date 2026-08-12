@@ -6,8 +6,9 @@ inject them at runtime. Never commit a populated `.env`, frontend build output,
 database dump, provider key, token, tunnel log, or backup.
 
 Production configuration must be reviewed together with the deployment artifact.
-Several fail-closed checks recommended by the production audit do not exist yet;
-until Phase 77B implements them, the operator must enforce this list manually.
+Phase 77B enforces the application settings in this reference at backend startup
+and guards the frontend production build. Infrastructure-owned controls below
+still require operator and hosting-provider verification.
 
 ## Backend runtime variables
 
@@ -19,14 +20,19 @@ until Phase 77B implements them, the operator must enforce this list manually.
 | `APP_PUBLIC_URL` | Yes | Public HTTPS frontend origin, no path or trailing slash, for example `https://ledger.example.invalid`. Never localhost. |
 | `DATABASE_URL` | Yes, secret | PostgreSQL SQLAlchemy URL for a dedicated least-privilege application role. Require encrypted transport according to the provider, commonly `sslmode=require` or stricter certificate validation. Never SQLite. |
 | `SECRET_KEY` | Yes, secret | Unique high-entropy JWT signing key. Current startup requires at least 32 characters; use at least 64 random bytes/URL-safe output and define rotation/session invalidation. Never reuse development, CI, or another environment's key. |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | Yes | Explicit short duration approved by the session design. Do not retain the current 1440-minute default for production without documented risk acceptance. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Yes | Must be explicitly set. Use 15-60 minutes. Values over 60 require `PRODUCTION_ALLOW_LONG_LIVED_TOKENS=true` and recorded risk acceptance. |
+| `PRODUCTION_ALLOW_LONG_LIVED_TOKENS` | No | Defaults to `false`. Temporary exception only; it does not fix browser token storage or session architecture. |
+| `PUBLIC_REGISTRATION_ENABLED` | No | Must be unset or `false` in production. Production startup rejects `true`; client admins are created by platform onboarding. |
+| `PRODUCTION_ALLOW_LOCAL_DATABASE` | No | Defaults to `false`. Set only for an explicitly accepted single-host topology; managed remote PostgreSQL is preferred. |
+| `PRODUCTION_ALLOW_DATABASE_WITHOUT_TLS` | No | Defaults to `false`. Production requires `sslmode=require`, `verify-ca`, or preferably `verify-full`; override only for a documented private/single-host exception. |
+| `PRODUCTION_SUBSCRIPTION_FAIL_CLOSED` | No | Defaults to `true` and production startup rejects `false`. A missing subscription blocks business APIs. |
 | `ALGORITHM` | No | Application is intentionally restricted to `HS256`; do not override. |
 | `CORS_ORIGINS` | Yes | Comma-separated exact HTTPS frontend origins. No `*`, localhost, HTTP, path, or trailing wildcard. Include only origins that must call the API directly. |
 | `AUTH_FAILED_LOGIN_LIMIT` | Yes | Positive limit approved with shared/edge rate limiting. Suggested starting policy: 5. |
 | `AUTH_FAILED_LOGIN_WINDOW_SECONDS` | Yes | Positive window. Suggested starting policy: 300 seconds, tuned with monitoring. |
 | `AUTH_REGISTER_RATE_LIMIT` | Conditional | Required only if registration remains enabled; registration should be disabled or invitation-gated before launch. |
 | `AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS` | Conditional | Same boundary as registration limit. |
-| `AI_JOURNAL_PROVIDER` | Yes | One approved value: `rules`, `openai`, or `gemini`. Use `rules` until external-provider privacy and commercial review is complete. Do not deploy `llm_placeholder`. |
+| `AI_JOURNAL_PROVIDER` | Yes | One approved value: `rules`, `openai`, or `gemini`. Production startup rejects any other value and requires the selected external provider key. Use `rules` until privacy and commercial review is complete. |
 | `OPENAI_API_KEY` | Conditional, secret | Required only when approved provider is `openai`; otherwise unset. Restrict, monitor, and rotate it. |
 | `OPENAI_MODEL` | Conditional | Pin the approved model identifier when using OpenAI; validate changes before deployment. |
 | `GEMINI_API_KEY` | Conditional, secret | Required only when approved provider is `gemini`; otherwise unset. Restrict, monitor, and rotate it. |
@@ -64,6 +70,11 @@ APP_PUBLIC_URL=https://ledger.example.invalid
 DATABASE_URL=<secret-manager-reference-to-postgresql-url>
 SECRET_KEY=<secret-manager-reference-to-random-signing-key>
 ACCESS_TOKEN_EXPIRE_MINUTES=<approved-short-duration>
+PRODUCTION_ALLOW_LONG_LIVED_TOKENS=false
+PUBLIC_REGISTRATION_ENABLED=false
+PRODUCTION_ALLOW_LOCAL_DATABASE=false
+PRODUCTION_ALLOW_DATABASE_WITHOUT_TLS=false
+PRODUCTION_SUBSCRIPTION_FAIL_CLOSED=true
 
 CORS_ORIGINS=https://ledger.example.invalid
 AUTH_FAILED_LOGIN_LIMIT=5
@@ -129,6 +140,7 @@ Before every production start or deploy:
 - Do not run Uvicorn with `--reload`, Vite dev/preview as the public web server,
   or Cloudflare Quick Tunnel as production hosting.
 - Do not copy the development database into production.
-- Do not create or promote platform owners with ad hoc SQL.
+- Do not create or promote platform owners with ad hoc SQL. Use the confirmed
+  `scripts/bootstrap_platform_admin.py` workflow in the handover runbook.
 - Do not send temporary passwords to logs, tickets, analytics, source control,
   shared documents, or long-lived terminal captures.

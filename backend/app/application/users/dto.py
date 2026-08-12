@@ -18,6 +18,7 @@ class UserDTO:
     updated_at: datetime
     full_name: str | None = None
     must_change_password: bool = False
+    token_version: int = 0
 
 
 @dataclass(frozen=True, slots=True)

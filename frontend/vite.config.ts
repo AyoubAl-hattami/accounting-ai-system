@@ -17,6 +17,15 @@ function stripApiPrefix(path: string): string {
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', 'VITE_')
+  if (mode === 'production') {
+    if (env.VITE_PUBLIC_DEMO === '1') {
+      throw new Error('VITE_PUBLIC_DEMO is forbidden in production builds')
+    }
+    const apiBase = (env.VITE_API_BASE_URL || '/api').trim()
+    if (/^http:\/\/(?:localhost|127\.0\.0\.1)(?::|\/|$)/i.test(apiBase)) {
+      throw new Error('Production VITE_API_BASE_URL must not target localhost')
+    }
+  }
 
   // Quick-tunnel demo only. Vite rejects unknown Host headers to block DNS
   // rebinding, so the tunnel hostname has to be allowed explicitly, and HMR has
