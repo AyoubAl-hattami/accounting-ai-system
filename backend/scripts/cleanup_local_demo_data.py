@@ -59,7 +59,6 @@ COMPANY_DEPENDENT_TABLES = (
     "journal_lines",
     "assistant_conversations",
     "journal_entries",
-    "journal_sequences",
     "journals",
     "audit_logs",
     "exchange_rates",
@@ -72,6 +71,7 @@ COMPANY_DEPENDENT_TABLES = (
     "company_subscriptions",
     "company_users",
 )
+JOURNAL_CHILD_TABLES = ("journal_sequences",)
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,6 +245,31 @@ def _delete_company_rows_if_table_exists(
     return int(result.rowcount or 0)
 
 
+def _delete_journal_children_if_tables_exist(
+    db: Session,
+    schema_inspector,
+    table_name: str,
+    company_ids: tuple[int, ...],
+) -> int:
+    """Delete rows linked to legacy journals through journal_id."""
+    child_columns = _table_columns(schema_inspector, table_name)
+    journal_columns = _table_columns(schema_inspector, "journals")
+    if (
+        not company_ids
+        or "journal_id" not in child_columns
+        or not {"id", "company_id"}.issubset(journal_columns)
+    ):
+        return 0
+    table_name = _safe_table_name(table_name)
+    statement = text(
+        f'DELETE FROM "{table_name}" WHERE journal_id IN ('
+        'SELECT id FROM "journals" WHERE company_id IN :company_ids'
+        ")"
+    ).bindparams(bindparam("company_ids", expanding=True))
+    result = db.execute(statement, {"company_ids": company_ids})
+    return int(result.rowcount or 0)
+
+
 def _clear_self_reference_if_table_exists(
     db: Session,
     schema_inspector,
@@ -284,6 +309,14 @@ def _delete_company_batch(db: Session, company_ids: tuple[int, ...]) -> int:
         company_ids,
     )
     for table_name in COMPANY_DEPENDENT_TABLES:
+        if table_name == "journals":
+            for child_table_name in JOURNAL_CHILD_TABLES:
+                _delete_journal_children_if_tables_exist(
+                    db,
+                    schema_inspector,
+                    child_table_name,
+                    company_ids,
+                )
         _delete_company_rows_if_table_exists(
             db,
             schema_inspector,

@@ -4,9 +4,11 @@ import pytest
 
 from scripts.cleanup_local_demo_data import (
     COMPANY_DEPENDENT_TABLES,
+    JOURNAL_CHILD_TABLES,
     CleanupPlan,
     _delete_company_batch,
     _delete_company_rows_if_table_exists,
+    _delete_journal_children_if_tables_exist,
     build_parser,
     cleanup_local_pollution,
     ensure_cleanup_environment,
@@ -126,6 +128,10 @@ def test_company_batch_deletes_legacy_journals_before_company_rows():
         deletion_order.append(table_name)
         return 0
 
+    def record_journal_child(_db, _inspector, table_name, _company_ids):
+        deletion_order.append(table_name)
+        return 0
+
     with (
         patch("scripts.cleanup_local_demo_data.inspect", return_value=Mock()),
         patch("scripts.cleanup_local_demo_data._clear_self_reference_if_table_exists"),
@@ -133,14 +139,68 @@ def test_company_batch_deletes_legacy_journals_before_company_rows():
             "scripts.cleanup_local_demo_data._delete_company_rows_if_table_exists",
             side_effect=record_table,
         ),
+        patch(
+            "scripts.cleanup_local_demo_data._delete_journal_children_if_tables_exist",
+            side_effect=record_journal_child,
+        ),
     ):
         deleted = _delete_company_batch(db, (4, 5))
 
     assert deleted == 2
-    assert deletion_order == list(COMPANY_DEPENDENT_TABLES)
+    expected_order = list(COMPANY_DEPENDENT_TABLES)
+    journals_index = expected_order.index("journals")
+    expected_order[journals_index:journals_index] = JOURNAL_CHILD_TABLES
+    assert deletion_order == expected_order
     assert deletion_order.index("journal_entries") < deletion_order.index("journals")
     assert deletion_order.index("journal_sequences") < deletion_order.index("journals")
     db.execute.assert_called_once()
+
+
+def test_delete_journal_sequences_through_legacy_journals():
+    db = Mock()
+    db.execute.return_value = Mock(rowcount=4)
+    schema_inspector = Mock()
+    schema_inspector.has_table.return_value = True
+    schema_inspector.get_columns.side_effect = lambda table_name: {
+        "journal_sequences": [{"name": "id"}, {"name": "journal_id"}],
+        "journals": [{"name": "id"}, {"name": "company_id"}],
+    }[table_name]
+
+    deleted = _delete_journal_children_if_tables_exist(
+        db,
+        schema_inspector,
+        "journal_sequences",
+        (6904, 6905),
+    )
+
+    assert deleted == 4
+    statement = str(db.execute.call_args.args[0])
+    assert 'DELETE FROM "journal_sequences" WHERE journal_id IN' in statement
+    assert 'SELECT id FROM "journals" WHERE company_id IN' in statement
+    assert db.execute.call_args.args[1] == {"company_ids": (6904, 6905)}
+
+
+@pytest.mark.parametrize("missing_table", ["journal_sequences", "journals"])
+def test_delete_journal_sequences_skips_missing_optional_tables(missing_table):
+    db = Mock()
+    schema_inspector = Mock()
+    schema_inspector.has_table.side_effect = lambda table_name: (
+        table_name != missing_table
+    )
+    schema_inspector.get_columns.side_effect = lambda table_name: {
+        "journal_sequences": [{"name": "journal_id"}],
+        "journals": [{"name": "id"}, {"name": "company_id"}],
+    }[table_name]
+
+    deleted = _delete_journal_children_if_tables_exist(
+        db,
+        schema_inspector,
+        "journal_sequences",
+        (6904,),
+    )
+
+    assert deleted == 0
+    db.execute.assert_not_called()
 
 
 def test_delete_if_table_exists_handles_legacy_journals_table():

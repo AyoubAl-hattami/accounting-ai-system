@@ -62,12 +62,13 @@ batch number, rows deleted in that batch, cumulative deleted count, and remainin
 candidate count. Within each batch, dependent demo/test rows (including journal
 lines, journal entries, local journal books, accounts, fiscal records,
 subscriptions, invitations, and memberships) are removed before the company.
-Tables from optional local migrations are skipped when they do not exist.
+Legacy journal sequence rows are removed before their journal books. Tables from
+optional local migrations are skipped when they do not exist.
 
-If the command is interrupted, rerun the same confirmed command. Already
-committed rows no longer match the next plan, so cleanup continues with the
-remaining candidates. Running the dry run first is optional but useful for
-reviewing the new remaining count.
+If the command is interrupted or a batch fails, rerun the same confirmed
+command. Already committed rows no longer match the next plan, so cleanup
+continues with the remaining candidates. Running the dry run first is optional
+but useful for reviewing the new remaining count.
 
 A failure rolls back only the current batch. The script does not weaken database
 constraints or broaden its candidate rules.
