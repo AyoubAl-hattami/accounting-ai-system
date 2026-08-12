@@ -4,11 +4,15 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
+from app.modules.accounting.models.company import Company
+from app.modules.accounting.models.company_user import CompanyUser
 from app.modules.accounting.models.user import User
 from scripts.cleanup_local_demo_data import (
     COMPANY_DEPENDENT_TABLES,
     JOURNAL_CHILD_TABLES,
     CleanupPlan,
+    _candidate_companies,
+    _candidate_users,
     _delete_company_batch,
     _delete_company_rows_if_table_exists,
     _delete_journal_children_if_tables_exist,
@@ -27,6 +31,234 @@ EMPTY_PLAN = CleanupPlan(
     user_emails=(),
     row_counts={},
 )
+
+
+@pytest.fixture
+def candidate_db():
+    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    Company.__table__.create(engine)
+    User.__table__.create(engine)
+    CompanyUser.__table__.create(engine)
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE accounts ("
+            "id INTEGER PRIMARY KEY, company_id INTEGER NOT NULL "
+            "REFERENCES companies(id) ON DELETE RESTRICT)"
+        )
+        connection.exec_driver_sql(
+            "CREATE TABLE journal_entries ("
+            "id INTEGER PRIMARY KEY, company_id INTEGER NOT NULL "
+            "REFERENCES companies(id) ON DELETE RESTRICT)"
+        )
+        connection.exec_driver_sql(
+            "CREATE TABLE company_subscriptions ("
+            "id INTEGER PRIMARY KEY, company_id INTEGER NOT NULL UNIQUE "
+            "REFERENCES companies(id) ON DELETE RESTRICT, "
+            "status VARCHAR(20) NOT NULL)"
+        )
+    with Session(engine) as db:
+        yield db
+
+
+def _add_user(db: Session, email: str, *, is_superuser: bool = False) -> User:
+    user = User(
+        email=email,
+        hashed_password="not-a-real-password-hash",
+        is_superuser=is_superuser,
+    )
+    db.add(user)
+    return user
+
+
+def _add_subscription(db: Session, company_id: int) -> None:
+    db.execute(
+        text(
+            "INSERT INTO company_subscriptions (company_id, status) "
+            "VALUES (:company_id, 'active')"
+        ),
+        {"company_id": company_id},
+    )
+
+
+@pytest.mark.parametrize(
+    "company_name",
+    (
+        "CrossTenantA_factory",
+        "CrossTenantB_factory",
+        "SameCompany_factory",
+        "CompanyA_factory",
+        "CompanyB_factory",
+        "Deterministic Company 42",
+        "Test Company 42",
+    ),
+)
+def test_candidate_company_patterns_include_remaining_test_clients(
+    candidate_db, company_name
+):
+    candidate = Company(name=company_name)
+    retained = Company(name="Example Consulting LLC")
+    candidate_db.add_all((candidate, retained))
+    candidate_db.flush()
+
+    companies = _candidate_companies(candidate_db, ())
+
+    assert [company.id for company in companies] == [candidate.id]
+
+
+def test_empty_subscribed_other_co_is_cleanup_candidate(candidate_db):
+    company = Company(name="Other Co")
+    candidate_db.add(company)
+    candidate_db.flush()
+    _add_subscription(candidate_db, company.id)
+
+    companies = _candidate_companies(candidate_db, ())
+
+    assert [candidate.id for candidate in companies] == [company.id]
+
+
+def test_other_co_with_membership_is_protected(candidate_db):
+    company = Company(name="Other Co")
+    user = _add_user(candidate_db, "owner@local.invalid")
+    candidate_db.add(company)
+    candidate_db.flush()
+    candidate_db.add(CompanyUser(company_id=company.id, user_id=user.id, role="admin"))
+    _add_subscription(candidate_db, company.id)
+    candidate_db.flush()
+
+    assert _candidate_companies(candidate_db, ()) == []
+
+
+@pytest.mark.parametrize("dependent_table", ["accounts", "journal_entries"])
+def test_other_co_with_accounting_data_is_protected(candidate_db, dependent_table):
+    company = Company(name="Other Co")
+    candidate_db.add(company)
+    candidate_db.flush()
+    _add_subscription(candidate_db, company.id)
+    candidate_db.execute(
+        text(f"INSERT INTO {dependent_table} (company_id) VALUES (:company_id)"),
+        {"company_id": company.id},
+    )
+
+    assert _candidate_companies(candidate_db, ()) == []
+
+
+def test_other_co_without_subscription_is_protected(candidate_db):
+    company = Company(name="Other Co")
+    candidate_db.add(company)
+    candidate_db.flush()
+
+    assert _candidate_companies(candidate_db, ()) == []
+
+
+@pytest.mark.parametrize(
+    "company_name",
+    ("Other Company", "Other Co ABC", "Demo Company Ltd", "ayoub", "ASAAS", "Alqassam"),
+)
+def test_similar_demo_and_local_company_names_are_protected(candidate_db, company_name):
+    company = Company(name=company_name)
+    candidate_db.add(company)
+    candidate_db.flush()
+    _add_subscription(candidate_db, company.id)
+
+    assert _candidate_companies(candidate_db, ()) == []
+
+
+def test_candidate_example_users_require_test_prefix_or_test_company(candidate_db):
+    test_company = Company(name="CrossTenantA_membership")
+    real_company = Company(name="Example Consulting LLC")
+    candidate_db.add_all((test_company, real_company))
+    prefixed_users = [
+        _add_user(candidate_db, f"{prefix}factory@example.com")
+        for prefix in (
+            "cross_tenant_",
+            "same_company_",
+            "admin_a_",
+            "admin_b_",
+            "user_a_",
+            "user_b_",
+            "test_",
+        )
+    ]
+    attached_user = _add_user(candidate_db, "ordinary_member@example.com")
+    retained_user = _add_user(candidate_db, "ordinary@example.com")
+    retained_member = _add_user(candidate_db, "real_company_member@example.com")
+    protected_superuser = _add_user(
+        candidate_db,
+        "cross_tenant_platform@example.com",
+        is_superuser=True,
+    )
+    candidate_db.flush()
+    candidate_db.add_all(
+        (
+            CompanyUser(
+                company_id=test_company.id,
+                user_id=attached_user.id,
+                role="admin",
+            ),
+            CompanyUser(
+                company_id=real_company.id,
+                user_id=retained_member.id,
+                role="admin",
+            ),
+        )
+    )
+    candidate_db.flush()
+
+    users = _candidate_users(candidate_db, (test_company.id,))
+    candidate_ids = {user.id for user in users}
+
+    assert {user.id for user in prefixed_users} <= candidate_ids
+    assert attached_user.id in candidate_ids
+    assert retained_user.id not in candidate_ids
+    assert retained_member.id not in candidate_ids
+    assert protected_superuser.id not in candidate_ids
+
+
+def test_expanded_candidates_appear_in_dry_run(candidate_db, capsys):
+    company = Company(name="SameCompany_dry_run")
+    user = _add_user(candidate_db, "same_company_admin_dry_run@example.com")
+    candidate_db.add(company)
+    candidate_db.flush()
+    candidate_db.add(
+        CompanyUser(company_id=company.id, user_id=user.id, role="admin")
+    )
+    candidate_db.flush()
+
+    with patch("scripts.cleanup_local_demo_data._count", return_value=0):
+        plan = cleanup_local_pollution(candidate_db, app_env="development")
+
+    assert plan.company_ids == (company.id,)
+    assert plan.user_ids == (user.id,)
+    assert "Candidate companies : 1" in capsys.readouterr().out
+    candidate_db.rollback()
+
+
+def test_confirm_deletes_expanded_company_and_user_candidates(candidate_db, capsys):
+    company = Company(name="CompanyA_confirm")
+    user = _add_user(candidate_db, "admin_a_confirm@example.com")
+    candidate_db.add(company)
+    candidate_db.flush()
+    company_id = company.id
+    user_id = user.id
+    candidate_db.add(
+        CompanyUser(company_id=company_id, user_id=user_id, role="admin")
+    )
+    candidate_db.commit()
+
+    with patch("scripts.cleanup_local_demo_data._count", return_value=0):
+        plan = cleanup_local_pollution(
+            candidate_db,
+            app_env="development",
+            confirm=True,
+            batch_size=1,
+        )
+
+    assert plan.company_ids == (company_id,)
+    assert plan.user_ids == (user_id,)
+    assert candidate_db.get(Company, company_id) is None
+    assert candidate_db.get(User, user_id) is None
+    output = capsys.readouterr().out
+    assert "Cleanup complete: deleted 2 of 2 candidates" in output
 
 
 @pytest.mark.parametrize("app_env", ["production", "staging", "test", ""])

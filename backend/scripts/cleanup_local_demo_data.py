@@ -34,8 +34,67 @@ from app.modules.accounting.models.user import User
 
 
 TEST_EMAIL_SUFFIX = "@accounting-ai-test.dev"
+EXAMPLE_TEST_EMAIL_SUFFIX = "@example.com"
+EXAMPLE_TEST_EMAIL_PREFIXES = (
+    "cross_tenant_",
+    "same_company_",
+    "admin_a_",
+    "admin_b_",
+    "user_a_",
+    "user_b_",
+    "test_",
+)
 TEST_COMPANY_PREFIXES = (
-    "Deterministic Company ",
+    "CrossTenant",
+    "SameCompany",
+    "CompanyA_",
+    "CompanyB_",
+    "Deterministic Company",
+    "Test Company",
+    "BS Multi Year ",
+    "CLI Client ",
+    "SoleCo_",
+    "RoleCompany_",
+    "OverlapCreate_",
+    "QuickSetupClosedPeriod_",
+    "AdjacentPeriod_",
+    "PeriodCompanyA_",
+    "PeriodCompanyB_",
+    "OverlapUpdate_",
+    "QuickSetupCreate_",
+    "QuickSetupIdempotent_",
+    "QuickSetupLockedYear_",
+    "ExplainProfit_",
+    "FiscalYearCreate_",
+    "FiscalPeriodCreate_",
+    "FiscalYearAudit_",
+    "Account roles_",
+    "Update roles_",
+    "Invite Company ",
+    "Account create_",
+    "Account validation first_",
+    "Account validation second_",
+    "Account update_",
+    "Update validation first_",
+    "Update validation second_",
+    "Update system_",
+    "AccountAuditCo_",
+    "AccountUpdateAuditCo_",
+    "Seed idempotency_",
+    "Journal create roles_",
+    "Journal write roles_",
+    "Journal read roles_",
+    "Journal inactive_",
+    "Journal code first_",
+    "Journal code second_",
+    "Journal accounts_",
+    "Journal archive_",
+    "Journal seed_",
+    "Journal preview_",
+    "Journal filters_",
+    "Seed defaults_",
+    "Journal access isolation_",
+    "Conversation Company ",
     "Tenant Co ",
     "AuditTestCo_",
     "SeedAuditCo_",
@@ -133,10 +192,52 @@ def _candidate_companies(
         *(Company.name.startswith(prefix) for prefix in TEST_COMPANY_PREFIXES)
     )
     fully_test_owned = Company.id.in_(test_member) & ~Company.id.in_(non_test_member)
-    criteria = generated_name | fully_test_owned
+    has_membership = select(CompanyUser.id).where(
+        CompanyUser.company_id == Company.id
+    ).exists()
+    has_account = select(Account.id).where(Account.company_id == Company.id).exists()
+    has_journal_entry = select(JournalEntry.id).where(
+        JournalEntry.company_id == Company.id
+    ).exists()
+    has_subscription = select(CompanySubscription.id).where(
+        CompanySubscription.company_id == Company.id
+    ).exists()
+    empty_other_co_test_fixture = (
+        (Company.name == "Other Co")
+        & ~has_membership
+        & ~has_account
+        & ~has_journal_entry
+        & has_subscription
+    )
+    criteria = generated_name | fully_test_owned | empty_other_co_test_fixture
     if explicit_company_ids:
         criteria = criteria | Company.id.in_(explicit_company_ids)
     return list(db.scalars(select(Company).where(criteria).order_by(Company.id)))
+
+
+def _candidate_users(db: Session, company_ids: tuple[int, ...]) -> list[User]:
+    known_example_identity = or_(
+        *(
+            User.email.ilike(f"{prefix}%{EXAMPLE_TEST_EMAIL_SUFFIX}")
+            for prefix in EXAMPLE_TEST_EMAIL_PREFIXES
+        )
+    )
+    attached_to_test_company = False
+    if company_ids:
+        attached_to_test_company = User.id.in_(
+            select(CompanyUser.user_id).where(CompanyUser.company_id.in_(company_ids))
+        )
+    criteria = User.email.ilike(f"%{TEST_EMAIL_SUFFIX}") | (
+        User.email.ilike(f"%{EXAMPLE_TEST_EMAIL_SUFFIX}")
+        & (known_example_identity | attached_to_test_company)
+    )
+    return list(
+        db.scalars(
+            select(User)
+            .where(criteria, User.is_superuser.is_(False))
+            .order_by(User.id)
+        )
+    )
 
 
 def _count(db: Session, model, company_ids: tuple[int, ...]) -> int:
@@ -155,16 +256,7 @@ def build_cleanup_plan(
 ) -> CleanupPlan:
     companies = _candidate_companies(db, explicit_company_ids)
     company_ids = tuple(company.id for company in companies)
-    test_users = list(
-        db.scalars(
-            select(User)
-            .where(
-                User.email.ilike(f"%{TEST_EMAIL_SUFFIX}"),
-                User.is_superuser.is_(False),
-            )
-            .order_by(User.id)
-        )
-    )
+    test_users = _candidate_users(db, company_ids)
     counts = {
         "assistant_conversations": _count(db, AssistantConversation, company_ids),
         "journal_entries": _count(db, JournalEntry, company_ids),
@@ -420,7 +512,10 @@ def _delete_user_batch(db: Session, user_ids: tuple[int, ...]) -> int:
     result = db.execute(
         delete(User).where(
             User.id.in_(user_ids),
-            User.email.ilike(f"%{TEST_EMAIL_SUFFIX}"),
+            or_(
+                User.email.ilike(f"%{TEST_EMAIL_SUFFIX}"),
+                User.email.ilike(f"%{EXAMPLE_TEST_EMAIL_SUFFIX}"),
+            ),
             User.is_superuser.is_(False),
         )
     )
