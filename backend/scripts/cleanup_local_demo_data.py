@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass
+from typing import Iterable, TypeVar
 
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
@@ -45,6 +46,9 @@ TEST_COMPANY_PREFIXES = (
     "Filter cancelled ",
     "Recent Client ",
 )
+DEFAULT_BATCH_SIZE = 100
+SAMPLE_SIZE = 5
+T = TypeVar("T")
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,25 +137,60 @@ def build_cleanup_plan(
     )
 
 
-def print_plan(plan: CleanupPlan) -> None:
-    print("\nLocal demo cleanup plan")
-    print("=" * 64)
-    print(f"Candidate companies : {len(plan.company_ids)}")
-    print(f"Candidate test users: {len(plan.user_ids)}")
+def _emit(message: str = "") -> None:
+    print(message, flush=True)
+
+
+def _batches(items: tuple[T, ...], batch_size: int) -> Iterable[tuple[T, ...]]:
+    for offset in range(0, len(items), batch_size):
+        yield items[offset : offset + batch_size]
+
+
+def _print_identifiers(
+    heading: str,
+    identifiers: tuple[int, ...],
+    labels: tuple[str, ...],
+    *,
+    verbose: bool,
+) -> None:
+    if not identifiers:
+        return
+    pairs = list(zip(identifiers, labels, strict=True))
+    if verbose or len(pairs) <= SAMPLE_SIZE * 2:
+        displayed = pairs
+    else:
+        displayed = pairs[:SAMPLE_SIZE] + pairs[-SAMPLE_SIZE:]
+    _emit(f"\n{heading}:")
+    for identifier, label in displayed:
+        _emit(f"  [{identifier}] {label}")
+    hidden = len(pairs) - len(displayed)
+    if hidden:
+        _emit(f"  ... {hidden} more (use --verbose to print every identifier)")
+
+
+def print_plan(plan: CleanupPlan, *, verbose: bool = False) -> None:
+    _emit("\nLocal demo cleanup plan")
+    _emit("=" * 64)
+    _emit(f"Candidate companies : {len(plan.company_ids)}")
+    _emit(f"Candidate test users: {len(plan.user_ids)}")
+    _emit(f"Total candidates    : {len(plan.company_ids) + len(plan.user_ids)}")
     for table, count in plan.row_counts.items():
-        print(f"  {table:24} {count}")
-    if plan.company_ids:
-        print("\nCompanies:")
-        for company_id, name in zip(plan.company_ids, plan.company_names, strict=True):
-            print(f"  [{company_id}] {name}")
-    if plan.user_ids:
-        print("\nAutomated-test users:")
-        for user_id, email in zip(plan.user_ids, plan.user_emails, strict=True):
-            print(f"  [{user_id}] {email}")
+        _emit(f"  {table:24} {count}")
+    _print_identifiers(
+        "Companies",
+        plan.company_ids,
+        plan.company_names,
+        verbose=verbose,
+    )
+    _print_identifiers(
+        "Automated-test users",
+        plan.user_ids,
+        plan.user_emails,
+        verbose=verbose,
+    )
 
 
-def execute_cleanup(db: Session, plan: CleanupPlan) -> None:
-    company_ids = plan.company_ids
+def _delete_company_batch(db: Session, company_ids: tuple[int, ...]) -> int:
     if company_ids:
         db.execute(
             delete(AssistantConversation).where(
@@ -183,31 +222,85 @@ def execute_cleanup(db: Session, plan: CleanupPlan) -> None:
             )
         )
         db.execute(delete(CompanyUser).where(CompanyUser.company_id.in_(company_ids)))
-        db.execute(delete(Company).where(Company.id.in_(company_ids)))
+        result = db.execute(delete(Company).where(Company.id.in_(company_ids)))
+        return int(result.rowcount or 0)
+    return 0
 
-    for user_id in plan.user_ids:
-        has_membership = db.scalar(
-            select(CompanyUser.id).where(CompanyUser.user_id == user_id).limit(1)
+
+def _delete_user_batch(db: Session, user_ids: tuple[int, ...]) -> int:
+    if not user_ids:
+        return 0
+    has_membership = select(CompanyUser.id).where(CompanyUser.user_id == User.id)
+    has_conversation = select(AssistantConversation.id).where(
+        AssistantConversation.user_id == User.id
+    )
+    has_invitation = select(CompanyUserInvitation.id).where(
+        CompanyUserInvitation.invited_by_user_id == User.id
+    )
+    result = db.execute(
+        delete(User).where(
+            User.id.in_(user_ids),
+            User.email.ilike(f"%{TEST_EMAIL_SUFFIX}"),
+            User.is_superuser.is_(False),
+            ~has_membership.exists(),
+            ~has_conversation.exists(),
+            ~has_invitation.exists(),
         )
-        has_conversation = db.scalar(
-            select(AssistantConversation.id)
-            .where(AssistantConversation.user_id == user_id)
-            .limit(1)
-        )
-        has_invitation = db.scalar(
-            select(CompanyUserInvitation.id)
-            .where(
-                or_(
-                    CompanyUserInvitation.invited_by_user_id == user_id,
-                    CompanyUserInvitation.accepted_by_user_id == user_id,
-                )
+    )
+    return int(result.rowcount or 0)
+
+
+def execute_cleanup(
+    db: Session,
+    plan: CleanupPlan,
+    *,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    verbose: bool = False,
+) -> int:
+    if batch_size < 1:
+        raise ValueError("batch_size must be at least 1")
+
+    total = len(plan.company_ids) + len(plan.user_ids)
+    total_batches = (
+        (len(plan.company_ids) + batch_size - 1) // batch_size
+        + (len(plan.user_ids) + batch_size - 1) // batch_size
+    )
+    processed = 0
+    deleted = 0
+    batch_number = 0
+
+    _emit(f"\nStarting confirmed cleanup: {total} candidates in {total_batches} batches.")
+
+    for kind, identifiers, labels, delete_batch in (
+        ("companies", plan.company_ids, plan.company_names, _delete_company_batch),
+        ("users", plan.user_ids, plan.user_emails, _delete_user_batch),
+    ):
+        label_by_id = dict(zip(identifiers, labels, strict=True))
+        for batch in _batches(identifiers, batch_size):
+            batch_number += 1
+            _emit(
+                f"Batch {batch_number}/{total_batches}: deleting up to "
+                f"{len(batch)} {kind}..."
             )
-            .limit(1)
-        )
-        if not any((has_membership, has_conversation, has_invitation)):
-            db.execute(delete(User).where(User.id == user_id, User.is_superuser.is_(False)))
+            if verbose:
+                for identifier in batch:
+                    _emit(f"  [{identifier}] {label_by_id[identifier]}")
+            try:
+                batch_deleted = delete_batch(db, batch)
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+            processed += len(batch)
+            deleted += batch_deleted
+            _emit(
+                f"Batch {batch_number}/{total_batches} committed: "
+                f"deleted {batch_deleted}; deleted total {deleted}; "
+                f"remaining candidates {total - processed}."
+            )
 
-    db.commit()
+    _emit(f"Cleanup complete: deleted {deleted} of {total} candidates.")
+    return deleted
 
 
 def cleanup_local_pollution(
@@ -216,19 +309,27 @@ def cleanup_local_pollution(
     app_env: str,
     confirm: bool = False,
     explicit_company_ids: tuple[int, ...] = (),
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    verbose: bool = False,
 ) -> CleanupPlan:
     ensure_cleanup_environment(app_env)
     plan = build_cleanup_plan(db, explicit_company_ids=explicit_company_ids)
-    print_plan(plan)
+    print_plan(plan, verbose=verbose)
     if not confirm:
-        print("\nDRY RUN: no rows were deleted. Re-run with --confirm to apply this plan.")
+        _emit("\nDRY RUN: no rows were deleted. Re-run with --confirm to apply this plan.")
         return plan
-    execute_cleanup(db, plan)
-    print("\nCleanup committed.")
+    execute_cleanup(db, plan, batch_size=batch_size, verbose=verbose)
     return plan
 
 
-def main() -> int:
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return parsed
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--confirm", action="store_true", help="Commit the printed cleanup plan."
@@ -240,7 +341,22 @@ def main() -> int:
         default=[],
         help="Explicit local company ID to include; repeat for multiple IDs.",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--batch-size",
+        type=_positive_int,
+        default=DEFAULT_BATCH_SIZE,
+        help=f"Candidates committed per batch (default: {DEFAULT_BATCH_SIZE}).",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print every candidate identifier instead of a short sample.",
+    )
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
     db = SessionLocal()
     try:
         cleanup_local_pollution(
@@ -248,6 +364,8 @@ def main() -> int:
             app_env=settings.APP_ENV,
             confirm=args.confirm,
             explicit_company_ids=tuple(args.company_id),
+            batch_size=args.batch_size,
+            verbose=args.verbose,
         )
     except Exception as error:
         db.rollback()
