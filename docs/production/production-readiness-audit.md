@@ -35,6 +35,13 @@ configuration and subscriptions, deployment templates, and operating runbooks.
 The decision remains NO-GO until the external evidence in the final production
 gate exists. See the Phase 77B status table below.
 
+Phase 77C adds a secret-redacting staging/production preflight command, deployment
+artifact regression tests, a signed staging smoke template, migration/rollback and
+production-initialization runbooks, concrete backup/reconciliation and incident
+templates, proxy limits/security headers, and a final evidence gate. These controls
+make staging execution reproducible but do not constitute evidence that DNS, TLS,
+PostgreSQL, a secret manager, backups, restores, alerts, or rollback work externally.
+
 ### Phase 77B blocker status
 
 | Blocker | Repository status | Remaining GO evidence |
@@ -45,6 +52,23 @@ gate exists. See the Phase 77B status table below.
 | C4 deployment/HTTPS | Templates complete, external pending | Real DNS/TLS/hosting/secrets, staging deployment and rollback evidence |
 | C5 recovery/monitoring | Runbooks complete, external pending | Successful restore drill meeting approved RPO/RTO and alert evidence |
 | C6 legal/governance | Checklist complete, external pending | Counsel/business-approved documents and customer acceptance |
+
+### Phase 77C external evidence still required
+
+- A tagged staging deployment using real DNS, trusted TLS, approved PostgreSQL,
+  secret-manager injection, immutable images, and verified proxy/client-IP topology.
+- A completed `staging-smoke-test.md` record, including browser network evidence,
+  platform/client flows, tenant isolation, subscriptions, accounting, and SPA refresh.
+- An encrypted backup plus successful isolated restore drill meeting approved RPO/RTO,
+  with row counts, Alembic revision, accounting reconciliation, and owner sign-off.
+- Tested uptime, 5xx, authentication abuse, database, migration, backup, subscription,
+  and applicable AI alerts; current on-call ownership and an incident tabletop.
+- Rehearsed application rollback and approved database recovery decision evidence.
+- Shared rate limiting, administrator MFA/session risk disposition, and legal,
+  privacy, accounting-scope, support, billing, retention, and customer approvals.
+
+Until every applicable row in `final-production-gate.md` has dated evidence and
+named approval, the production decision remains **NO-GO**.
 
 The application may continue to be demonstrated locally. A limited production
 pilot becomes a GO only after all critical blockers below are implemented,

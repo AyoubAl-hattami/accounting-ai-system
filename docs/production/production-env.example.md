@@ -5,7 +5,7 @@ secret. Store production secrets in the selected platform's secret manager and
 inject them at runtime. Never commit a populated `.env`, frontend build output,
 database dump, provider key, token, tunnel log, or backup.
 
-Production configuration must be reviewed together with the deployment artifact.
+Production and staging configuration must be reviewed together with the deployment artifact.
 Phase 77B enforces the application settings in this reference at backend startup
 and guards the frontend production build. Infrastructure-owned controls below
 still require operator and hosting-provider verification.
@@ -120,6 +120,15 @@ the production deployment:
 ## Preflight checks
 
 Before every production start or deploy:
+
+```powershell
+python backend/scripts/production_preflight.py --mode staging
+python backend/scripts/production_preflight.py --mode production
+```
+
+Run only the command matching the target environment after its variables have
+been injected by the secret manager. The command prints pass/fail check names,
+never configured values. A failed check blocks the deployment.
 
 1. Confirm no value contains `localhost`, `127.0.0.1`, demo credentials, CI keys,
    reserved example placeholders, or temporary tunnel domains.
