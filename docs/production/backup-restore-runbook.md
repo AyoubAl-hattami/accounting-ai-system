@@ -21,12 +21,19 @@ restored regularly. A successful backup job alone is not recovery evidence.
 Use secret-manager-injected `DATABASE_URL`; never paste it into this document or logs.
 
 ```powershell
-pg_dump --format=custom --no-owner --no-acl --file <encrypted-staging-path> $env:DATABASE_URL
-pg_restore --list <encrypted-staging-path>
-pg_restore --clean --if-exists --no-owner --no-acl --dbname $env:RESTORE_DATABASE_URL <encrypted-staging-path>
+$backupFile = "<approved-encrypted-volume>\accounting-<UTC-timestamp>.dump"
+pg_dump --dbname $env:BACKUP_DATABASE_URL --format=custom --no-owner --no-acl --file $backupFile
+Get-FileHash -Algorithm SHA256 -LiteralPath $backupFile
+pg_restore --list $backupFile
+
+# RESTORE_DATABASE_URL must identify a new, isolated drill database.
+pg_restore --dbname $env:RESTORE_DATABASE_URL --no-owner --no-acl --exit-on-error $backupFile
 ```
 
-`RESTORE_DATABASE_URL` must point to a newly provisioned isolated drill database,
+`BACKUP_DATABASE_URL` and `RESTORE_DATABASE_URL` are secret-manager-injected and
+must never be echoed. The backup path is a mounted encrypted destination, not
+source control or the application container filesystem. `RESTORE_DATABASE_URL`
+must point to a newly provisioned empty isolated drill database,
 never the active production database. Verify checksums before restore and securely
 remove temporary plaintext material according to the retention policy.
 
@@ -44,6 +51,21 @@ remove temporary plaintext material according to the retention policy.
 7. Confirm tenant isolation and login only with drill-specific rotated credentials.
 8. Record missing/corrupt rows, duration, achieved RPO/RTO, and approver sign-off.
 9. Destroy the isolated restore under provider policy after evidence is retained.
+
+Record source and restore counts in a restricted worksheet. Query aggregates only:
+
+```sql
+SELECT 'companies' AS entity, COUNT(*) FROM companies
+UNION ALL SELECT 'users', COUNT(*) FROM users
+UNION ALL SELECT 'company_users', COUNT(*) FROM company_users
+UNION ALL SELECT 'subscriptions', COUNT(*) FROM company_subscriptions
+UNION ALL SELECT 'accounts', COUNT(*) FROM accounts
+UNION ALL SELECT 'journal_entries', COUNT(*) FROM journal_entries
+UNION ALL SELECT 'journal_lines', COUNT(*) FROM journal_lines;
+```
+
+The drill must also record the `alembic_version` row and compare accountant-approved
+report totals for representative tenants. Row counts alone do not prove ledger integrity.
 
 ## Migration and deployment recovery checklist
 
