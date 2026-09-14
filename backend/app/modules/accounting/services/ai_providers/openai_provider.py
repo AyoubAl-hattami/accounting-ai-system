@@ -30,6 +30,26 @@ from app.modules.accounting.services.gemini_agent_contract import (
 
 logger = logging.getLogger(__name__)
 
+# Measured SDK defaults, not assumed: OpenAI ships
+# Timeout(connect=5.0, read=600, write=600, pool=600) with max_retries=2, so a
+# stalled call could hold a worker for ~30 minutes; google-genai defaults to
+# timeout=None, i.e. no limit. These are synchronous calls on FastAPI's
+# threadpool with --workers 2, so a slow provider stalls logins and journal
+# posting, not just the assistant.
+#
+# Each provider already wraps its call in `except Exception` and falls back to
+# the deterministic rules engine. That fallback never fired, because a hang is
+# not an exception. The timeout is what turns the hang into the exception the
+# existing handler is already waiting for.
+#
+# 20s sits well inside the 60s proxy_read_timeout in nginx.production.conf,
+# leaving room for the fallback to answer before the proxy gives up.
+REQUEST_TIMEOUT_SECONDS = 20.0
+
+# One retry, not the SDK default of two: three attempts at the timeout above
+# would outlast the proxy, and the rules fallback beats a 504.
+_MAX_RETRIES = 1
+
 
 def _build_system_prompt(language: str) -> str:
     """Backward-compatible helper backed by the canonical contract."""
@@ -173,7 +193,11 @@ class OpenAIJournalSuggestionProvider(BaseJournalSuggestionProvider):
         language: str,
     ) -> dict:
         """Make the actual OpenAI API call and validate the response."""
-        client = OpenAI(api_key=self._api_key)
+        client = OpenAI(
+            api_key=self._api_key,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+            max_retries=_MAX_RETRIES,
+        )
 
         system_prompt = _build_system_prompt(language)
         user_prompt = _build_user_prompt(description, accounts)

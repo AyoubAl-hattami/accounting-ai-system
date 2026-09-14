@@ -81,6 +81,9 @@ from app.modules.accounting.services.gemini_agent_contract import (
     build_agent_prompt,
     general_answer_task_instructions,
 )
+from app.modules.accounting.services.ai_providers.gemini_provider import (
+    REQUEST_TIMEOUT_SECONDS as GEMINI_REQUEST_TIMEOUT_SECONDS,
+)
 from app.modules.accounting.services.account_mapper import map_to_accounts
 from app.modules.accounting.services.audit_service import list_audit_logs
 from app.modules.accounting.services.reports_application_facade import (
@@ -951,7 +954,11 @@ def _call_gemini_for_answer(
 
     try:
         from google import genai
-        client = genai.Client(api_key=api_key)
+        # Milliseconds; see ai_providers/gemini_provider.py for why 20s.
+        client = genai.Client(
+            api_key=api_key,
+            http_options={"timeout": int(GEMINI_REQUEST_TIMEOUT_SECONDS * 1000)},
+        )
         response = client.models.generate_content(
             model=model,
             contents=prompt.user_message,

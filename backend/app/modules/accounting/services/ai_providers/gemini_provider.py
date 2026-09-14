@@ -31,6 +31,26 @@ from app.modules.accounting.services.gemini_agent_contract import (
 
 logger = logging.getLogger(__name__)
 
+# Measured SDK defaults, not assumed: OpenAI ships
+# Timeout(connect=5.0, read=600, write=600, pool=600) with max_retries=2, so a
+# stalled call could hold a worker for ~30 minutes; google-genai defaults to
+# timeout=None, i.e. no limit. These are synchronous calls on FastAPI's
+# threadpool with --workers 2, so a slow provider stalls logins and journal
+# posting, not just the assistant.
+#
+# Each provider already wraps its call in `except Exception` and falls back to
+# the deterministic rules engine. That fallback never fired, because a hang is
+# not an exception. The timeout is what turns the hang into the exception the
+# existing handler is already waiting for.
+#
+# 20s sits well inside the 60s proxy_read_timeout in nginx.production.conf,
+# leaving room for the fallback to answer before the proxy gives up.
+REQUEST_TIMEOUT_SECONDS = 20.0
+
+# google-genai documents HttpOptions.timeout as milliseconds and divides by
+# 1000.0 before handing it to httpx.
+_TIMEOUT_MS = int(REQUEST_TIMEOUT_SECONDS * 1000)
+
 
 def _build_prompt(
     description: str,
@@ -161,7 +181,10 @@ class GeminiJournalSuggestionProvider(BaseJournalSuggestionProvider):
         language: str,
     ) -> dict:
         """Make the actual Gemini API call and validate the response."""
-        client = genai.Client(api_key=self._api_key)
+        client = genai.Client(
+            api_key=self._api_key,
+            http_options={"timeout": _TIMEOUT_MS},
+        )
 
         prompt = _build_prompt(description, accounts, language)
 
