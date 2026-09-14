@@ -462,6 +462,7 @@ def _tool_trace_amount(
         for line in lines:
             lines_by_entry.setdefault(line.journal_entry_id, []).append(line)
         accounts = {a.id: a for a in db.scalars(select(AccountModel).where(AccountModel.company_id == company_id)).all()}
+        actors = _tool_get_entry_actors(db, company_id, entry_ids)
         result = []
         for entry in entries:
             entry_lines = lines_by_entry.get(entry.id, [])
@@ -472,7 +473,7 @@ def _tool_trace_amount(
             credit_match = any(line.credit == target for line in matching)
             debit_accounts = [accounts[line.account_id].name for line in entry_lines if line.debit > 0 and line.account_id in accounts]
             credit_accounts = [accounts[line.account_id].name for line in entry_lines if line.credit > 0 and line.account_id in accounts]
-            actor = _tool_get_entry_actor(db, company_id, entry.id)
+            actor = actors[entry.id]
             result.append({
                 "id": entry.id,
                 "entry_no": entry.entry_no,
@@ -537,6 +538,7 @@ def _tool_get_pl_contributors(
         by_entry: dict[int, list[tuple[JournalLineModel, AccountModel]]] = {}
         for line, account in lines:
             by_entry.setdefault(line.journal_entry_id, []).append((line, account))
+        actors = _tool_get_entry_actors(db, company_id, ids)
         result = []
         for entry in entries:
             relevant = by_entry.get(entry.id, [])
@@ -548,7 +550,7 @@ def _tool_get_pl_contributors(
                 reason = "report_expense_contribution"
             if contribution == 0:
                 continue
-            actor = _tool_get_entry_actor(db, company_id, entry.id)
+            actor = actors[entry.id]
             result.append({
                 "id": entry.id, "entry_no": entry.entry_no, "entry_date": str(entry.entry_date),
                 "description": entry.description, "status": entry.status, "source_type": entry.source_type,
@@ -633,7 +635,10 @@ def _tool_get_account_entries(
 
         result = []
         for e in entries:
-            db.refresh(e, ["lines"])
+            # No db.refresh(e, ["lines"]) here: JournalEntry.lines is
+            # lazy="selectin", so the select above already loaded every entry's
+            # lines in one extra statement. The refresh re-read the entry row
+            # and its lines again, once per entry.
             lines = []
             for line in e.lines:
                 acc = all_accounts.get(line.account_id)
@@ -657,28 +662,78 @@ def _tool_get_account_entries(
         return []
 
 
-def _tool_get_entry_actor(
-    db: Session, company_id: int, entry_id: int,
-) -> dict:
-    """Get who created/posted a specific journal entry from audit logs."""
-    result = {"created_by": None, "posted_by": None, "reviewed_by": None}
+# How many audit rows per entry the actor lookup considers, newest first. This
+# was `list_audit_logs(..., limit=20)` when the lookup ran one entry at a time;
+# the batched query below reproduces it per entry rather than across the batch.
+_ACTOR_AUDIT_LIMIT = 20
+_ACTOR_CREATE_ACTIONS = ("create_journal_entry", "create_journal_draft_via_gemini")
+
+
+def _tool_get_entry_actors(
+    db: Session, company_id: int, entry_ids: list[int],
+) -> dict[int, dict]:
+    """Get who created/posted each journal entry from audit logs, in one query.
+
+    This used to be `_tool_get_entry_actor`, called once per entry from inside
+    the result loops of _tool_trace_amount and _tool_get_pl_contributors -- one
+    audit_logs SELECT per row returned to the assistant.
+
+    The per-entry `limit=20` is preserved with a window function rather than
+    dropped for a plain IN query. It is not cosmetic: an entry whose creation
+    log has been pushed out of its twenty newest rows reports created_by=None
+    today, and a batch-wide limit or no limit at all would silently start
+    reporting a creator for it.
+
+    Returns an entry_id -> actor dict for every id asked for, so callers can
+    index it directly.
+    """
+    actors: dict[int, dict] = {
+        entry_id: {"created_by": None, "posted_by": None, "reviewed_by": None}
+        for entry_id in entry_ids
+    }
+    if not entry_ids:
+        return actors
     try:
-        logs = list_audit_logs(
-            db=db, company_id=company_id,
-            entity_type="journal_entry", entity_id=entry_id,
-            limit=20,
+        ranked = (
+            select(
+                AuditLogModel.entity_id.label("entity_id"),
+                AuditLogModel.action.label("action"),
+                AuditLogModel.actor.label("actor"),
+                AuditLogModel.actor_name.label("actor_name"),
+                AuditLogModel.actor_email.label("actor_email"),
+                func.row_number()
+                .over(
+                    partition_by=AuditLogModel.entity_id,
+                    order_by=AuditLogModel.created_at.desc(),
+                )
+                .label("recency"),
+            )
+            .where(
+                AuditLogModel.company_id == company_id,
+                AuditLogModel.entity_type == "journal_entry",
+                AuditLogModel.entity_id.in_(entry_ids),
+            )
+            .subquery()
         )
-        for log in logs:
-            actor = log.actor_name or log.actor_email or log.actor
-            if log.action in ("create_journal_entry", "create_journal_draft_via_gemini") and not result["created_by"]:
+        rows = db.execute(
+            select(ranked)
+            .where(ranked.c.recency <= _ACTOR_AUDIT_LIMIT)
+            # Newest first within each entry, matching the order the previous
+            # per-entry query returned: the first match for an action wins.
+            .order_by(ranked.c.entity_id, ranked.c.recency)
+        ).all()
+        for row in rows:
+            result = actors[row.entity_id]
+            actor = row.actor_name or row.actor_email or row.actor
+            if row.action in _ACTOR_CREATE_ACTIONS and not result["created_by"]:
                 result["created_by"] = actor
-            elif log.action == "post_journal_entry" and not result["posted_by"]:
+            elif row.action == "post_journal_entry" and not result["posted_by"]:
                 result["posted_by"] = actor
-            elif log.action == "review_journal_entry" and not result["reviewed_by"]:
+            elif row.action == "review_journal_entry" and not result["reviewed_by"]:
                 result["reviewed_by"] = actor
     except Exception as exc:
-        logger.warning("_tool_get_entry_actor failed: %s", exc)
-    return result
+        logger.warning("_tool_get_entry_actors failed: %s", exc)
+    return actors
 
 
 # ── Intent classification (deterministic) ────────────────────────────────────
