@@ -56,9 +56,8 @@ export function useCompanyUsers({ companyId, skip }: UseCompanyUsersOptions) {
           }));
           
           items = [...pendingUsers, ...items];
-        } catch (invErr) {
+        } catch {
           // If invitations fail (e.g., non-admin user), just ignore and show regular users
-          console.error("Failed to fetch pending invitations", invErr);
         }
       }
 
