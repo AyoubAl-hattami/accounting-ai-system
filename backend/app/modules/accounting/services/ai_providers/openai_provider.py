@@ -193,6 +193,15 @@ class OpenAIJournalSuggestionProvider(BaseJournalSuggestionProvider):
         language: str,
     ) -> dict:
         """Make the actual OpenAI API call and validate the response."""
+        # Constructed per call on purpose; caching it is WONTFIX (finding D6).
+        # A module-level cached client moves construction out of this module,
+        # and `openai_provider.OpenAI` is the seam that test_ai_provider_factory
+        # and test_gemini_agent_contract patch -- twelve sites across the two
+        # files -- to assert the contract version is sent and that the system
+        # prompt and user text are never logged. Caching would also hold a
+        # MagicMock across tests. What it buys is TLS and connection reuse on a
+        # call already bounded at REQUEST_TIMEOUT_SECONDS; the hang that made
+        # this path dangerous is fixed above. Not worth the seam.
         client = OpenAI(
             api_key=self._api_key,
             timeout=REQUEST_TIMEOUT_SECONDS,
