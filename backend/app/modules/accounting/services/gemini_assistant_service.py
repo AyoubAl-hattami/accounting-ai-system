@@ -3610,7 +3610,12 @@ def dispatch_gemini_assistant(
             ),
             intent="access_denied", confidence="high", data_sources=[],
         )
-    if intent in ("report_question", "balance_question", "journal_question", "explain_question") and user_role not in _CAN_READ_REPORTS:
+    # pl_contribution_question belongs here because its handler answers with
+    # profit_loss_report + journal_entries -- the same data this gate protects.
+    # It was dispatched at line 3641 with no gate at all, so a role outside
+    # _CAN_READ_REPORTS received real journal entries: number, date, description
+    # and amount.
+    if intent in ("report_question", "balance_question", "journal_question", "explain_question", "pl_contribution_question") and user_role not in _CAN_READ_REPORTS:
         return GeminiAssistantReply(
             reply=(
                 "🔒 ليس لديك صلاحية الوصول إلى هذه البيانات."
