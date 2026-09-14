@@ -19,6 +19,7 @@ from __future__ import annotations
 import io
 from datetime import datetime
 from decimal import Decimal
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT
@@ -99,7 +100,18 @@ def _build_styles():
 
 
 def _p(text: str, style) -> Paragraph:
-    return Paragraph(str(text), style)
+    """Render operator-supplied text as text, not as markup.
+
+    ReportLab's Paragraph parses a small HTML dialect, so an account named
+    ``<a href="...">`` embedded a real clickable link annotation in the exported
+    PDF, ``Tools <Legacy>`` silently lost the bracketed part, ``R&D Expense``
+    rendered as ``R&D; Expense``, and an unclosed known tag such as
+    ``Q1 <b>Bonus`` raised and returned HTTP 500.
+
+    Deliberate markup does not come through here -- the status line and the
+    report titles build their own Paragraph directly.
+    """
+    return Paragraph(escape(str(text)), style)
 
 
 def _common_table_style(n_rows: int) -> TableStyle:
@@ -406,7 +418,11 @@ def account_ledger_to_pdf(report: AccountLedgerRead) -> bytes:
 
     elements.append(Paragraph("Account Ledger", styles["ReportTitle"]))
     elements.append(Paragraph(
-        f"Account: {report.account_code} – {report.account_name} ({report.account_type})",
+        # Escaped individually: this header builds its Paragraph directly
+        # rather than through _p, so it is the one place operator text
+        # reaches ReportLab without passing that helper.
+        f"Account: {escape(report.account_code)} – {escape(report.account_name)} "
+        f"({escape(report.account_type)})",
         styles["ReportSubtitle"],
     ))
     date_parts = []
