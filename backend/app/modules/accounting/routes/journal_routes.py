@@ -86,6 +86,26 @@ def validate_journal_accounts(
             )
 
 
+# The unique index behind the duplicate-entry_no check below.
+UNIQUE_ENTRY_NO_CONSTRAINT = "uq_journal_entries_company_entry_no"
+
+
+def _is_duplicate_entry_no(exc: IntegrityError) -> bool:
+    """Whether this violation is the duplicate entry_no and not some other one.
+
+    journal_entries also carries four foreign keys, a status check and a second
+    unique index. Mapping every IntegrityError to 409 would report any of them
+    as "entry number already exists", so the constraint is identified by name.
+    psycopg2 supplies it in diag; the string fallback is for a driver that does
+    not, and anything unrecognised is re-raised rather than guessed at.
+    """
+    diagnostics = getattr(getattr(exc, "orig", None), "diag", None)
+    name = getattr(diagnostics, "constraint_name", None)
+    if name:
+        return name == UNIQUE_ENTRY_NO_CONSTRAINT
+    return UNIQUE_ENTRY_NO_CONSTRAINT in str(getattr(exc, "orig", None) or exc)
+
+
 @router.post(
     "",
     response_model=JournalEntryRead,
@@ -192,7 +212,23 @@ def create_journal_entry_endpoint(
         ),
     )
     repository = SqlAlchemyJournalRepository(db)
-    journal_entry = CreateJournalEntry(repository).execute(command)
+    # The get_journal_entry_by_no check above closes the ordinary case, but it
+    # is a read followed by a write with no lock between them. Two requests
+    # carrying the same entry_no both pass it, and the second one's flush hits
+    # uq_journal_entries_company_entry_no. Without this the client got a 500 for
+    # a conflict the endpoint already knows how to describe; the database was
+    # never at risk, only the answer was wrong.
+    try:
+        journal_entry = CreateJournalEntry(repository).execute(command)
+    except IntegrityError as exc:
+        if not _is_duplicate_entry_no(exc):
+            raise
+        # SqlAlchemyJournalRepository.create already rolled the session back
+        # before re-raising, so nothing is left to undo here.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Journal entry number already exists for this company",
+        ) from exc
 
     prepare_audit_log(
         db=db,
