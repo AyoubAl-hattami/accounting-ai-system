@@ -63,6 +63,10 @@ def count_journal_entries_for_fiscal_year(db: Session, fiscal_year_id: int) -> i
     return SqlAlchemyJournalRepository(db).count_by_fiscal_year(fiscal_year_id)
 
 
+def count_journal_entries_for_fiscal_period(db: Session, fiscal_period_id: int) -> int:
+    return SqlAlchemyJournalRepository(db).count_by_fiscal_period(fiscal_period_id)
+
+
 def get_fiscal_period_by_no(
     db: Session,
     fiscal_year_id: int,

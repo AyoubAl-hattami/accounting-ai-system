@@ -318,3 +318,11 @@ class SqlAlchemyJournalRepository(JournalRepository):
             .where(JournalEntry.fiscal_year_id == fiscal_year_id)
         )
         return int(self._db.scalar(statement) or 0)
+
+    def count_by_fiscal_period(self, fiscal_period_id: int) -> int:
+        statement = (
+            select(func.count())
+            .select_from(JournalEntry)
+            .where(JournalEntry.fiscal_period_id == fiscal_period_id)
+        )
+        return int(self._db.scalar(statement) or 0)
