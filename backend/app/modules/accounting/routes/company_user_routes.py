@@ -4,11 +4,9 @@ from sqlalchemy.orm import Session
 # pyrefly: ignore [missing-import]
 from sqlalchemy import func, select
 
-from app.application.company_users.dto import CreateCompanyUserCommand, UpdateCompanyUserCommand
+from app.application.company_users.dto import UpdateCompanyUserCommand
 from app.application.company_users.use_cases import (
-    CreateCompanyUser,
     GetCompanyUser,
-    GetCompanyUserByCompanyAndUser,
     ListCompanyUsers,
     SetCompanyUserActive,
     UpdateCompanyUser,
@@ -22,14 +20,10 @@ from app.core.pagination import PaginatedResponse
 from app.infrastructure.database.sqlalchemy.repositories.company_user_repository import (
     SqlAlchemyCompanyUserRepository,
 )
-from app.infrastructure.database.sqlalchemy.repositories.user_repository import (
-    SqlAlchemyUserRepository,
-)
 from app.modules.accounting.models.user import User
 from app.modules.accounting.models.company_user import CompanyUser
 from app.modules.accounting.models.company_user_invitation import CompanyUserInvitation
 from app.modules.accounting.schemas.company_user import (
-    CompanyUserCreate,
     CompanyUserRead,
     CompanyUserUpdate,
 )
@@ -218,77 +212,6 @@ def accept_invitation_endpoint(
         raise _invitation_error_to_http(exc) from exc
     db.commit()
     return result
-
-
-@router.post(
-    "",
-    response_model=CompanyUserRead,
-    status_code=status.HTTP_201_CREATED,
-)
-def create_company_user_endpoint(
-    payload: CompanyUserCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    ensure_company_access(
-        db=db,
-        current_user=current_user,
-        company_id=payload.company_id,
-        allowed_roles={"admin"},
-    )
-
-    # Validate company exists
-    from app.modules.accounting.models.company import Company
-    from sqlalchemy import select as sa_select
-    if not db.scalar(sa_select(Company).where(Company.id == payload.company_id)):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Company not found",
-        )
-
-    # Validate user exists
-    user_repo = SqlAlchemyUserRepository(db)
-    if user_repo.get(payload.user_id) is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-
-    cu_repo = SqlAlchemyCompanyUserRepository(db)
-
-    existing = GetCompanyUserByCompanyAndUser(cu_repo).execute(
-        company_id=payload.company_id, user_id=payload.user_id
-    )
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="User is already assigned to this company",
-        )
-
-    company_user = CreateCompanyUser(cu_repo).execute(
-        CreateCompanyUserCommand(
-            company_id=payload.company_id,
-            user_id=payload.user_id,
-            role=payload.role,
-            is_active=payload.is_active,
-        )
-    )
-
-    prepare_audit_log(
-        db=db,
-        company_id=company_user.company_id,
-        actor=current_user.email,
-        actor_user_id=current_user.id,
-        actor_email=current_user.email,
-        actor_name=current_user.full_name,
-        action="create_company_user",
-        entity_type="company_user",
-        entity_id=company_user.id,
-        description=f"Added user {payload.user_id} to company {payload.company_id} with role {company_user.role}",
-    )
-    db.commit()
-
-    return company_user
 
 
 @router.get(

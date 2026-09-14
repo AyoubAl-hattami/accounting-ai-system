@@ -82,40 +82,6 @@ export function useCompanyUsers({ companyId, skip }: UseCompanyUsersOptions) {
     }
   }, [companyId, skip]);
 
-  const addCompanyUser = useCallback(async (payload: {
-    company_id: number;
-    user_id: number;
-    role: CompanyUserRole;
-    is_active: boolean;
-  }): Promise<CompanyUser | null> => {
-    setIsSubmitting(true);
-    setSubmitError(null);
-
-    try {
-      const response = await apiClient.post<CompanyUser>('/company-users', payload);
-      return response.data;
-    } catch (err) {
-      if (axios.isAxiosError(err)) {
-        const detail = err.response?.data?.detail;
-        if (typeof detail === 'string') {
-          setSubmitError(detail);
-        } else if (Array.isArray(detail)) {
-          const msg = detail
-            .map((d: { loc: (string | number)[]; msg: string }) => `${d.loc.join('.')}: ${d.msg}`)
-            .join(', ');
-          setSubmitError(msg);
-        } else {
-          setSubmitError('Failed to add company user. Please check your inputs.');
-        }
-      } else {
-        setSubmitError('Failed to add company user. An unexpected error occurred.');
-      }
-      return null;
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, []);
-
   const inviteCompanyUser = useCallback(async (payload: {
     company_id: number;
     email: string;
@@ -314,7 +280,6 @@ export function useCompanyUsers({ companyId, skip }: UseCompanyUsersOptions) {
     statusCode,
     fetchUsers,
     pageSize: USERS_PAGE_SIZE,
-    addCompanyUser,
     inviteCompanyUser,
     updateCompanyUser,
     removeCompanyAccess,

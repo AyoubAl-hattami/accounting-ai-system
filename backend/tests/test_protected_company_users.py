@@ -39,14 +39,37 @@ def _create_company(base_url, headers, prefix="Company"):
     return response.json()["id"]
 
 
-def _add_company_user(base_url, auth_headers, company_id, user_id, role="viewer"):
-    response = requests.post(
+def _add_company_user(base_url, auth_headers, company_id, user_id, email, role="viewer"):
+    """Give an existing account membership of a company.
+
+    Goes through the invitation endpoint, which is the only supported path now
+    that the direct ``POST /company-users`` route is gone.  For an address that
+    already has an account, ``create_invitation`` grants the membership
+    immediately and answers ``status="added_existing"``.
+
+    That answer carries no account details by design, so the membership id is
+    resolved with a follow-up read.  Keying the grant on an email the caller
+    already knows -- rather than on a guessable integer id -- is the whole point
+    of the change: there is no longer a request that turns "user #37" into that
+    person's name and address.
+    """
+    invite = requests.post(
+        f"{base_url}/company-users/invitations",
+        headers=auth_headers,
+        json={"company_id": company_id, "email": email, "role": role},
+    )
+    assert invite.status_code == 200, invite.text
+    assert invite.json()["status"] == "added_existing", invite.text
+
+    listing = requests.get(
         f"{base_url}/company-users",
         headers=auth_headers,
-        json={"company_id": company_id, "user_id": user_id, "role": role},
+        params={"company_id": company_id, "user_id": user_id},
     )
-    assert response.status_code == 201, response.text
-    return response.json()["id"]
+    assert listing.status_code == 200, listing.text
+    items = listing.json()["items"]
+    assert len(items) == 1, listing.text
+    return items[0]["id"]
 
 
 def test_company_users_require_authentication(base_url, deterministic_accounting_bootstrap):
@@ -144,13 +167,9 @@ def test_remove_company_access_flow(base_url, deterministic_accounting_bootstrap
     assert login.status_code == 200
     user_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
-    add_member = requests.post(
-        f"{base_url}/company-users",
-        json={"company_id": bs.company_id, "user_id": user_id, "role": "viewer"},
-        headers=bs.auth_headers,
+    company_user_id = _add_company_user(
+        base_url, bs.auth_headers, bs.company_id, user_id, unique_email, "viewer"
     )
-    assert add_member.status_code == 201
-    company_user_id = add_member.json()["id"]
 
     acc_check = requests.get(
         f"{base_url}/accounts?company_id={bs.company_id}",
@@ -407,13 +426,9 @@ def test_restore_company_access_flow(
     )
     user_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
-    add_member = requests.post(
-        f"{base_url}/company-users",
-        json={"company_id": bs.company_id, "user_id": user_id, "role": "viewer"},
-        headers=bs.auth_headers,
+    company_user_id = _add_company_user(
+        base_url, bs.auth_headers, bs.company_id, user_id, unique_email, "viewer"
     )
-    assert add_member.status_code == 201
-    company_user_id = add_member.json()["id"]
 
     requests.patch(
         f"{base_url}/company-users/{company_user_id}/remove-access",
@@ -585,12 +600,9 @@ def test_current_user_company_role_resolutions(base_url, deterministic_accountin
     assert reg1.status_code == 201
     acc_user_id = reg1.json()["id"]
 
-    add1 = requests.post(
-        f"{base_url}/company-users",
-        json={"company_id": bs.company_id, "user_id": acc_user_id, "role": "accountant"},
-        headers=bs.auth_headers,
+    _add_company_user(
+        base_url, bs.auth_headers, bs.company_id, acc_user_id, acc_email, "accountant"
     )
-    assert add1.status_code == 201, f"Failed to add accountant: {add1.text}"
 
     login1 = requests.post(f"{base_url}/auth/login", json={"email": acc_email, "password": PASSWORD})
     acc_headers = {"Authorization": f"Bearer {login1.json()['access_token']}"}
@@ -611,13 +623,9 @@ def test_current_user_company_role_resolutions(base_url, deterministic_accountin
     assert reg2.status_code == 201
     view_user_id = reg2.json()["id"]
 
-    add2 = requests.post(
-        f"{base_url}/company-users",
-        json={"company_id": bs.company_id, "user_id": view_user_id, "role": "viewer"},
-        headers=bs.auth_headers,
+    view_company_user_id = _add_company_user(
+        base_url, bs.auth_headers, bs.company_id, view_user_id, view_email, "viewer"
     )
-    assert add2.status_code == 201, f"Failed to add viewer: {add2.text}"
-    view_company_user_id = add2.json()["id"]
 
     login2 = requests.post(f"{base_url}/auth/login", json={"email": view_email, "password": PASSWORD})
     view_headers = {"Authorization": f"Bearer {login2.json()['access_token']}"}
@@ -684,7 +692,7 @@ def test_company_admin_cannot_globally_change_user_in_same_company(base_url):
     _, _, auth_headers = _register_and_login(base_url, "same_company_admin", "Same Company Admin")
     target_user_id, target_email, _ = _register_and_login(base_url, "same_company_target", "Same Company Target")
     company_id = _create_company(base_url, auth_headers, "SameCompany")
-    _add_company_user(base_url, auth_headers, company_id, target_user_id, "viewer")
+    _add_company_user(base_url, auth_headers, company_id, target_user_id, target_email, "viewer")
 
     deactivate = requests.patch(
         f"{base_url}/company-users/users/{target_user_id}/deactivate?company_id={company_id}",
@@ -717,8 +725,8 @@ def test_viewer_cannot_deactivate_or_reactivate_company_user(
     viewer_headers = accounting_factory.auth_headers_for(viewer_user)
 
     company_id = _create_company(base_url, auth_headers, "RoleCompany")
-    _add_company_user(base_url, auth_headers, company_id, viewer_user.id, "viewer")
-    _add_company_user(base_url, auth_headers, company_id, target_user.id, "viewer")
+    _add_company_user(base_url, auth_headers, company_id, viewer_user.id, viewer_user.email, "viewer")
+    _add_company_user(base_url, auth_headers, company_id, target_user.id, target_user.email, "viewer")
 
     bad_deactivate = requests.patch(
         f"{base_url}/company-users/users/{target_user.id}/deactivate?company_id={company_id}",
@@ -754,7 +762,9 @@ def test_cross_company_access_isolated_from_global_account_status(
 
     company_a_id = _create_company(base_url, admin_a_headers, "CrossTenantA")
     company_b_id = _create_company(base_url, target_headers, "CrossTenantB")
-    membership_a_id = _add_company_user(base_url, admin_a_headers, company_a_id, target_id, "viewer")
+    membership_a_id = _add_company_user(
+        base_url, admin_a_headers, company_a_id, target_id, target_email, "viewer"
+    )
 
     removed = requests.patch(
         f"{base_url}/company-users/{membership_a_id}/remove-access",
