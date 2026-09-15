@@ -87,6 +87,7 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
 
   const {
     users,
+    invitations,
     total,
     isLoading,
     error,
@@ -114,13 +115,33 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
     }
   }, [selectedCompanyId, skip, fetchUsers]);
 
+  /* `users` is one page. /company-users takes no role filter, so a company-wide
+     admin count is not obtainable from it, and counting admins on the current
+     page can only ever be an undercount -- two admins on different pages read
+     as one. That made the last-admin lock disable "Remove access" on an admin
+     row while a second admin plainly existed, with no way for the user to tell
+     why. The count is trusted only when this page holds the whole company;
+     otherwise the control stays enabled and the backend's own guard answers,
+     which it does with an explicit 400 (company_user_routes.py:329-340). */
+  const adminCountIsComplete = total <= users.length;
+
   const isOnlyAdmin = useMemo(() => {
     return users.filter((u) => u.role === 'admin' && u.is_active).length <= 1;
   }, [users]);
 
   // Tab-based user categorisation and search
   const filteredUsers = useMemo(() => {
-    return users.filter((u) => {
+    /* Pending invitations are company-wide and unpaginated; members arrive one
+       page at a time. The tabs draw from whichever of the two they are about,
+       and `all` shows both -- see the note on PaginationControls below. */
+    const source =
+      activeTab === 'pending'
+        ? invitations
+        : activeTab === 'all'
+          ? [...invitations, ...users]
+          : users;
+
+    return source.filter((u) => {
       // 1. Tab check
       if (activeTab === 'active') {
         if (u.is_invitation || !u.is_active || u.user_is_active === false) return false;
@@ -149,7 +170,7 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
 
       return true;
     });
-  }, [users, activeTab, searchQuery, roleFilter]);
+  }, [users, invitations, activeTab, searchQuery, roleFilter]);
 
   const formatDateTime = (dateString: string | null | undefined): string => {
     if (!dateString) return '—';
@@ -330,7 +351,7 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
     if (!canManageCompanyUsers(userRole)) return null;
 
     const grow = layout === 'card' ? 'flex-1 justify-center' : '';
-    const lockedLastAdmin = isOnlyAdmin && user.role === 'admin';
+    const lockedLastAdmin = adminCountIsComplete && isOnlyAdmin && user.role === 'admin';
     /* The platform-wide actions carry the longest labels and are the rarest to
        use, so in a table row they shrink to their icon and keep the wording in
        the tooltip and the confirmation dialog. */
@@ -676,6 +697,13 @@ function CompanyUsersContent({ selectedCompanyId, companiesLoading, userRole }: 
               ))}
             </div>
 
+            {/* KNOWN GAP, filed as one finding: `total` counts members on the
+                server, while the rows above are filtered here, on one page.
+                So a tab or a search can render fewer rows than the control
+                claims, and `all` renders more. Closing it needs /company-users
+                to accept the tab, search and role filters and return a matching
+                total; until then the control describes the member list it
+                paginates, not the rows on screen. */}
             <PaginationControls
               skip={skip}
               limit={pageSize}
