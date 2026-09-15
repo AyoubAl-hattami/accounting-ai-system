@@ -149,8 +149,6 @@ def get_owned_conversation(
     )
 
 
-
-
 def list_owned_conversations(
     db: Session,
     *,
