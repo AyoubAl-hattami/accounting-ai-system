@@ -93,7 +93,11 @@ export default function AcceptInvitePage() {
   };
 
   const handleLoginRedirect = () => {
-    navigate(`/login?redirect=/accept-invite?token=${token}`);
+    // Encoded as one value. Unencoded, the nested `?token=` ended the
+    // redirect parameter and became a separate query parameter of /login,
+    // so the invitation was lost on the way to the sign-in form.
+    const target = encodeURIComponent(`/accept-invite?token=${token}`);
+    navigate(`/login?redirect=${target}`);
   };
 
   if (isLoading) {

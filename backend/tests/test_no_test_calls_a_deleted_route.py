@@ -36,19 +36,13 @@ HOLE = "\x00"
 # cannot outlive the code it excuses.
 UNRESOLVABLE_CALL_SITES: dict[tuple[str, int], str] = {}
 
-# Call sites that name a route the application does not serve, and that predate
-# this guard.  They are listed so it can be introduced green rather than by
-# weakening it.  Each is a defect in its own right, not an exemption earned --
-# and the staleness test below withdraws the excuse as soon as one is fixed.
-KNOWN_ORPHANED_CALL_SITES: dict[tuple[str, int], str] = {
-    ("test_protected_company_users.py", 391):
-        "GET /auth/validate-invite -- no such route. The real one is "
-        "GET /company-users/invitations/validate. The assertion accepts 404, so "
-        "this test has been passing on the absence of the endpoint.",
-    ("test_protected_company_users.py", 394):
-        "POST /auth/accept-invite -- no such route. The real one is "
-        "POST /company-users/invitations/accept. Same vacuous pass as above.",
-}
+# Call sites that name a route the application does not serve.  Empty, and
+# meant to stay that way: it existed to let this guard ship green over two
+# pre-existing orphans in test_protected_company_users, and emptied itself when
+# those were repointed at the real endpoints -- the staleness test below failed
+# the moment they resolved, which is what it is for.  An entry here is a defect
+# being deferred, not an exemption earned.
+KNOWN_ORPHANED_CALL_SITES: dict[tuple[str, int], str] = {}
 
 
 def _template(node: ast.AST) -> str | None:

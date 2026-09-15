@@ -388,14 +388,27 @@ def test_cancel_invitation_flow(base_url, deterministic_accounting_bootstrap):
     )
     assert ok_cancel.status_code == 200
 
-    validate_res = requests.get(f"{base_url}/auth/validate-invite?token={invite_token}")
-    assert validate_res.status_code in (400, 404)
+    # These used to call /auth/validate-invite and /auth/accept-invite, which
+    # are not routes. Both assertions accepted 404, so this test passed on the
+    # absence of the endpoints rather than on the guarantee it names.
+    validate_res = requests.get(
+        f"{base_url}/company-users/invitations/validate",
+        params={"token": invite_token},
+    )
+    # 410 Gone, not 400: the invitation existed and no longer does.
+    assert validate_res.status_code == 410, validate_res.text
+    assert "cancel" in validate_res.text.lower(), validate_res.text
 
     accept_res = requests.post(
-        f"{base_url}/auth/accept-invite?token={invite_token}",
-        json={"password": "NewPassword123", "full_name": "Should Fail"},
+        f"{base_url}/company-users/invitations/accept",
+        json={
+            "token": invite_token,
+            "password": "NewPassword123",
+            "full_name": "Should Fail",
+        },
     )
-    assert accept_res.status_code in (400, 404)
+    assert accept_res.status_code == 410, accept_res.text
+    assert "cancel" in accept_res.text.lower(), accept_res.text
 
     audit = requests.get(
         f"{base_url}/audit-logs?company_id={bs.company_id}",
