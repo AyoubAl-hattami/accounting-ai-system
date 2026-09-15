@@ -13,6 +13,7 @@ from app.modules.accounting.models.assistant_conversation import (
     AssistantConversation,
     AssistantMessage,
 )
+from app.modules.accounting.models.rate_limit_attempt import RateLimitAttempt
 
 __all__ = [
     "Company",
@@ -28,4 +29,5 @@ __all__ = [
     "CompanyUserInvitation",
     "AssistantConversation",
     "AssistantMessage",
+    "RateLimitAttempt",
 ]
