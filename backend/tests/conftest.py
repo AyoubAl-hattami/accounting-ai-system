@@ -7,7 +7,6 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.core.rate_limit import _attempts, _lock
 from app.modules.accounting.services.auth_service import create_user_token
 from factories.accounting import AccountingTestFactory
 
@@ -125,14 +124,25 @@ def pytest_collection_modifyitems(session, config, items):
     )
 
 
-@pytest.fixture(autouse=True)
-def reset_rate_limiter():
-    """Clear in-memory rate-limit state before every test to prevent cross-test pollution."""
-    with _lock:
-        _attempts.clear()
-    yield
-    with _lock:
-        _attempts.clear()
+# There is deliberately no rate-limiter reset fixture here.
+#
+# There used to be one, clearing app.core.rate_limit._attempts around every
+# test.  It never isolated anything.  The limiter it cleared lived in THIS
+# process, while the limiter under test lives in the server process the suite
+# talks to over HTTP -- clearing a dict here could not reach it.  The counters
+# now live in the rate_limit_attempts table, which makes that plainer but did
+# not change it.
+#
+# Nothing needed it.  test_auth_rate_limit.py -- the only test that exercises
+# the limiter -- builds a fresh uuid4 email per run, so its bucket key
+# ("login:{ip}:{email}") is unique by construction and no previous test can
+# have touched it.  That is the isolation, and it is the isolation that was
+# actually working.
+#
+# If a future test needs a bucket cleared for real, call
+# rate_limit.reset_attempts(key), which deletes the rows. Do not reintroduce an
+# autouse fixture: it would run against all 552 offline tests, which have no
+# database to delete from.
 
 
 @pytest.fixture

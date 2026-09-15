@@ -40,13 +40,6 @@ from app.core.database import SessionLocal
 from app.modules.accounting.models.rate_limit_attempt import RateLimitAttempt
 
 
-# Retained only so that callers importing these names keep working; the counters
-# are the table now, and clearing this dict does not reset a limiter.  It never
-# reset the server's either -- the test suite talks to a separate process.
-_attempts: dict[str, list[float]] = {}
-_lock = threading.Lock()
-
-
 # How often any one process runs the global sweep, and how far back it deletes.
 # The retention floor is derived from the configured windows rather than
 # hardcoded, so raising a window cannot start deleting rows the limiter is still
