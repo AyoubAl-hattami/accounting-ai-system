@@ -7,6 +7,13 @@ services:
       - ./production.env
     expose:
       - "8000"
+    environment:
+      # Both proxy hops, as a CIDR over the pinned network below.  uvicorn walks
+      # X-Forwarded-For in reverse and returns the first address it does not
+      # trust, so naming only the frontend would stop the walk at Caddy and
+      # report Caddy's address as every client.  A CIDR rather than two literals
+      # because Compose assigns container addresses per network creation.
+      FORWARDED_ALLOW_IPS: 172.28.0.0/16
     healthcheck:
       # /health/db, not /health: /health returns ok unconditionally and touches
       # nothing, so a backend that cannot reach PostgreSQL reported healthy,
@@ -53,6 +60,15 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+
+networks:
+  default:
+    ipam:
+      config:
+        # Pinned so FORWARDED_ALLOW_IPS above stays true across recreation.
+        # Without this the addresses move and the allow-list silently stops
+        # matching, which does not fail -- it just reports Caddy as the client.
+        - subnet: 172.28.0.0/16
 
 # PostgreSQL is intentionally external and managed. Do not add development data
 # or credentials here. A TLS-verified DATABASE_URL is injected through the
