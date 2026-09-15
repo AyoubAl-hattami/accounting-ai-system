@@ -436,11 +436,22 @@ def remove_company_access_endpoint(
 @router.patch("/users/{user_id}/deactivate", response_model=UserRead)
 def deactivate_user_account_endpoint(
     user_id: int,
-    company_id: int = Query(..., ge=1),
+    # Accepted and ignored. This operation is global: it sets the
+    # account's is_active across every tenant and bumps its token
+    # version, so there is no company to scope it to. It was REQUIRED,
+    # which told every reader of the OpenAPI schema the opposite.
+    # Optional rather than removed, because existing callers send it.
+    company_id: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    '''Globally deactivate a platform account; company_id is retained for API compatibility.'''
+    """Globally deactivate a platform account.
+
+    Platform-superuser only, and not scoped to any company: the effect
+    is on the account itself, in every tenant it belongs to.
+    ``company_id`` is accepted for backwards compatibility with callers
+    that still send it, and is not read.
+    """
     _ensure_platform_superuser(current_user)
 
     target = get_user(db=db, user_id=user_id)
@@ -583,11 +594,22 @@ def restore_company_access_endpoint(
 @router.patch("/users/{user_id}/reactivate", response_model=UserRead)
 def reactivate_user_account_endpoint(
     user_id: int,
-    company_id: int = Query(..., ge=1),
+    # Accepted and ignored. This operation is global: it sets the
+    # account's is_active across every tenant and bumps its token
+    # version, so there is no company to scope it to. It was REQUIRED,
+    # which told every reader of the OpenAPI schema the opposite.
+    # Optional rather than removed, because existing callers send it.
+    company_id: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    '''Globally reactivate a platform account; company_id is retained for API compatibility.'''
+    """Globally reactivate a platform account.
+
+    Platform-superuser only, and not scoped to any company: the effect
+    is on the account itself, in every tenant it belongs to.
+    ``company_id`` is accepted for backwards compatibility with callers
+    that still send it, and is not read.
+    """
     _ensure_platform_superuser(current_user)
 
     target = get_user(db=db, user_id=user_id)
