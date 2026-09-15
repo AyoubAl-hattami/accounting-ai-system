@@ -7,6 +7,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import flush_or_rollback
+from app.core.sql_search import (
+    LIKE_ESCAPE,
+    escaped_search_pattern as _escaped_search_pattern,
+)
 from app.modules.accounting.models.assistant_conversation import (
     AssistantConversation,
     AssistantMessage,
@@ -145,9 +149,6 @@ def get_owned_conversation(
     )
 
 
-def _escaped_search_pattern(search: str) -> str:
-    escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return f"%{escaped}%"
 
 
 def list_owned_conversations(
@@ -179,8 +180,8 @@ def list_owned_conversations(
         pattern = _escaped_search_pattern(normalized_search)
         filters.append(
             or_(
-                AssistantConversation.title.ilike(pattern, escape="\\"),
-                last_preview.ilike(pattern, escape="\\"),
+                AssistantConversation.title.ilike(pattern, escape=LIKE_ESCAPE),
+                last_preview.ilike(pattern, escape=LIKE_ESCAPE),
             )
         )
 

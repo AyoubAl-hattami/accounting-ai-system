@@ -35,6 +35,7 @@ from sqlalchemy import select, func, or_, case, exists
 
 from app.core.config import settings
 from app.core.clock import get_today_date
+from app.core.sql_search import LIKE_ESCAPE, escaped_search_pattern
 from app.modules.accounting.schemas.gemini_assistant_schemas import (
     ClarificationOption,
     ConversationTurn,
@@ -605,7 +606,9 @@ def _tool_get_account_entries(
         accs = db.scalars(
             select(AccountModel).where(
                 AccountModel.company_id == company_id,
-                AccountModel.name.ilike(f"%{account_name_hint}%"),
+                AccountModel.name.ilike(
+                    escaped_search_pattern(account_name_hint), escape=LIKE_ESCAPE
+                ),
             )
         ).all()
         if not accs:
