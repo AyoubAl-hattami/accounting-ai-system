@@ -530,3 +530,112 @@ def test_who_action_shares_the_audit_log_role_gate(monkeypatch, no_gemini):
         assert reply.intent == "access_denied"
         assert reply.data_sources == []
         assert reply.reply == "🔒 You don't have permission to access audit logs."
+
+# ── trace_question ───────────────────────────────────────────────────
+
+# Two whole arms of this handler were unexercised: the amount-not-identified
+# clarification (3809-3819) and the refusal to estimate when the journal cannot
+# be read (3822-3823).
+
+
+def _trace(monkeypatch, message, matches, language="en"):
+    monkeypatch.setattr(service, "_tool_trace_amount", lambda *a, **k: matches)
+    return dispatch(message, language=language)
+
+
+def test_trace_treats_zero_as_an_unidentifiable_amount(monkeypatch):
+    """RECORDED AS-IS: asking about 0 is answered "I couldn't identify the amount".
+
+    This is the only English route into the clarification arm. _classify_intent
+    returns trace_question because the message contains a digit, and then
+    _extract_amount_from_message returns None for zero, so the two disagree.
+    Filed, not fixed.
+    """
+    assert service._classify_intent("who entered 0?") == "trace_question"
+    assert service._extract_amount_from_message("who entered 0?") is None
+    assert service._extract_amount_from_message("who entered 0.00?") is None
+
+    reply = _trace(monkeypatch, "who entered 0?", [])
+    assert reply.intent == "clarification"
+    assert reply.confidence == "low"
+    assert reply.data_sources == []
+    assert reply.grounding is None
+    assert reply.reply == (
+        "🤔 I couldn't identify the amount. "
+        "Please specify, e.g. 'Who entered 1000?'")
+
+
+def test_trace_clarification_is_arabic_for_an_arabic_question(monkeypatch):
+    """The Arabic route in needs no digits at all, unlike every other one."""
+    assert service._classify_intent(
+        "وين راحت الفلوس؟") == "trace_question"
+
+    reply = _trace(monkeypatch, "وين راحت الفلوس؟", [], language="ar")
+    assert reply.intent == "clarification"
+    assert reply.reply == (
+        "🤔 لم أتمكن من تحديد المبلغ. "
+        "حدد المبلغ المطلوب تتبعه، مثل: "
+        "'من أدخل 1000؟'")
+
+
+def test_trace_language_argument_loses_to_the_message(monkeypatch):
+    """RECORDED AS-IS: language="en" still answers in Arabic here.
+
+    dispatch_gemini_assistant re-detects the language from the message at line
+    3434, so the caller's choice is advisory.
+    """
+    english_request = _trace(
+        monkeypatch, "وين راحت الفلوس؟", [], language="en")
+    arabic_request = _trace(
+        monkeypatch, "وين راحت الفلوس؟", [], language="ar")
+    assert english_request.reply == arabic_request.reply
+
+
+def test_trace_unavailable_journal_refuses_to_estimate(monkeypatch):
+    """The tool returning None means "could not read", and is never guessed past."""
+    reply = _trace(monkeypatch, "Who entered 1000?", None)
+    assert reply.intent == "answer_trace_question"
+    assert reply.confidence == "low"
+    assert reply.data_sources == []
+    assert reply.grounding.status == "unavailable"
+    assert reply.grounding.kind == "journal_evidence"
+    assert reply.evidence == []
+    assert reply.reply == (
+        "I could not verify the journal entries from the accounting data. "
+        "No estimated results were shown.")
+
+
+def test_trace_empty_result_is_not_the_same_as_an_unreadable_one(monkeypatch):
+    """Nothing found is medium confidence and still grounded; unreadable is low."""
+    reply = _trace(monkeypatch, "Who entered 1000?", [])
+    assert reply.intent == "answer_trace_question"
+    assert reply.confidence == "medium"
+    assert reply.data_sources == ["journal_entries"]
+    assert reply.reply == (
+        "No journal entries matching 1,000.00 were found in the current "
+        "company data.")
+
+
+def test_trace_match_populates_both_evidence_and_grounding(monkeypatch):
+    matches = [{
+        "id": 71, "entry_no": "JE-71", "entry_date": "2026-02-10",
+        "description": "Invoice 900", "status": "posted", "source_type": "manual",
+        "created_by": "Sara Ahmed", "amount": "1000.00", "total_debit": "1000.00",
+        "total_credit": "1000.00", "matched_amount": "1000.00",
+        "match_reason": "debit_line", "debit_accounts": ["1100 Cash"],
+        "credit_accounts": ["4000 Revenue"],
+    }]
+    reply = _trace(monkeypatch, "Who entered 1000?", matches)
+
+    assert reply.confidence == "high"
+    # Audit logs join the sources only when something matched.
+    assert reply.data_sources == ["journal_entries", "audit_logs"]
+    assert len(reply.evidence) == 1
+    assert reply.evidence[0].entry_no == "JE-71"
+    assert reply.evidence[0].debit_account == "1100 Cash"
+    assert reply.evidence[0].credit_account == "4000 Revenue"
+    assert reply.grounding.status == "grounded"
+    assert reply.grounding.summary.total_matches == 1
+    assert reply.reply == (
+        "I found 1 journal entries containing 1,000.00.\n"
+        "1. JE-71 | 2026-02-10 | Invoice 900 | posted | Debit amount 1,000.00")
