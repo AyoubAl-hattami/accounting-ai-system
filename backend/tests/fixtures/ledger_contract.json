@@ -1,0 +1,2026 @@
+{
+ "accounts": {
+  "Q1": {
+   "1000": {
+    "account_code": "1000",
+    "account_name": "Cash at Bank",
+    "account_type": "asset",
+    "closing_balance": "21400.00",
+    "end_date": "2026-03-31",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "25000.00",
+      "description": "Owner funding",
+      "entry_date": "2026-01-05",
+      "entry_no": "JE-0001",
+      "line_no": 1,
+      "running_balance": "25000.00"
+     },
+     {
+      "credit": "3600.00",
+      "debit": "0",
+      "description": "Twelve months rent paid up front",
+      "entry_date": "2026-01-20",
+      "entry_no": "JE-0002",
+      "line_no": 2,
+      "running_balance": "21400.00"
+     },
+     {
+      "credit": "5000.00",
+      "debit": "0",
+      "description": "February salaries, later reversed",
+      "entry_date": "2026-02-25",
+      "entry_no": "JE-0004",
+      "line_no": 2,
+      "running_balance": "16400.00"
+     },
+     {
+      "credit": "0",
+      "debit": "5000.00",
+      "description": "Reversal of JE-0004",
+      "entry_date": "2026-02-26",
+      "entry_no": "JE-0005",
+      "line_no": 1,
+      "running_balance": "21400.00"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   },
+   "1100": {
+    "account_code": "1100",
+    "account_name": "Accounts Receivable",
+    "account_type": "asset",
+    "closing_balance": "8400.50",
+    "end_date": "2026-03-31",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "8400.50",
+      "description": "Invoice 2026-011",
+      "entry_date": "2026-02-11",
+      "entry_no": "JE-0003",
+      "line_no": 1,
+      "running_balance": "8400.50"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   },
+   "1200": {
+    "account_code": "1200",
+    "account_name": "Prepaid Rent",
+    "account_type": "asset",
+    "closing_balance": "2700.00",
+    "end_date": "2026-03-31",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "3600.00",
+      "description": "Twelve months rent paid up front",
+      "entry_date": "2026-01-20",
+      "entry_no": "JE-0002",
+      "line_no": 1,
+      "running_balance": "3600.00"
+     },
+     {
+      "credit": "900.00",
+      "debit": "0",
+      "description": "Q1 rent expensed",
+      "entry_date": "2026-03-31",
+      "entry_no": "JE-0006",
+      "line_no": 2,
+      "running_balance": "2700.00"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   },
+   "1900": {
+    "account_code": "1900",
+    "account_name": "Dormant Asset",
+    "account_type": "asset",
+    "closing_balance": "0",
+    "end_date": "2026-03-31",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   },
+   "2000": {
+    "account_code": "2000",
+    "account_name": "Accounts Payable",
+    "account_type": "liability",
+    "closing_balance": "25000.00",
+    "end_date": "2026-03-31",
+    "lines": [
+     {
+      "credit": "25000.00",
+      "debit": "0",
+      "description": "Owner funding",
+      "entry_date": "2026-01-05",
+      "entry_no": "JE-0001",
+      "line_no": 2,
+      "running_balance": "25000.00"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   },
+   "4000": {
+    "account_code": "4000",
+    "account_name": "Consulting Revenue",
+    "account_type": "income",
+    "closing_balance": "8400.50",
+    "end_date": "2026-03-31",
+    "lines": [
+     {
+      "credit": "8400.50",
+      "debit": "0",
+      "description": "Invoice 2026-011",
+      "entry_date": "2026-02-11",
+      "entry_no": "JE-0003",
+      "line_no": 2,
+      "running_balance": "8400.50"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   },
+   "4900": {
+    "account_code": "4900",
+    "account_name": "Dormant Revenue",
+    "account_type": "income",
+    "closing_balance": "0",
+    "end_date": "2026-03-31",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   },
+   "5000": {
+    "account_code": "5000",
+    "account_name": "Rent Expense",
+    "account_type": "expense",
+    "closing_balance": "900.00",
+    "end_date": "2026-03-31",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "900.00",
+      "description": "Q1 rent expensed",
+      "entry_date": "2026-03-31",
+      "entry_no": "JE-0006",
+      "line_no": 1,
+      "running_balance": "900.00"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   },
+   "5100": {
+    "account_code": "5100",
+    "account_name": "Salaries Expense",
+    "account_type": "expense",
+    "closing_balance": "0.00",
+    "end_date": "2026-03-31",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "5000.00",
+      "description": "February salaries, later reversed",
+      "entry_date": "2026-02-25",
+      "entry_no": "JE-0004",
+      "line_no": 1,
+      "running_balance": "5000.00"
+     },
+     {
+      "credit": "5000.00",
+      "debit": "0",
+      "description": "Reversal of JE-0004",
+      "entry_date": "2026-02-26",
+      "entry_no": "JE-0005",
+      "line_no": 2,
+      "running_balance": "0.00"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   }
+  },
+  "Q2": {
+   "1000": {
+    "account_code": "1000",
+    "account_name": "Cash at Bank",
+    "account_type": "asset",
+    "closing_balance": "23700.50",
+    "end_date": "2026-06-30",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "8400.50",
+      "description": "Invoice 2026-011 settled",
+      "entry_date": "2026-04-02",
+      "entry_no": "JE-0009",
+      "line_no": 1,
+      "running_balance": "29800.50"
+     },
+     {
+      "credit": "6100.00",
+      "debit": "0",
+      "description": "Q2 salaries",
+      "entry_date": "2026-06-30",
+      "entry_no": "JE-0011",
+      "line_no": 2,
+      "running_balance": "23700.50"
+     }
+    ],
+    "opening_balance": "21400.00",
+    "start_date": "2026-04-01"
+   },
+   "1100": {
+    "account_code": "1100",
+    "account_name": "Accounts Receivable",
+    "account_type": "asset",
+    "closing_balance": "12750.25",
+    "end_date": "2026-06-30",
+    "lines": [
+     {
+      "credit": "8400.50",
+      "debit": "0",
+      "description": "Invoice 2026-011 settled",
+      "entry_date": "2026-04-02",
+      "entry_no": "JE-0009",
+      "line_no": 2,
+      "running_balance": "0.00"
+     },
+     {
+      "credit": "0",
+      "debit": "12750.25",
+      "description": "Invoice 2026-042",
+      "entry_date": "2026-05-18",
+      "entry_no": "JE-0010",
+      "line_no": 1,
+      "running_balance": "12750.25"
+     }
+    ],
+    "opening_balance": "8400.50",
+    "start_date": "2026-04-01"
+   },
+   "1200": {
+    "account_code": "1200",
+    "account_name": "Prepaid Rent",
+    "account_type": "asset",
+    "closing_balance": "2700.00",
+    "end_date": "2026-06-30",
+    "lines": [],
+    "opening_balance": "2700.00",
+    "start_date": "2026-04-01"
+   },
+   "1900": {
+    "account_code": "1900",
+    "account_name": "Dormant Asset",
+    "account_type": "asset",
+    "closing_balance": "0",
+    "end_date": "2026-06-30",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-04-01"
+   },
+   "2000": {
+    "account_code": "2000",
+    "account_name": "Accounts Payable",
+    "account_type": "liability",
+    "closing_balance": "25000.00",
+    "end_date": "2026-06-30",
+    "lines": [],
+    "opening_balance": "25000.00",
+    "start_date": "2026-04-01"
+   },
+   "4000": {
+    "account_code": "4000",
+    "account_name": "Consulting Revenue",
+    "account_type": "income",
+    "closing_balance": "21150.75",
+    "end_date": "2026-06-30",
+    "lines": [
+     {
+      "credit": "12750.25",
+      "debit": "0",
+      "description": "Invoice 2026-042",
+      "entry_date": "2026-05-18",
+      "entry_no": "JE-0010",
+      "line_no": 2,
+      "running_balance": "21150.75"
+     }
+    ],
+    "opening_balance": "8400.50",
+    "start_date": "2026-04-01"
+   },
+   "4900": {
+    "account_code": "4900",
+    "account_name": "Dormant Revenue",
+    "account_type": "income",
+    "closing_balance": "0",
+    "end_date": "2026-06-30",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-04-01"
+   },
+   "5000": {
+    "account_code": "5000",
+    "account_name": "Rent Expense",
+    "account_type": "expense",
+    "closing_balance": "900.00",
+    "end_date": "2026-06-30",
+    "lines": [],
+    "opening_balance": "900.00",
+    "start_date": "2026-04-01"
+   },
+   "5100": {
+    "account_code": "5100",
+    "account_name": "Salaries Expense",
+    "account_type": "expense",
+    "closing_balance": "6100.00",
+    "end_date": "2026-06-30",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "6100.00",
+      "description": "Q2 salaries",
+      "entry_date": "2026-06-30",
+      "entry_no": "JE-0011",
+      "line_no": 1,
+      "running_balance": "6100.00"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": "2026-04-01"
+   }
+  },
+  "empty future": {
+   "1000": {
+    "account_code": "1000",
+    "account_name": "Cash at Bank",
+    "account_type": "asset",
+    "closing_balance": "23700.50",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "23700.50",
+    "start_date": "2026-11-01"
+   },
+   "1100": {
+    "account_code": "1100",
+    "account_name": "Accounts Receivable",
+    "account_type": "asset",
+    "closing_balance": "12750.25",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "12750.25",
+    "start_date": "2026-11-01"
+   },
+   "1200": {
+    "account_code": "1200",
+    "account_name": "Prepaid Rent",
+    "account_type": "asset",
+    "closing_balance": "2700.00",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "2700.00",
+    "start_date": "2026-11-01"
+   },
+   "1900": {
+    "account_code": "1900",
+    "account_name": "Dormant Asset",
+    "account_type": "asset",
+    "closing_balance": "0",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-11-01"
+   },
+   "2000": {
+    "account_code": "2000",
+    "account_name": "Accounts Payable",
+    "account_type": "liability",
+    "closing_balance": "25000.00",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "25000.00",
+    "start_date": "2026-11-01"
+   },
+   "4000": {
+    "account_code": "4000",
+    "account_name": "Consulting Revenue",
+    "account_type": "income",
+    "closing_balance": "21150.75",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "21150.75",
+    "start_date": "2026-11-01"
+   },
+   "4900": {
+    "account_code": "4900",
+    "account_name": "Dormant Revenue",
+    "account_type": "income",
+    "closing_balance": "0",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-11-01"
+   },
+   "5000": {
+    "account_code": "5000",
+    "account_name": "Rent Expense",
+    "account_type": "expense",
+    "closing_balance": "900.00",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "900.00",
+    "start_date": "2026-11-01"
+   },
+   "5100": {
+    "account_code": "5100",
+    "account_name": "Salaries Expense",
+    "account_type": "expense",
+    "closing_balance": "6100.00",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "6100.00",
+    "start_date": "2026-11-01"
+   }
+  },
+  "from Q2 start only": {
+   "1000": {
+    "account_code": "1000",
+    "account_name": "Cash at Bank",
+    "account_type": "asset",
+    "closing_balance": "23700.50",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "8400.50",
+      "description": "Invoice 2026-011 settled",
+      "entry_date": "2026-04-02",
+      "entry_no": "JE-0009",
+      "line_no": 1,
+      "running_balance": "29800.50"
+     },
+     {
+      "credit": "6100.00",
+      "debit": "0",
+      "description": "Q2 salaries",
+      "entry_date": "2026-06-30",
+      "entry_no": "JE-0011",
+      "line_no": 2,
+      "running_balance": "23700.50"
+     }
+    ],
+    "opening_balance": "21400.00",
+    "start_date": "2026-04-01"
+   },
+   "1100": {
+    "account_code": "1100",
+    "account_name": "Accounts Receivable",
+    "account_type": "asset",
+    "closing_balance": "12750.25",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "8400.50",
+      "debit": "0",
+      "description": "Invoice 2026-011 settled",
+      "entry_date": "2026-04-02",
+      "entry_no": "JE-0009",
+      "line_no": 2,
+      "running_balance": "0.00"
+     },
+     {
+      "credit": "0",
+      "debit": "12750.25",
+      "description": "Invoice 2026-042",
+      "entry_date": "2026-05-18",
+      "entry_no": "JE-0010",
+      "line_no": 1,
+      "running_balance": "12750.25"
+     }
+    ],
+    "opening_balance": "8400.50",
+    "start_date": "2026-04-01"
+   },
+   "1200": {
+    "account_code": "1200",
+    "account_name": "Prepaid Rent",
+    "account_type": "asset",
+    "closing_balance": "2700.00",
+    "end_date": null,
+    "lines": [],
+    "opening_balance": "2700.00",
+    "start_date": "2026-04-01"
+   },
+   "1900": {
+    "account_code": "1900",
+    "account_name": "Dormant Asset",
+    "account_type": "asset",
+    "closing_balance": "0",
+    "end_date": null,
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-04-01"
+   },
+   "2000": {
+    "account_code": "2000",
+    "account_name": "Accounts Payable",
+    "account_type": "liability",
+    "closing_balance": "25000.00",
+    "end_date": null,
+    "lines": [],
+    "opening_balance": "25000.00",
+    "start_date": "2026-04-01"
+   },
+   "4000": {
+    "account_code": "4000",
+    "account_name": "Consulting Revenue",
+    "account_type": "income",
+    "closing_balance": "21150.75",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "12750.25",
+      "debit": "0",
+      "description": "Invoice 2026-042",
+      "entry_date": "2026-05-18",
+      "entry_no": "JE-0010",
+      "line_no": 2,
+      "running_balance": "21150.75"
+     }
+    ],
+    "opening_balance": "8400.50",
+    "start_date": "2026-04-01"
+   },
+   "4900": {
+    "account_code": "4900",
+    "account_name": "Dormant Revenue",
+    "account_type": "income",
+    "closing_balance": "0",
+    "end_date": null,
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-04-01"
+   },
+   "5000": {
+    "account_code": "5000",
+    "account_name": "Rent Expense",
+    "account_type": "expense",
+    "closing_balance": "900.00",
+    "end_date": null,
+    "lines": [],
+    "opening_balance": "900.00",
+    "start_date": "2026-04-01"
+   },
+   "5100": {
+    "account_code": "5100",
+    "account_name": "Salaries Expense",
+    "account_type": "expense",
+    "closing_balance": "6100.00",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "6100.00",
+      "description": "Q2 salaries",
+      "entry_date": "2026-06-30",
+      "entry_no": "JE-0011",
+      "line_no": 1,
+      "running_balance": "6100.00"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": "2026-04-01"
+   }
+  },
+  "mid-Q1 split": {
+   "1000": {
+    "account_code": "1000",
+    "account_name": "Cash at Bank",
+    "account_type": "asset",
+    "closing_balance": "21400.00",
+    "end_date": "2026-02-28",
+    "lines": [
+     {
+      "credit": "5000.00",
+      "debit": "0",
+      "description": "February salaries, later reversed",
+      "entry_date": "2026-02-25",
+      "entry_no": "JE-0004",
+      "line_no": 2,
+      "running_balance": "16400.00"
+     },
+     {
+      "credit": "0",
+      "debit": "5000.00",
+      "description": "Reversal of JE-0004",
+      "entry_date": "2026-02-26",
+      "entry_no": "JE-0005",
+      "line_no": 1,
+      "running_balance": "21400.00"
+     }
+    ],
+    "opening_balance": "21400.00",
+    "start_date": "2026-02-01"
+   },
+   "1100": {
+    "account_code": "1100",
+    "account_name": "Accounts Receivable",
+    "account_type": "asset",
+    "closing_balance": "8400.50",
+    "end_date": "2026-02-28",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "8400.50",
+      "description": "Invoice 2026-011",
+      "entry_date": "2026-02-11",
+      "entry_no": "JE-0003",
+      "line_no": 1,
+      "running_balance": "8400.50"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-02-01"
+   },
+   "1200": {
+    "account_code": "1200",
+    "account_name": "Prepaid Rent",
+    "account_type": "asset",
+    "closing_balance": "3600.00",
+    "end_date": "2026-02-28",
+    "lines": [],
+    "opening_balance": "3600.00",
+    "start_date": "2026-02-01"
+   },
+   "1900": {
+    "account_code": "1900",
+    "account_name": "Dormant Asset",
+    "account_type": "asset",
+    "closing_balance": "0",
+    "end_date": "2026-02-28",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-02-01"
+   },
+   "2000": {
+    "account_code": "2000",
+    "account_name": "Accounts Payable",
+    "account_type": "liability",
+    "closing_balance": "25000.00",
+    "end_date": "2026-02-28",
+    "lines": [],
+    "opening_balance": "25000.00",
+    "start_date": "2026-02-01"
+   },
+   "4000": {
+    "account_code": "4000",
+    "account_name": "Consulting Revenue",
+    "account_type": "income",
+    "closing_balance": "8400.50",
+    "end_date": "2026-02-28",
+    "lines": [
+     {
+      "credit": "8400.50",
+      "debit": "0",
+      "description": "Invoice 2026-011",
+      "entry_date": "2026-02-11",
+      "entry_no": "JE-0003",
+      "line_no": 2,
+      "running_balance": "8400.50"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-02-01"
+   },
+   "4900": {
+    "account_code": "4900",
+    "account_name": "Dormant Revenue",
+    "account_type": "income",
+    "closing_balance": "0",
+    "end_date": "2026-02-28",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-02-01"
+   },
+   "5000": {
+    "account_code": "5000",
+    "account_name": "Rent Expense",
+    "account_type": "expense",
+    "closing_balance": "0",
+    "end_date": "2026-02-28",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-02-01"
+   },
+   "5100": {
+    "account_code": "5100",
+    "account_name": "Salaries Expense",
+    "account_type": "expense",
+    "closing_balance": "0.00",
+    "end_date": "2026-02-28",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "5000.00",
+      "description": "February salaries, later reversed",
+      "entry_date": "2026-02-25",
+      "entry_no": "JE-0004",
+      "line_no": 1,
+      "running_balance": "5000.00"
+     },
+     {
+      "credit": "5000.00",
+      "debit": "0",
+      "description": "Reversal of JE-0004",
+      "entry_date": "2026-02-26",
+      "entry_no": "JE-0005",
+      "line_no": 2,
+      "running_balance": "0.00"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-02-01"
+   }
+  },
+  "unbounded": {
+   "1000": {
+    "account_code": "1000",
+    "account_name": "Cash at Bank",
+    "account_type": "asset",
+    "closing_balance": "23700.50",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "25000.00",
+      "description": "Owner funding",
+      "entry_date": "2026-01-05",
+      "entry_no": "JE-0001",
+      "line_no": 1,
+      "running_balance": "25000.00"
+     },
+     {
+      "credit": "3600.00",
+      "debit": "0",
+      "description": "Twelve months rent paid up front",
+      "entry_date": "2026-01-20",
+      "entry_no": "JE-0002",
+      "line_no": 2,
+      "running_balance": "21400.00"
+     },
+     {
+      "credit": "5000.00",
+      "debit": "0",
+      "description": "February salaries, later reversed",
+      "entry_date": "2026-02-25",
+      "entry_no": "JE-0004",
+      "line_no": 2,
+      "running_balance": "16400.00"
+     },
+     {
+      "credit": "0",
+      "debit": "5000.00",
+      "description": "Reversal of JE-0004",
+      "entry_date": "2026-02-26",
+      "entry_no": "JE-0005",
+      "line_no": 1,
+      "running_balance": "21400.00"
+     },
+     {
+      "credit": "0",
+      "debit": "8400.50",
+      "description": "Invoice 2026-011 settled",
+      "entry_date": "2026-04-02",
+      "entry_no": "JE-0009",
+      "line_no": 1,
+      "running_balance": "29800.50"
+     },
+     {
+      "credit": "6100.00",
+      "debit": "0",
+      "description": "Q2 salaries",
+      "entry_date": "2026-06-30",
+      "entry_no": "JE-0011",
+      "line_no": 2,
+      "running_balance": "23700.50"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": null
+   },
+   "1100": {
+    "account_code": "1100",
+    "account_name": "Accounts Receivable",
+    "account_type": "asset",
+    "closing_balance": "12750.25",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "8400.50",
+      "description": "Invoice 2026-011",
+      "entry_date": "2026-02-11",
+      "entry_no": "JE-0003",
+      "line_no": 1,
+      "running_balance": "8400.50"
+     },
+     {
+      "credit": "8400.50",
+      "debit": "0",
+      "description": "Invoice 2026-011 settled",
+      "entry_date": "2026-04-02",
+      "entry_no": "JE-0009",
+      "line_no": 2,
+      "running_balance": "0.00"
+     },
+     {
+      "credit": "0",
+      "debit": "12750.25",
+      "description": "Invoice 2026-042",
+      "entry_date": "2026-05-18",
+      "entry_no": "JE-0010",
+      "line_no": 1,
+      "running_balance": "12750.25"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": null
+   },
+   "1200": {
+    "account_code": "1200",
+    "account_name": "Prepaid Rent",
+    "account_type": "asset",
+    "closing_balance": "2700.00",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "3600.00",
+      "description": "Twelve months rent paid up front",
+      "entry_date": "2026-01-20",
+      "entry_no": "JE-0002",
+      "line_no": 1,
+      "running_balance": "3600.00"
+     },
+     {
+      "credit": "900.00",
+      "debit": "0",
+      "description": "Q1 rent expensed",
+      "entry_date": "2026-03-31",
+      "entry_no": "JE-0006",
+      "line_no": 2,
+      "running_balance": "2700.00"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": null
+   },
+   "1900": {
+    "account_code": "1900",
+    "account_name": "Dormant Asset",
+    "account_type": "asset",
+    "closing_balance": "0.00",
+    "end_date": null,
+    "lines": [],
+    "opening_balance": "0.00",
+    "start_date": null
+   },
+   "2000": {
+    "account_code": "2000",
+    "account_name": "Accounts Payable",
+    "account_type": "liability",
+    "closing_balance": "25000.00",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "25000.00",
+      "debit": "0",
+      "description": "Owner funding",
+      "entry_date": "2026-01-05",
+      "entry_no": "JE-0001",
+      "line_no": 2,
+      "running_balance": "25000.00"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": null
+   },
+   "4000": {
+    "account_code": "4000",
+    "account_name": "Consulting Revenue",
+    "account_type": "income",
+    "closing_balance": "21150.75",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "8400.50",
+      "debit": "0",
+      "description": "Invoice 2026-011",
+      "entry_date": "2026-02-11",
+      "entry_no": "JE-0003",
+      "line_no": 2,
+      "running_balance": "8400.50"
+     },
+     {
+      "credit": "12750.25",
+      "debit": "0",
+      "description": "Invoice 2026-042",
+      "entry_date": "2026-05-18",
+      "entry_no": "JE-0010",
+      "line_no": 2,
+      "running_balance": "21150.75"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": null
+   },
+   "4900": {
+    "account_code": "4900",
+    "account_name": "Dormant Revenue",
+    "account_type": "income",
+    "closing_balance": "0.00",
+    "end_date": null,
+    "lines": [],
+    "opening_balance": "0.00",
+    "start_date": null
+   },
+   "5000": {
+    "account_code": "5000",
+    "account_name": "Rent Expense",
+    "account_type": "expense",
+    "closing_balance": "900.00",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "900.00",
+      "description": "Q1 rent expensed",
+      "entry_date": "2026-03-31",
+      "entry_no": "JE-0006",
+      "line_no": 1,
+      "running_balance": "900.00"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": null
+   },
+   "5100": {
+    "account_code": "5100",
+    "account_name": "Salaries Expense",
+    "account_type": "expense",
+    "closing_balance": "6100.00",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "5000.00",
+      "description": "February salaries, later reversed",
+      "entry_date": "2026-02-25",
+      "entry_no": "JE-0004",
+      "line_no": 1,
+      "running_balance": "5000.00"
+     },
+     {
+      "credit": "5000.00",
+      "debit": "0",
+      "description": "Reversal of JE-0004",
+      "entry_date": "2026-02-26",
+      "entry_no": "JE-0005",
+      "line_no": 2,
+      "running_balance": "0.00"
+     },
+     {
+      "credit": "0",
+      "debit": "6100.00",
+      "description": "Q2 salaries",
+      "entry_date": "2026-06-30",
+      "entry_no": "JE-0011",
+      "line_no": 1,
+      "running_balance": "6100.00"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": null
+   }
+  }
+ },
+ "general": {
+  "Q1": [
+   {
+    "account_code": "1000",
+    "account_name": "Cash at Bank",
+    "account_type": "asset",
+    "closing_balance": "21400.00",
+    "end_date": "2026-03-31",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "25000.00",
+      "description": "Owner funding",
+      "entry_date": "2026-01-05",
+      "entry_no": "JE-0001",
+      "line_no": 1,
+      "running_balance": "25000.00"
+     },
+     {
+      "credit": "3600.00",
+      "debit": "0",
+      "description": "Twelve months rent paid up front",
+      "entry_date": "2026-01-20",
+      "entry_no": "JE-0002",
+      "line_no": 2,
+      "running_balance": "21400.00"
+     },
+     {
+      "credit": "5000.00",
+      "debit": "0",
+      "description": "February salaries, later reversed",
+      "entry_date": "2026-02-25",
+      "entry_no": "JE-0004",
+      "line_no": 2,
+      "running_balance": "16400.00"
+     },
+     {
+      "credit": "0",
+      "debit": "5000.00",
+      "description": "Reversal of JE-0004",
+      "entry_date": "2026-02-26",
+      "entry_no": "JE-0005",
+      "line_no": 1,
+      "running_balance": "21400.00"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   },
+   {
+    "account_code": "1100",
+    "account_name": "Accounts Receivable",
+    "account_type": "asset",
+    "closing_balance": "8400.50",
+    "end_date": "2026-03-31",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "8400.50",
+      "description": "Invoice 2026-011",
+      "entry_date": "2026-02-11",
+      "entry_no": "JE-0003",
+      "line_no": 1,
+      "running_balance": "8400.50"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   },
+   {
+    "account_code": "1200",
+    "account_name": "Prepaid Rent",
+    "account_type": "asset",
+    "closing_balance": "2700.00",
+    "end_date": "2026-03-31",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "3600.00",
+      "description": "Twelve months rent paid up front",
+      "entry_date": "2026-01-20",
+      "entry_no": "JE-0002",
+      "line_no": 1,
+      "running_balance": "3600.00"
+     },
+     {
+      "credit": "900.00",
+      "debit": "0",
+      "description": "Q1 rent expensed",
+      "entry_date": "2026-03-31",
+      "entry_no": "JE-0006",
+      "line_no": 2,
+      "running_balance": "2700.00"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   },
+   {
+    "account_code": "1900",
+    "account_name": "Dormant Asset",
+    "account_type": "asset",
+    "closing_balance": "0",
+    "end_date": "2026-03-31",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   },
+   {
+    "account_code": "2000",
+    "account_name": "Accounts Payable",
+    "account_type": "liability",
+    "closing_balance": "25000.00",
+    "end_date": "2026-03-31",
+    "lines": [
+     {
+      "credit": "25000.00",
+      "debit": "0",
+      "description": "Owner funding",
+      "entry_date": "2026-01-05",
+      "entry_no": "JE-0001",
+      "line_no": 2,
+      "running_balance": "25000.00"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   },
+   {
+    "account_code": "4000",
+    "account_name": "Consulting Revenue",
+    "account_type": "income",
+    "closing_balance": "8400.50",
+    "end_date": "2026-03-31",
+    "lines": [
+     {
+      "credit": "8400.50",
+      "debit": "0",
+      "description": "Invoice 2026-011",
+      "entry_date": "2026-02-11",
+      "entry_no": "JE-0003",
+      "line_no": 2,
+      "running_balance": "8400.50"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   },
+   {
+    "account_code": "4900",
+    "account_name": "Dormant Revenue",
+    "account_type": "income",
+    "closing_balance": "0",
+    "end_date": "2026-03-31",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   },
+   {
+    "account_code": "5000",
+    "account_name": "Rent Expense",
+    "account_type": "expense",
+    "closing_balance": "900.00",
+    "end_date": "2026-03-31",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "900.00",
+      "description": "Q1 rent expensed",
+      "entry_date": "2026-03-31",
+      "entry_no": "JE-0006",
+      "line_no": 1,
+      "running_balance": "900.00"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   },
+   {
+    "account_code": "5100",
+    "account_name": "Salaries Expense",
+    "account_type": "expense",
+    "closing_balance": "0.00",
+    "end_date": "2026-03-31",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "5000.00",
+      "description": "February salaries, later reversed",
+      "entry_date": "2026-02-25",
+      "entry_no": "JE-0004",
+      "line_no": 1,
+      "running_balance": "5000.00"
+     },
+     {
+      "credit": "5000.00",
+      "debit": "0",
+      "description": "Reversal of JE-0004",
+      "entry_date": "2026-02-26",
+      "entry_no": "JE-0005",
+      "line_no": 2,
+      "running_balance": "0.00"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-01-01"
+   }
+  ],
+  "Q2": [
+   {
+    "account_code": "1000",
+    "account_name": "Cash at Bank",
+    "account_type": "asset",
+    "closing_balance": "23700.50",
+    "end_date": "2026-06-30",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "8400.50",
+      "description": "Invoice 2026-011 settled",
+      "entry_date": "2026-04-02",
+      "entry_no": "JE-0009",
+      "line_no": 1,
+      "running_balance": "29800.50"
+     },
+     {
+      "credit": "6100.00",
+      "debit": "0",
+      "description": "Q2 salaries",
+      "entry_date": "2026-06-30",
+      "entry_no": "JE-0011",
+      "line_no": 2,
+      "running_balance": "23700.50"
+     }
+    ],
+    "opening_balance": "21400.00",
+    "start_date": "2026-04-01"
+   },
+   {
+    "account_code": "1100",
+    "account_name": "Accounts Receivable",
+    "account_type": "asset",
+    "closing_balance": "12750.25",
+    "end_date": "2026-06-30",
+    "lines": [
+     {
+      "credit": "8400.50",
+      "debit": "0",
+      "description": "Invoice 2026-011 settled",
+      "entry_date": "2026-04-02",
+      "entry_no": "JE-0009",
+      "line_no": 2,
+      "running_balance": "0.00"
+     },
+     {
+      "credit": "0",
+      "debit": "12750.25",
+      "description": "Invoice 2026-042",
+      "entry_date": "2026-05-18",
+      "entry_no": "JE-0010",
+      "line_no": 1,
+      "running_balance": "12750.25"
+     }
+    ],
+    "opening_balance": "8400.50",
+    "start_date": "2026-04-01"
+   },
+   {
+    "account_code": "1200",
+    "account_name": "Prepaid Rent",
+    "account_type": "asset",
+    "closing_balance": "2700.00",
+    "end_date": "2026-06-30",
+    "lines": [],
+    "opening_balance": "2700.00",
+    "start_date": "2026-04-01"
+   },
+   {
+    "account_code": "1900",
+    "account_name": "Dormant Asset",
+    "account_type": "asset",
+    "closing_balance": "0",
+    "end_date": "2026-06-30",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-04-01"
+   },
+   {
+    "account_code": "2000",
+    "account_name": "Accounts Payable",
+    "account_type": "liability",
+    "closing_balance": "25000.00",
+    "end_date": "2026-06-30",
+    "lines": [],
+    "opening_balance": "25000.00",
+    "start_date": "2026-04-01"
+   },
+   {
+    "account_code": "4000",
+    "account_name": "Consulting Revenue",
+    "account_type": "income",
+    "closing_balance": "21150.75",
+    "end_date": "2026-06-30",
+    "lines": [
+     {
+      "credit": "12750.25",
+      "debit": "0",
+      "description": "Invoice 2026-042",
+      "entry_date": "2026-05-18",
+      "entry_no": "JE-0010",
+      "line_no": 2,
+      "running_balance": "21150.75"
+     }
+    ],
+    "opening_balance": "8400.50",
+    "start_date": "2026-04-01"
+   },
+   {
+    "account_code": "4900",
+    "account_name": "Dormant Revenue",
+    "account_type": "income",
+    "closing_balance": "0",
+    "end_date": "2026-06-30",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-04-01"
+   },
+   {
+    "account_code": "5000",
+    "account_name": "Rent Expense",
+    "account_type": "expense",
+    "closing_balance": "900.00",
+    "end_date": "2026-06-30",
+    "lines": [],
+    "opening_balance": "900.00",
+    "start_date": "2026-04-01"
+   },
+   {
+    "account_code": "5100",
+    "account_name": "Salaries Expense",
+    "account_type": "expense",
+    "closing_balance": "6100.00",
+    "end_date": "2026-06-30",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "6100.00",
+      "description": "Q2 salaries",
+      "entry_date": "2026-06-30",
+      "entry_no": "JE-0011",
+      "line_no": 1,
+      "running_balance": "6100.00"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": "2026-04-01"
+   }
+  ],
+  "empty future": [
+   {
+    "account_code": "1000",
+    "account_name": "Cash at Bank",
+    "account_type": "asset",
+    "closing_balance": "23700.50",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "23700.50",
+    "start_date": "2026-11-01"
+   },
+   {
+    "account_code": "1100",
+    "account_name": "Accounts Receivable",
+    "account_type": "asset",
+    "closing_balance": "12750.25",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "12750.25",
+    "start_date": "2026-11-01"
+   },
+   {
+    "account_code": "1200",
+    "account_name": "Prepaid Rent",
+    "account_type": "asset",
+    "closing_balance": "2700.00",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "2700.00",
+    "start_date": "2026-11-01"
+   },
+   {
+    "account_code": "1900",
+    "account_name": "Dormant Asset",
+    "account_type": "asset",
+    "closing_balance": "0",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-11-01"
+   },
+   {
+    "account_code": "2000",
+    "account_name": "Accounts Payable",
+    "account_type": "liability",
+    "closing_balance": "25000.00",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "25000.00",
+    "start_date": "2026-11-01"
+   },
+   {
+    "account_code": "4000",
+    "account_name": "Consulting Revenue",
+    "account_type": "income",
+    "closing_balance": "21150.75",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "21150.75",
+    "start_date": "2026-11-01"
+   },
+   {
+    "account_code": "4900",
+    "account_name": "Dormant Revenue",
+    "account_type": "income",
+    "closing_balance": "0",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-11-01"
+   },
+   {
+    "account_code": "5000",
+    "account_name": "Rent Expense",
+    "account_type": "expense",
+    "closing_balance": "900.00",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "900.00",
+    "start_date": "2026-11-01"
+   },
+   {
+    "account_code": "5100",
+    "account_name": "Salaries Expense",
+    "account_type": "expense",
+    "closing_balance": "6100.00",
+    "end_date": "2026-12-31",
+    "lines": [],
+    "opening_balance": "6100.00",
+    "start_date": "2026-11-01"
+   }
+  ],
+  "from Q2 start only": [
+   {
+    "account_code": "1000",
+    "account_name": "Cash at Bank",
+    "account_type": "asset",
+    "closing_balance": "23700.50",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "8400.50",
+      "description": "Invoice 2026-011 settled",
+      "entry_date": "2026-04-02",
+      "entry_no": "JE-0009",
+      "line_no": 1,
+      "running_balance": "29800.50"
+     },
+     {
+      "credit": "6100.00",
+      "debit": "0",
+      "description": "Q2 salaries",
+      "entry_date": "2026-06-30",
+      "entry_no": "JE-0011",
+      "line_no": 2,
+      "running_balance": "23700.50"
+     }
+    ],
+    "opening_balance": "21400.00",
+    "start_date": "2026-04-01"
+   },
+   {
+    "account_code": "1100",
+    "account_name": "Accounts Receivable",
+    "account_type": "asset",
+    "closing_balance": "12750.25",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "8400.50",
+      "debit": "0",
+      "description": "Invoice 2026-011 settled",
+      "entry_date": "2026-04-02",
+      "entry_no": "JE-0009",
+      "line_no": 2,
+      "running_balance": "0.00"
+     },
+     {
+      "credit": "0",
+      "debit": "12750.25",
+      "description": "Invoice 2026-042",
+      "entry_date": "2026-05-18",
+      "entry_no": "JE-0010",
+      "line_no": 1,
+      "running_balance": "12750.25"
+     }
+    ],
+    "opening_balance": "8400.50",
+    "start_date": "2026-04-01"
+   },
+   {
+    "account_code": "1200",
+    "account_name": "Prepaid Rent",
+    "account_type": "asset",
+    "closing_balance": "2700.00",
+    "end_date": null,
+    "lines": [],
+    "opening_balance": "2700.00",
+    "start_date": "2026-04-01"
+   },
+   {
+    "account_code": "1900",
+    "account_name": "Dormant Asset",
+    "account_type": "asset",
+    "closing_balance": "0",
+    "end_date": null,
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-04-01"
+   },
+   {
+    "account_code": "2000",
+    "account_name": "Accounts Payable",
+    "account_type": "liability",
+    "closing_balance": "25000.00",
+    "end_date": null,
+    "lines": [],
+    "opening_balance": "25000.00",
+    "start_date": "2026-04-01"
+   },
+   {
+    "account_code": "4000",
+    "account_name": "Consulting Revenue",
+    "account_type": "income",
+    "closing_balance": "21150.75",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "12750.25",
+      "debit": "0",
+      "description": "Invoice 2026-042",
+      "entry_date": "2026-05-18",
+      "entry_no": "JE-0010",
+      "line_no": 2,
+      "running_balance": "21150.75"
+     }
+    ],
+    "opening_balance": "8400.50",
+    "start_date": "2026-04-01"
+   },
+   {
+    "account_code": "4900",
+    "account_name": "Dormant Revenue",
+    "account_type": "income",
+    "closing_balance": "0",
+    "end_date": null,
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-04-01"
+   },
+   {
+    "account_code": "5000",
+    "account_name": "Rent Expense",
+    "account_type": "expense",
+    "closing_balance": "900.00",
+    "end_date": null,
+    "lines": [],
+    "opening_balance": "900.00",
+    "start_date": "2026-04-01"
+   },
+   {
+    "account_code": "5100",
+    "account_name": "Salaries Expense",
+    "account_type": "expense",
+    "closing_balance": "6100.00",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "6100.00",
+      "description": "Q2 salaries",
+      "entry_date": "2026-06-30",
+      "entry_no": "JE-0011",
+      "line_no": 1,
+      "running_balance": "6100.00"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": "2026-04-01"
+   }
+  ],
+  "mid-Q1 split": [
+   {
+    "account_code": "1000",
+    "account_name": "Cash at Bank",
+    "account_type": "asset",
+    "closing_balance": "21400.00",
+    "end_date": "2026-02-28",
+    "lines": [
+     {
+      "credit": "5000.00",
+      "debit": "0",
+      "description": "February salaries, later reversed",
+      "entry_date": "2026-02-25",
+      "entry_no": "JE-0004",
+      "line_no": 2,
+      "running_balance": "16400.00"
+     },
+     {
+      "credit": "0",
+      "debit": "5000.00",
+      "description": "Reversal of JE-0004",
+      "entry_date": "2026-02-26",
+      "entry_no": "JE-0005",
+      "line_no": 1,
+      "running_balance": "21400.00"
+     }
+    ],
+    "opening_balance": "21400.00",
+    "start_date": "2026-02-01"
+   },
+   {
+    "account_code": "1100",
+    "account_name": "Accounts Receivable",
+    "account_type": "asset",
+    "closing_balance": "8400.50",
+    "end_date": "2026-02-28",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "8400.50",
+      "description": "Invoice 2026-011",
+      "entry_date": "2026-02-11",
+      "entry_no": "JE-0003",
+      "line_no": 1,
+      "running_balance": "8400.50"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-02-01"
+   },
+   {
+    "account_code": "1200",
+    "account_name": "Prepaid Rent",
+    "account_type": "asset",
+    "closing_balance": "3600.00",
+    "end_date": "2026-02-28",
+    "lines": [],
+    "opening_balance": "3600.00",
+    "start_date": "2026-02-01"
+   },
+   {
+    "account_code": "1900",
+    "account_name": "Dormant Asset",
+    "account_type": "asset",
+    "closing_balance": "0",
+    "end_date": "2026-02-28",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-02-01"
+   },
+   {
+    "account_code": "2000",
+    "account_name": "Accounts Payable",
+    "account_type": "liability",
+    "closing_balance": "25000.00",
+    "end_date": "2026-02-28",
+    "lines": [],
+    "opening_balance": "25000.00",
+    "start_date": "2026-02-01"
+   },
+   {
+    "account_code": "4000",
+    "account_name": "Consulting Revenue",
+    "account_type": "income",
+    "closing_balance": "8400.50",
+    "end_date": "2026-02-28",
+    "lines": [
+     {
+      "credit": "8400.50",
+      "debit": "0",
+      "description": "Invoice 2026-011",
+      "entry_date": "2026-02-11",
+      "entry_no": "JE-0003",
+      "line_no": 2,
+      "running_balance": "8400.50"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-02-01"
+   },
+   {
+    "account_code": "4900",
+    "account_name": "Dormant Revenue",
+    "account_type": "income",
+    "closing_balance": "0",
+    "end_date": "2026-02-28",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-02-01"
+   },
+   {
+    "account_code": "5000",
+    "account_name": "Rent Expense",
+    "account_type": "expense",
+    "closing_balance": "0",
+    "end_date": "2026-02-28",
+    "lines": [],
+    "opening_balance": "0",
+    "start_date": "2026-02-01"
+   },
+   {
+    "account_code": "5100",
+    "account_name": "Salaries Expense",
+    "account_type": "expense",
+    "closing_balance": "0.00",
+    "end_date": "2026-02-28",
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "5000.00",
+      "description": "February salaries, later reversed",
+      "entry_date": "2026-02-25",
+      "entry_no": "JE-0004",
+      "line_no": 1,
+      "running_balance": "5000.00"
+     },
+     {
+      "credit": "5000.00",
+      "debit": "0",
+      "description": "Reversal of JE-0004",
+      "entry_date": "2026-02-26",
+      "entry_no": "JE-0005",
+      "line_no": 2,
+      "running_balance": "0.00"
+     }
+    ],
+    "opening_balance": "0",
+    "start_date": "2026-02-01"
+   }
+  ],
+  "unbounded": [
+   {
+    "account_code": "1000",
+    "account_name": "Cash at Bank",
+    "account_type": "asset",
+    "closing_balance": "23700.50",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "25000.00",
+      "description": "Owner funding",
+      "entry_date": "2026-01-05",
+      "entry_no": "JE-0001",
+      "line_no": 1,
+      "running_balance": "25000.00"
+     },
+     {
+      "credit": "3600.00",
+      "debit": "0",
+      "description": "Twelve months rent paid up front",
+      "entry_date": "2026-01-20",
+      "entry_no": "JE-0002",
+      "line_no": 2,
+      "running_balance": "21400.00"
+     },
+     {
+      "credit": "5000.00",
+      "debit": "0",
+      "description": "February salaries, later reversed",
+      "entry_date": "2026-02-25",
+      "entry_no": "JE-0004",
+      "line_no": 2,
+      "running_balance": "16400.00"
+     },
+     {
+      "credit": "0",
+      "debit": "5000.00",
+      "description": "Reversal of JE-0004",
+      "entry_date": "2026-02-26",
+      "entry_no": "JE-0005",
+      "line_no": 1,
+      "running_balance": "21400.00"
+     },
+     {
+      "credit": "0",
+      "debit": "8400.50",
+      "description": "Invoice 2026-011 settled",
+      "entry_date": "2026-04-02",
+      "entry_no": "JE-0009",
+      "line_no": 1,
+      "running_balance": "29800.50"
+     },
+     {
+      "credit": "6100.00",
+      "debit": "0",
+      "description": "Q2 salaries",
+      "entry_date": "2026-06-30",
+      "entry_no": "JE-0011",
+      "line_no": 2,
+      "running_balance": "23700.50"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": null
+   },
+   {
+    "account_code": "1100",
+    "account_name": "Accounts Receivable",
+    "account_type": "asset",
+    "closing_balance": "12750.25",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "8400.50",
+      "description": "Invoice 2026-011",
+      "entry_date": "2026-02-11",
+      "entry_no": "JE-0003",
+      "line_no": 1,
+      "running_balance": "8400.50"
+     },
+     {
+      "credit": "8400.50",
+      "debit": "0",
+      "description": "Invoice 2026-011 settled",
+      "entry_date": "2026-04-02",
+      "entry_no": "JE-0009",
+      "line_no": 2,
+      "running_balance": "0.00"
+     },
+     {
+      "credit": "0",
+      "debit": "12750.25",
+      "description": "Invoice 2026-042",
+      "entry_date": "2026-05-18",
+      "entry_no": "JE-0010",
+      "line_no": 1,
+      "running_balance": "12750.25"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": null
+   },
+   {
+    "account_code": "1200",
+    "account_name": "Prepaid Rent",
+    "account_type": "asset",
+    "closing_balance": "2700.00",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "3600.00",
+      "description": "Twelve months rent paid up front",
+      "entry_date": "2026-01-20",
+      "entry_no": "JE-0002",
+      "line_no": 1,
+      "running_balance": "3600.00"
+     },
+     {
+      "credit": "900.00",
+      "debit": "0",
+      "description": "Q1 rent expensed",
+      "entry_date": "2026-03-31",
+      "entry_no": "JE-0006",
+      "line_no": 2,
+      "running_balance": "2700.00"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": null
+   },
+   {
+    "account_code": "1900",
+    "account_name": "Dormant Asset",
+    "account_type": "asset",
+    "closing_balance": "0.00",
+    "end_date": null,
+    "lines": [],
+    "opening_balance": "0.00",
+    "start_date": null
+   },
+   {
+    "account_code": "2000",
+    "account_name": "Accounts Payable",
+    "account_type": "liability",
+    "closing_balance": "25000.00",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "25000.00",
+      "debit": "0",
+      "description": "Owner funding",
+      "entry_date": "2026-01-05",
+      "entry_no": "JE-0001",
+      "line_no": 2,
+      "running_balance": "25000.00"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": null
+   },
+   {
+    "account_code": "4000",
+    "account_name": "Consulting Revenue",
+    "account_type": "income",
+    "closing_balance": "21150.75",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "8400.50",
+      "debit": "0",
+      "description": "Invoice 2026-011",
+      "entry_date": "2026-02-11",
+      "entry_no": "JE-0003",
+      "line_no": 2,
+      "running_balance": "8400.50"
+     },
+     {
+      "credit": "12750.25",
+      "debit": "0",
+      "description": "Invoice 2026-042",
+      "entry_date": "2026-05-18",
+      "entry_no": "JE-0010",
+      "line_no": 2,
+      "running_balance": "21150.75"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": null
+   },
+   {
+    "account_code": "4900",
+    "account_name": "Dormant Revenue",
+    "account_type": "income",
+    "closing_balance": "0.00",
+    "end_date": null,
+    "lines": [],
+    "opening_balance": "0.00",
+    "start_date": null
+   },
+   {
+    "account_code": "5000",
+    "account_name": "Rent Expense",
+    "account_type": "expense",
+    "closing_balance": "900.00",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "900.00",
+      "description": "Q1 rent expensed",
+      "entry_date": "2026-03-31",
+      "entry_no": "JE-0006",
+      "line_no": 1,
+      "running_balance": "900.00"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": null
+   },
+   {
+    "account_code": "5100",
+    "account_name": "Salaries Expense",
+    "account_type": "expense",
+    "closing_balance": "6100.00",
+    "end_date": null,
+    "lines": [
+     {
+      "credit": "0",
+      "debit": "5000.00",
+      "description": "February salaries, later reversed",
+      "entry_date": "2026-02-25",
+      "entry_no": "JE-0004",
+      "line_no": 1,
+      "running_balance": "5000.00"
+     },
+     {
+      "credit": "5000.00",
+      "debit": "0",
+      "description": "Reversal of JE-0004",
+      "entry_date": "2026-02-26",
+      "entry_no": "JE-0005",
+      "line_no": 2,
+      "running_balance": "0.00"
+     },
+     {
+      "credit": "0",
+      "debit": "6100.00",
+      "description": "Q2 salaries",
+      "entry_date": "2026-06-30",
+      "entry_no": "JE-0011",
+      "line_no": 1,
+      "running_balance": "6100.00"
+     }
+    ],
+    "opening_balance": "0.00",
+    "start_date": null
+   }
+  ]
+ }
+}

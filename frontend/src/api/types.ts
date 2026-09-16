@@ -232,6 +232,10 @@ export interface AccountLedgerRead {
   opening_balance: string;
   closing_balance: string;
   lines: AccountLedgerLine[];
+  /** Lines in the whole window; `lines` may be one page of them. */
+  total_lines: number;
+  line_skip: number | null;
+  line_limit: number | null;
 }
 
 // ── General Ledger (all accounts) ──
@@ -240,6 +244,10 @@ export interface GeneralLedgerRead {
   start_date: string | null;
   end_date: string | null;
   accounts: AccountLedgerRead[];
+  /** Accounts in the company; `accounts` may be one page of them. */
+  total_accounts: number;
+  account_skip: number | null;
+  account_limit: number | null;
 }
 
 // ── Journal Entry Payloads ──

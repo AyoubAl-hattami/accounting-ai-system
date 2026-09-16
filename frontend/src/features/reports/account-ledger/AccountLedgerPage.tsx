@@ -18,6 +18,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import PageLayout from '../../../components/layout/PageLayout';
+import PaginationControls from '../../../components/ui/PaginationControls';
 import ChartCard from '../../../components/charts/ChartCard';
 import LoadingState from '../../../components/feedback/LoadingState';
 import ErrorState from '../../../components/feedback/ErrorState';
@@ -29,7 +30,7 @@ import ReportExportButtons from '../components/ReportExportButtons';
 import ReportDateField from '../components/ReportDateField';
 import ReportSearchField from '../components/ReportSearchField';
 import MoneyAmount from '../../../components/ui/MoneyAmount';
-import { useAccountLedger } from './useAccountLedger';
+import { useAccountLedger, LEDGER_LINE_PAGE_SIZE } from './useAccountLedger';
 import { useI18n } from '../../../i18n';
 import { formatCurrency, parseAmount } from '../../../lib/format';
 import apiClient from '../../../api/client';
@@ -129,6 +130,15 @@ function AccountLedgerContent({ selectedCompanyId, companiesLoading }: AccountLe
     setEndDate(null);
   }, [selectedCompanyId]);
 
+  const [lineSkip, setLineSkip] = useState(0);
+
+  // A page number means nothing once the ledger under it changes: page three
+  // of one account would become page three of the next, which may have two
+  // lines and would render empty.
+  useEffect(() => {
+    setLineSkip(0);
+  }, [selectedAccountId, startDate, endDate]);
+
   const {
     data,
     isLoading: ledgerLoading,
@@ -139,6 +149,7 @@ function AccountLedgerContent({ selectedCompanyId, companiesLoading }: AccountLe
     accountId: selectedAccountId,
     startDate,
     endDate,
+    lineSkip,
   });
 
   useEffect(() => {
@@ -365,6 +376,22 @@ function AccountLedgerContent({ selectedCompanyId, companiesLoading }: AccountLe
               {t.common.clearSearch}
             </button>
           }
+        />
+      )}
+
+      {/* The server sends one page of the window; total_lines is the window.
+          opening_balance and closing_balance always describe the whole window,
+          so the figures either side of a page boundary still reconcile. */}
+      {data.total_lines > data.lines.length && (
+        <PaginationControls
+          skip={lineSkip}
+          limit={LEDGER_LINE_PAGE_SIZE}
+          total={data.total_lines}
+          onPrev={() =>
+            setLineSkip((previous) => Math.max(0, previous - LEDGER_LINE_PAGE_SIZE))
+          }
+          onNext={() => setLineSkip((previous) => previous + LEDGER_LINE_PAGE_SIZE)}
+          entityName={t.reports.accountLedger.entries.toLowerCase()}
         />
       )}
 

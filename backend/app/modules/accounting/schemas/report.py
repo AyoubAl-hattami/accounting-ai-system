@@ -108,6 +108,11 @@ class AccountLedgerRead(BaseModel):
     closing_balance: Decimal
 
     lines: list[AccountLedgerLine]
+
+    # Lines in the whole window, against which `lines` may be a single page.
+    total_lines: int = 0
+    line_skip: int | None = None
+    line_limit: int | None = None
 class GeneralLedgerRead(BaseModel):
     company_id: int
 
@@ -115,3 +120,8 @@ class GeneralLedgerRead(BaseModel):
     end_date: date | None = None
 
     accounts: list[AccountLedgerRead]
+
+    # Accounts in the company, against which `accounts` may be a single page.
+    total_accounts: int = 0
+    account_skip: int | None = None
+    account_limit: int | None = None

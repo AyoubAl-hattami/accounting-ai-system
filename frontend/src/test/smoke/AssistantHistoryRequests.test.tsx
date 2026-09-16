@@ -74,7 +74,9 @@ describe('assistant conversation history is not fetched twice', () => {
 
     console.log(`  after mount: ${afterMount}, after a search: ${listCalls().length}`);
     expect(listCalls().length).toBe(afterMount + 1);
-    expect((listCalls().at(-1)?.[1] as { params: { search?: string } }).params.search).toBe('invoice');
+    const calls = listCalls();
+    const lastParams = (calls[calls.length - 1][1] as { params: { search?: string } }).params;
+    expect(lastParams.search).toBe('invoice');
   });
 
   it('still fetches when the restore request failed', async () => {

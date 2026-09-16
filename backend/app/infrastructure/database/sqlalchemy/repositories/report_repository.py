@@ -468,6 +468,8 @@ def get_account_ledger(
     account_id: int,
     start_date: date | None = None,
     end_date: date | None = None,
+    line_skip: int | None = None,
+    line_limit: int | None = None,
 ) -> AccountLedgerRead | None:
     account = db.scalar(
         select(Account).where(
@@ -545,45 +547,15 @@ def get_account_ledger(
 
     rows = db.execute(statement).all()
 
-    running_balance = opening_balance
-    lines: list[AccountLedgerLine] = []
-
-    for row in rows:
-        debit = Decimal(str(row.debit or 0))
-        credit = Decimal(str(row.credit or 0))
-
-        movement = _account_signed_amount(
-            account_type=account.account_type,
-            debit=debit,
-            credit=credit,
-        )
-
-        running_balance += movement
-
-        lines.append(
-            AccountLedgerLine(
-                journal_entry_id=row.journal_entry_id,
-                entry_no=row.entry_no,
-                entry_date=row.entry_date,
-                line_no=row.line_no,
-                description=row.description,
-                debit=debit,
-                credit=credit,
-                running_balance=running_balance,
-            )
-        )
-
-    return AccountLedgerRead(
+    return _ledger_from_rows(
         company_id=company_id,
-        account_id=account.id,
-        account_code=account.code,
-        account_name=account.name,
-        account_type=account.account_type,
+        account=account,
+        opening_balance=opening_balance,
+        rows=rows,
         start_date=start_date,
         end_date=end_date,
-        opening_balance=opening_balance,
-        closing_balance=running_balance,
-        lines=lines,
+        line_skip=line_skip,
+        line_limit=line_limit,
     )
 
 
@@ -595,11 +567,22 @@ def _ledger_from_rows(
     rows,
     start_date: date | None,
     end_date: date | None,
+    line_skip: int | None = None,
+    line_limit: int | None = None,
 ) -> AccountLedgerRead:
     """Turn ordered line rows into a ledger.
 
     The only place a running balance is computed, so the single-account path
     and the whole-company path cannot drift apart.
+
+    LIMITATION, deliberate: ``line_skip``/``line_limit`` bound the RESPONSE,
+    not the query. Every line in the window is still read and its running
+    balance computed, because each balance depends on every line before it --
+    page two's first figure is only correct if page one was added up. Bounding
+    the query instead would mean computing the running balance with a SQL
+    window function, which changes how the figures are produced and puts the
+    byte-for-byte ledger contract at risk. The measured harm was 2,000 lines
+    serialised and rendered, and that is what this removes.
     """
     running_balance = opening_balance
     lines: list[AccountLedgerLine] = []
@@ -627,6 +610,13 @@ def _ledger_from_rows(
             )
         )
 
+    total_lines = len(lines)
+    if line_skip is not None or line_limit is not None:
+        offset = line_skip or 0
+        page = lines[offset:] if line_limit is None else lines[offset:offset + line_limit]
+    else:
+        page = lines
+
     return AccountLedgerRead(
         company_id=company_id,
         account_id=account.id,
@@ -635,9 +625,16 @@ def _ledger_from_rows(
         account_type=account.account_type,
         start_date=start_date,
         end_date=end_date,
+        # Both balances describe the WINDOW, not the page: the opening figure
+        # a page-two running balance descends from, and the closing figure of
+        # the last page. Recomputing either per page would make them disagree
+        # with the ledger the exporters produce.
         opening_balance=opening_balance,
         closing_balance=running_balance,
-        lines=lines,
+        lines=page,
+        total_lines=total_lines,
+        line_skip=line_skip,
+        line_limit=line_limit,
     )
 
 
@@ -646,6 +643,8 @@ def get_general_ledger(
     company_id: int,
     start_date: date | None = None,
     end_date: date | None = None,
+    account_skip: int | None = None,
+    account_limit: int | None = None,
 ) -> GeneralLedgerRead:
     """Every account's ledger, in a fixed number of queries.
 
@@ -653,12 +652,28 @@ def get_general_ledger(
     without a date filter, 3 with one -- measured at 601 and 901 queries for
     300 accounts. Opening balances and lines are now fetched for every account
     at once and grouped in memory.
+
+    Paginated by ACCOUNT and never by line. A page that split an account would
+    show a running balance with no beginning and a closing figure belonging to
+    neither page. Callers that pass neither bound -- the CSV and PDF exporters
+    among them -- receive every account.
     """
     account_statement = (
         select(Account)
         .where(Account.company_id == company_id)
         .order_by(Account.code.asc())
     )
+
+    total_accounts = db.scalar(
+        select(func.count())
+        .select_from(Account)
+        .where(Account.company_id == company_id)
+    ) or 0
+
+    if account_skip is not None:
+        account_statement = account_statement.offset(account_skip)
+    if account_limit is not None:
+        account_statement = account_statement.limit(account_limit)
 
     accounts = db.scalars(account_statement).all()
 
@@ -668,6 +683,9 @@ def get_general_ledger(
             start_date=start_date,
             end_date=end_date,
             accounts=[],
+            total_accounts=total_accounts,
+            account_skip=account_skip,
+            account_limit=account_limit,
         )
 
     account_ids = [account.id for account in accounts]
@@ -769,6 +787,9 @@ def get_general_ledger(
         start_date=start_date,
         end_date=end_date,
         accounts=account_ledgers,
+        total_accounts=total_accounts,
+        account_skip=account_skip,
+        account_limit=account_limit,
     )
 
 class SqlAlchemyReportRepository(ReportRepository):
@@ -806,6 +827,8 @@ class SqlAlchemyReportRepository(ReportRepository):
             account_id=query.account_id,
             start_date=query.start_date,
             end_date=query.end_date,
+            line_skip=query.line_skip,
+            line_limit=query.line_limit,
         )
 
     def get_general_ledger(self, query: GeneralLedgerQuery) -> GeneralLedgerRead:
@@ -814,4 +837,6 @@ class SqlAlchemyReportRepository(ReportRepository):
             company_id=query.company_id,
             start_date=query.start_date,
             end_date=query.end_date,
+            account_skip=query.account_skip,
+            account_limit=query.account_limit,
         )

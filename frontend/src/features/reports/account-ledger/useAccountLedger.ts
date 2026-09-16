@@ -8,9 +8,19 @@ interface UseAccountLedgerOptions {
   accountId: number | null;
   startDate: string | null;
   endDate: string | null;
+  lineSkip?: number;
 }
 
-export function useAccountLedger({ companyId, accountId, startDate, endDate }: UseAccountLedgerOptions) {
+/** Matches the endpoint's own default, so the control and the server agree. */
+export const LEDGER_LINE_PAGE_SIZE = 200;
+
+export function useAccountLedger({
+  companyId,
+  accountId,
+  startDate,
+  endDate,
+  lineSkip = 0,
+}: UseAccountLedgerOptions) {
   const [data, setData] = useState<AccountLedgerRead | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +38,9 @@ export function useAccountLedger({ companyId, accountId, startDate, endDate }: U
       let url = `/reports/account-ledger?company_id=${companyId}&account_id=${accountId}`;
       if (startDate) url += `&start_date=${startDate}`;
       if (endDate) url += `&end_date=${endDate}`;
+      // Sent explicitly rather than relying on the endpoint default, so the
+      // page size the control paginates by is the page size the server used.
+      url += `&line_skip=${lineSkip}&line_limit=${LEDGER_LINE_PAGE_SIZE}`;
       const response = await apiClient.get<AccountLedgerRead>(url);
       setData(response.data);
     } catch {
@@ -36,7 +49,7 @@ export function useAccountLedger({ companyId, accountId, startDate, endDate }: U
     } finally {
       setIsLoading(false);
     }
-  }, [companyId, accountId, startDate, endDate]);
+  }, [companyId, accountId, startDate, endDate, lineSkip]);
 
   // Auto-refetch when posted journal data changes (post/review/void/reverse)
   useEffect(() => {
