@@ -383,3 +383,150 @@ def test_user_question_is_refused_for_every_other_role(monkeypatch, no_gemini, r
     assert reply.confidence == "high"
     assert reply.data_sources == []
     assert reply.reply == "🔒 You don't have permission to view company user data."
+
+# ── who_action_question ──────────────────────────────────────────────
+
+# The whole discriminating logic of this handler is a chain of substring tests
+# that picks one audit action to filter by. Four of its six arms were never
+# executed by any test, so the chain could have been reordered or dropped
+# without a single failure. Each arm is pinned here, in both languages where
+# the classifier offers a route in.
+
+
+def _who_action_filter(monkeypatch, message, role="admin", language="en"):
+    """Return the action filter this message causes, and the reply."""
+    seen = []
+
+    def logs(db, company_id, action=None, limit=10):
+        seen.append((action, limit))
+        return []
+
+    monkeypatch.setattr(service, "_tool_get_recent_audit_logs", logs)
+    reply = dispatch(message, role=role, language=language)
+    assert reply.intent == "answer_who_action_question"
+    assert len(seen) == 1
+    return seen[0][0], reply
+
+
+@pytest.mark.parametrize(("message", "expected_filter"), [
+    ("Who posted the entry?", "post_journal_entry"),
+    ("Who reviewed the entry?", "review_journal_entry"),
+    ("Who created the entry?", "create_journal_entry"),
+    ("Who made the reverse entry?", "reverse_journal_entry"),
+    ("Who changed the role?", "update_company_user"),
+    ("Who modified it?", "update_company_user"),
+    ("Who deleted the user?", "remove_company_access"),
+    ("who made the call", None),
+])
+def test_who_action_english_arms_select_their_audit_action(
+    monkeypatch, no_gemini, message, expected_filter,
+):
+    assert _who_action_filter(monkeypatch, message)[0] == expected_filter
+
+
+@pytest.mark.parametrize(("message", "expected_filter"), [
+    ("من رحل القيد", "post_journal_entry"),
+    ("من راجع القيد", "review_journal_entry"),
+    ("من أنشأ القيد", "create_journal_entry"),
+    ("من عدل الصلاحية", "update_company_user"),
+    ("من حذف المستخدم", "remove_company_access"),
+])
+def test_who_action_arabic_arms_select_their_audit_action(
+    monkeypatch, no_gemini, message, expected_filter,
+):
+    assert _who_action_filter(monkeypatch, message, language="ar")[0] == expected_filter
+
+
+def test_who_action_arms_are_ordered_and_the_first_match_wins(monkeypatch, no_gemini):
+    """The chain is elif, so a message naming two actions gets the earlier arm."""
+    assert _who_action_filter(
+        monkeypatch, "Who posted and reviewed the entry?")[0] == "post_journal_entry"
+    assert _who_action_filter(
+        monkeypatch, "Who reviewed and deleted it?")[0] == "review_journal_entry"
+
+
+def test_who_action_reverse_arm_has_no_route_of_its_own(monkeypatch, no_gemini):
+    """RECORDED AS-IS: the classifier has no "who reversed" pattern.
+
+    "Who reversed the entry?" is classified audit_question, not
+    who_action_question -- it reaches this handler only because the intent
+    orchestrator re-routes it. The reverse arm is therefore reachable from the
+    classifier only by a message that matches some OTHER who-action pattern and
+    happens to contain the word "reverse". Filed, not fixed.
+    """
+    assert service._classify_intent("Who reversed the entry?") == "audit_question"
+    assert service._classify_intent("Who made the reverse entry?") == "who_action_question"
+
+    # Routed to who_action anyway, by the orchestrator rather than the classifier.
+    action, reply = _who_action_filter(monkeypatch, "Who reversed the entry?")
+    assert action == "reverse_journal_entry"
+    assert reply.intent == "answer_who_action_question"
+
+
+def test_who_action_unmatched_message_reports_recent_actions(monkeypatch, no_gemini):
+    """With no arm matched, the filter is None and the reply says so."""
+    action, reply = _who_action_filter(monkeypatch, "who made the call")
+    assert action is None
+    assert reply.confidence == "low"
+    assert reply.data_sources == ["audit_logs"]
+    assert reply.reply == "🔍 No audit log found matching 'recent actions'."
+
+
+def test_who_action_empty_result_names_the_filter_it_used(monkeypatch, no_gemini):
+    _, reply = _who_action_filter(monkeypatch, "Who reviewed the entry?")
+    assert reply.reply == (
+        "🔍 No audit log found matching 'review_journal_entry'.")
+
+    _, arabic = _who_action_filter(
+        monkeypatch, "من راجع القيد", language="ar")
+    assert arabic.reply == (
+        "🔍 لم أجد سجل تدقيق يطابق 'review_journal_entry'.")
+
+
+def test_who_action_reply_leads_with_the_latest_log(monkeypatch, no_gemini):
+    monkeypatch.setattr(service, "_tool_get_recent_audit_logs",
+                        lambda *a, **k: _audit_logs())
+    reply = dispatch("Who reviewed the entry?")
+
+    assert reply.confidence == "high"
+    assert reply.data_sources == ["audit_logs"]
+    assert reply.grounding is None
+    # RECORDED AS-IS: the reply describes the newest log whatever the filter
+    # asked for -- the handler does not check that the log it found matches.
+    assert reply.reply == (
+        "👤 **Sara Ahmed** performed **post journal entry** "
+        "at 2026-03-04T09:15:00.\n"
+        "• Description: Posted JE-41\n"
+        "\n"
+        "📋 **Last 2 actions:**\n"
+        "• Sara Ahmed — post journal entry — 2026-03-04T09:15:00\n"
+        "• Omar Ali — create journal entry — 2026-03-03T14:02:11"
+    )
+
+
+def test_who_action_prefers_gemini_over_the_fallback(monkeypatch):
+    monkeypatch.setattr(service, "_tool_get_recent_audit_logs",
+                        lambda *a, **k: _audit_logs())
+    monkeypatch.setattr(service, "_call_gemini_for_answer",
+                        lambda *a, **k: "Gemini wrote this.")
+    assert dispatch("Who reviewed the entry?").reply == "Gemini wrote this."
+
+
+def test_who_action_shares_the_audit_log_role_gate(monkeypatch, no_gemini):
+    """This handler reads audit logs and carries the audit gate, at line 3701.
+
+    Written first as "not gated", which the run corrected: who_action_question
+    is restricted to the same _CAN_READ_AUDIT_LOGS roles as audit_question, and
+    refuses with the audit-log wording.
+    """
+    monkeypatch.setattr(service, "_tool_get_recent_audit_logs",
+                        lambda *a, **k: _audit_logs())
+    for role in ("admin", "auditor"):
+        assert dispatch("Who reviewed the entry?", role=role).intent == (
+            "answer_who_action_question")
+
+    for role in ("accountant", "reviewer", "approver", "viewer"):
+        reply = dispatch("Who reviewed the entry?", role=role)
+        assert reply.intent == "access_denied"
+        assert reply.data_sources == []
+        assert reply.reply == "🔒 You don't have permission to access audit logs."
