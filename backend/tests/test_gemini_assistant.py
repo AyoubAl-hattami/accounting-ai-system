@@ -310,8 +310,15 @@ def test_gemini_assistant_report_question(base_url, deterministic_accounting_boo
     )
 
 
-def test_gemini_assistant_audit_question_admin(base_url, deterministic_accounting_bootstrap):
-    """Admin should be able to ask audit log questions."""
+def test_gemini_assistant_who_changed_a_role_admin(base_url, deterministic_accounting_bootstrap):
+    """Admin asking who changed a role is answered by the who-action handler.
+
+    Named for the handler it actually reaches. Line tracing showed this test
+    executing who_action_question's body, never audit_question's, and the
+    disjunctive assertion it used to carry could not tell the two apart -- so
+    it was the only evidence anyone had that audit_question worked, while
+    proving nothing about it.
+    """
     bs = deterministic_accounting_bootstrap
     response = gemini_assistant_request(
         base_url=base_url,
@@ -324,7 +331,7 @@ def test_gemini_assistant_audit_question_admin(base_url, deterministic_accountin
     assert response.status_code == 200
 
     data = response.json()
-    assert data["intent"] in ("answer_audit_question", "answer_who_action_question", "clarification")
+    assert data["intent"] == "answer_who_action_question"
 
 
 def test_gemini_assistant_journal_question(base_url, deterministic_accounting_bootstrap):
