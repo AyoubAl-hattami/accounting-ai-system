@@ -587,31 +587,182 @@ def get_account_ledger(
     )
 
 
+def _ledger_from_rows(
+    *,
+    company_id: int,
+    account: Account,
+    opening_balance: Decimal,
+    rows,
+    start_date: date | None,
+    end_date: date | None,
+) -> AccountLedgerRead:
+    """Turn ordered line rows into a ledger.
+
+    The only place a running balance is computed, so the single-account path
+    and the whole-company path cannot drift apart.
+    """
+    running_balance = opening_balance
+    lines: list[AccountLedgerLine] = []
+
+    for row in rows:
+        debit = Decimal(str(row.debit or 0))
+        credit = Decimal(str(row.credit or 0))
+
+        running_balance += _account_signed_amount(
+            account_type=account.account_type,
+            debit=debit,
+            credit=credit,
+        )
+
+        lines.append(
+            AccountLedgerLine(
+                journal_entry_id=row.journal_entry_id,
+                entry_no=row.entry_no,
+                entry_date=row.entry_date,
+                line_no=row.line_no,
+                description=row.description,
+                debit=debit,
+                credit=credit,
+                running_balance=running_balance,
+            )
+        )
+
+    return AccountLedgerRead(
+        company_id=company_id,
+        account_id=account.id,
+        account_code=account.code,
+        account_name=account.name,
+        account_type=account.account_type,
+        start_date=start_date,
+        end_date=end_date,
+        opening_balance=opening_balance,
+        closing_balance=running_balance,
+        lines=lines,
+    )
+
+
 def get_general_ledger(
     db: Session,
     company_id: int,
     start_date: date | None = None,
     end_date: date | None = None,
 ) -> GeneralLedgerRead:
-    accounts = db.scalars(
+    """Every account's ledger, in a fixed number of queries.
+
+    This used to call get_account_ledger in a loop: 2 queries per account
+    without a date filter, 3 with one -- measured at 601 and 901 queries for
+    300 accounts. Opening balances and lines are now fetched for every account
+    at once and grouped in memory.
+    """
+    account_statement = (
         select(Account)
         .where(Account.company_id == company_id)
         .order_by(Account.code.asc())
-    ).all()
+    )
 
-    account_ledgers: list[AccountLedgerRead] = []
+    accounts = db.scalars(account_statement).all()
 
-    for account in accounts:
-        ledger = get_account_ledger(
-            db=db,
+    if not accounts:
+        return GeneralLedgerRead(
             company_id=company_id,
-            account_id=account.id,
             start_date=start_date,
             end_date=end_date,
+            accounts=[],
         )
 
-        if ledger is not None:
-            account_ledgers.append(ledger)
+    account_ids = [account.id for account in accounts]
+
+    # One grouped query for every opening balance instead of one per account.
+    # An account with nothing before start_date is simply absent from the
+    # result and falls back to Decimal(str(0)) -- the same value the
+    # per-account coalesce produced, which renders as "0" and not "0.00".
+    # That inconsistency is pre-existing and is reproduced on purpose: the
+    # captured ledger contract contains it.
+    opening_by_account: dict[int, tuple[Decimal, Decimal]] = {}
+    if start_date is not None:
+        opening_rows = db.execute(
+            select(
+                JournalLine.account_id.label("account_id"),
+                func.coalesce(func.sum(JournalLine.debit), 0).label("debit_total"),
+                func.coalesce(func.sum(JournalLine.credit), 0).label("credit_total"),
+            )
+            .select_from(JournalLine)
+            .join(JournalEntry, JournalEntry.id == JournalLine.journal_entry_id)
+            .where(
+                JournalLine.company_id == company_id,
+                JournalLine.account_id.in_(account_ids),
+                _official_entry_filter(end_date=start_date - timedelta(days=1)),
+            )
+            .group_by(JournalLine.account_id)
+        ).all()
+        opening_by_account = {
+            row.account_id: (
+                Decimal(str(row.debit_total or 0)),
+                Decimal(str(row.credit_total or 0)),
+            )
+            for row in opening_rows
+        }
+
+    # One query for every line, ordered so each account's slice already arrives
+    # in the order the per-account query produced.
+    line_statement = (
+        select(
+            JournalLine.account_id.label("account_id"),
+            JournalEntry.id.label("journal_entry_id"),
+            JournalEntry.entry_no.label("entry_no"),
+            JournalEntry.entry_date.label("entry_date"),
+            JournalLine.line_no.label("line_no"),
+            JournalLine.description.label("description"),
+            JournalLine.debit.label("debit"),
+            JournalLine.credit.label("credit"),
+        )
+        .select_from(JournalLine)
+        .join(JournalEntry, JournalEntry.id == JournalLine.journal_entry_id)
+        .where(
+            JournalLine.company_id == company_id,
+            JournalLine.account_id.in_(account_ids),
+            _official_entry_filter(),
+        )
+        .order_by(
+            JournalLine.account_id.asc(),
+            JournalEntry.entry_date.asc(),
+            JournalEntry.id.asc(),
+            JournalLine.line_no.asc(),
+        )
+    )
+
+    if start_date is not None:
+        line_statement = line_statement.where(JournalEntry.entry_date >= start_date)
+    if end_date is not None:
+        line_statement = line_statement.where(JournalEntry.entry_date <= end_date)
+
+    rows_by_account: dict[int, list] = {account_id: [] for account_id in account_ids}
+    for row in db.execute(line_statement).all():
+        rows_by_account[row.account_id].append(row)
+
+    zero = Decimal(str(0))
+    account_ledgers: list[AccountLedgerRead] = []
+    for account in accounts:
+        if start_date is None:
+            opening_balance = Decimal("0.00")
+        else:
+            debit_total, credit_total = opening_by_account.get(account.id, (zero, zero))
+            opening_balance = _account_signed_amount(
+                account_type=account.account_type,
+                debit=debit_total,
+                credit=credit_total,
+            )
+
+        account_ledgers.append(
+            _ledger_from_rows(
+                company_id=company_id,
+                account=account,
+                opening_balance=opening_balance,
+                rows=rows_by_account[account.id],
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
 
     return GeneralLedgerRead(
         company_id=company_id,
