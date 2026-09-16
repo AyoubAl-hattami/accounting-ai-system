@@ -47,7 +47,6 @@ describe('dashboard reports a source that failed', () => {
     render(<I18nProvider><DashboardPage /></I18nProvider>);
 
     await waitFor(() => expect(dashboardRendered()).toBe(true));
-    console.log(`  one source failed -> banner: ${banner() !== null}, dashboard still rendered: ${dashboardRendered()}`);
     expect(banner()).not.toBeNull();
     expect(screen.getByText(en.nav.balanceSheet)).toBeInTheDocument();
     expect(dashboardRendered()).toBe(true);
@@ -58,7 +57,6 @@ describe('dashboard reports a source that failed', () => {
     render(<I18nProvider><DashboardPage /></I18nProvider>);
     await waitFor(() => expect(banner()).not.toBeNull());
     const names = screen.getByText(new RegExp(`${en.nav.balanceSheet}|${en.nav.profitAndLoss}`));
-    console.log(`  two sources failed -> named: "${names.textContent}"`);
     expect(names.textContent).toContain(en.nav.profitAndLoss);
     expect(names.textContent).toContain(en.nav.balanceSheet);
   });
@@ -69,7 +67,6 @@ describe('dashboard reports a source that failed', () => {
     await waitFor(() =>
       expect(screen.queryByText(/Failed to load dashboard data/)).not.toBeNull(),
     );
-    console.log(`  all sources failed -> dashboard rendered: ${dashboardRendered()}`);
     expect(dashboardRendered()).toBe(false);
   });
 
@@ -77,7 +74,6 @@ describe('dashboard reports a source that failed', () => {
     respond([]);
     render(<I18nProvider><DashboardPage /></I18nProvider>);
     await waitFor(() => expect(dashboardRendered()).toBe(true));
-    console.log(`  nothing failed -> banner: ${banner() !== null}`);
     expect(banner()).toBeNull();
   });
 });

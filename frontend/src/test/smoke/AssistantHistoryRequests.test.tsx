@@ -46,10 +46,6 @@ describe('assistant conversation history is not fetched twice', () => {
     });
 
     const calls = listCalls();
-    console.log(`  GET /ai/conversations after one mount: ${calls.length}`);
-    calls.forEach((call, i) => {
-      console.log(`    [${i}] ${JSON.stringify((call[1] as { params: unknown }).params)}`);
-    });
     expect(calls.length).toBe(1);
   });
 
@@ -72,7 +68,6 @@ describe('assistant conversation history is not fetched twice', () => {
       await new Promise((resolve) => setTimeout(resolve, 400));
     });
 
-    console.log(`  after mount: ${afterMount}, after a search: ${listCalls().length}`);
     expect(listCalls().length).toBe(afterMount + 1);
     const calls = listCalls();
     const lastParams = (calls[calls.length - 1][1] as { params: { search?: string } }).params;
@@ -94,7 +89,6 @@ describe('assistant conversation history is not fetched twice', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 400));
     });
-    console.log(`  GET /ai/conversations when restore failed: ${listCalls().length}`);
     expect(listCalls().length).toBeGreaterThanOrEqual(2);
   });
 });
