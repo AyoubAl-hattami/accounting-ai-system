@@ -43,8 +43,21 @@ export default function LoginPage() {
       );
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'response' in err) {
-        const axiosError = err as { response?: { data?: { detail?: string } } };
-        setError(axiosError.response?.data?.detail || t.login.invalidCredentials);
+        const axiosError = err as {
+          response?: { status?: number; data?: { detail?: string } };
+        };
+        /* A 401 is the one failure the client can word better than the server.
+           The server answers "Invalid email or password" in English, which read
+           as a foreign string in an Arabic UI; the translation already exists.
+
+           Every other status keeps the server's wording, because it carries
+           something only the server knows -- a lockout, an expired
+           subscription, a rejected address. */
+        setError(
+          axiosError.response?.status === 401
+            ? t.login.invalidCredentials
+            : axiosError.response?.data?.detail || t.login.invalidCredentials,
+        );
       } else {
         setError(t.login.networkError);
       }
