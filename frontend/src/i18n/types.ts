@@ -283,6 +283,11 @@ export interface Translations {
     subtypeRevenue: string;
     subtypeExpense: string;
     subtypeOther: string;
+    typeAsset: string;
+    typeLiability: string;
+    typeEquity: string;
+    typeIncome: string;
+    typeExpense: string;
     parentAccount: string;
     parentNone: string;
     quickTemplates: string;
