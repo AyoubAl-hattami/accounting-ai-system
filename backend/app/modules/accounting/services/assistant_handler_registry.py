@@ -270,4 +270,21 @@ ASSISTANT_HANDLERS: tuple[HandlerEntry, ...] = (
         ),
         handler=ServiceHandler('_handle_action_request_intent'),
     ),
+    HandlerEntry(
+        intents=("structured_report_question",),
+        permission=_CAN_READ_REPORTS,
+        denial=Denial(
+            arabic='ليس لديك صلاحية عرض هذا التقرير.',
+            english='I do not have permission to view this report.',
+        ),
+        handler=ServiceHandler("_handle_structured_report_question"),
+        # The second half of the branch condition, carried across as it was.
+        # Measurement says it is redundant -- every path that sets this intent
+        # also sets structured_kind to one of these four -- but a migration
+        # that relocated and simplified at once could not say which half broke
+        # something. Removing it is a separate decision with its own evidence.
+        precondition=lambda request: request.structured_kind in {
+            "balance_sheet", "trial_balance", "account_ledger", "general_ledger",
+        },
+    ),
 )

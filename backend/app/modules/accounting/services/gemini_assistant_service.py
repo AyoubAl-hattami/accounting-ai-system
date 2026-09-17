@@ -3757,6 +3757,40 @@ def _handle_action_request_intent(request: AssistantRequest) -> GeminiAssistantR
     )
 
 
+def _handle_structured_report_question(
+    request: AssistantRequest,
+) -> GeminiAssistantReply:
+    """Answer with a balance sheet, trial balance, or ledger.
+
+    Moved out of dispatch_gemini_assistant's if-chain. Two things travelled
+    into the registry entry rather than into this function:
+
+      * the `structured_kind in {...}` half of the branch condition, which is
+        now the entry's `precondition`;
+      * the role check that used to be the first statement of this body,
+        which is now the entry's `permission` and `denial`.
+
+    What remains below is the rest of the branch, dedented and unchanged.
+    """
+    db = request.db
+    company_id = request.company_id
+    message = request.message
+    language = request.language
+    page_context = request.page_context
+    structured_kind = request.structured_kind
+    orchestrated_account_target = request.orchestrated_account_target
+
+    return _structured_report_reply(
+        db,
+        company_id,
+        message,
+        language,
+        page_context,
+        structured_kind,
+        account_target=orchestrated_account_target,
+    )
+
+
 def dispatch_gemini_assistant(
     db: Session,
     company_id: int,
@@ -4085,19 +4119,6 @@ def dispatch_gemini_assistant(
                     intent="access_denied", confidence="high", data_sources=[],
                 )
             return entry.handler(assistant_request)
-
-    if intent == "structured_report_question" and structured_kind in {"balance_sheet", "trial_balance", "account_ledger", "general_ledger"}:
-        if user_role not in _CAN_READ_REPORTS:
-            return GeminiAssistantReply(reply=("I do not have permission to view this report." if language != "ar" else "ليس لديك صلاحية عرض هذا التقرير."), intent="access_denied", confidence="high", data_sources=[])
-        return _structured_report_reply(
-            db,
-            company_id,
-            message,
-            language,
-            page_context,
-            structured_kind,
-            account_target=orchestrated_account_target,
-        )
 
     # ── Conversation-aware retry ─────────────────────────────────────────────
     # A follow-up like "it was 300 from the bank" classifies as unknown on its

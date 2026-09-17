@@ -52,17 +52,12 @@ CLASSIFIER = "_classify_intent"
 
 # Handlers whose gate is not a peer of the others and so cannot be detected by
 # shape.  Every entry needs a reason; an empty reason is not an exemption.
-# This set empties itself as the migration proceeds: a registered handler
-# carries its gate in a field, so there is nothing left to exempt.
-INLINE_GATED_HANDLERS = {
-    # Carries its own gate immediately inside the handler body:
-    #     if user_role not in _CAN_READ_REPORTS: return ... access_denied
-    # The enclosing condition is `intent == "structured_report_question" and
-    # structured_kind in {...}`.  When this handler is registered, that
-    # condition becomes its `precondition` field and the gate becomes its
-    # `permission` field, and this exemption goes away.
-    "structured_report_question",
-}
+#
+# Empty now. structured_report_question was the only entry, and its gate is a
+# field of its registry entry rather than a statement inside its body, so
+# there is nothing left to exempt. The allowlist test below still runs and
+# now asserts over an empty set, which is what it should assert.
+INLINE_GATED_HANDLERS: set[str] = set()
 
 # Produced by the resolution chain but deliberately not dispatched by any
 # handler.  Each needs a reason.
