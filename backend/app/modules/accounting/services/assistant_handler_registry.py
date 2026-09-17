@@ -71,6 +71,22 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     )
 
 
+# ── Permission vocabulary ───────────────────────────────────────
+# These live here rather than in the service because a registry entry has to
+# name the set that gates it, and the service already imports this module -- so
+# the service cannot own them without a cycle. They are imported back into the
+# service under the same names, so every gate there reads exactly as it did.
+#
+# A copy in each place would NOT be caught by the consistency test:
+# _CAN_READ_USERS and _CAN_READ_AUDIT_LOGS are equal today, so a stale copy of
+# one would still compare equal to the other and pass. One definition removes
+# the question.
+_CAN_READ_REPORTS = frozenset(
+    {"admin", "accountant", "reviewer", "approver", "auditor", "viewer"})
+_CAN_READ_AUDIT_LOGS = frozenset({"admin", "auditor"})
+_CAN_READ_USERS = frozenset({"admin", "auditor"})
+_CAN_CREATE_DRAFT = frozenset({"admin", "accountant"})
+
 @dataclass(frozen=True, slots=True)
 class AssistantRequest:
     """Every dispatcher local a handler body reads, passed through unchanged.
@@ -130,6 +146,27 @@ class Denial:
 
 
 @dataclass(frozen=True, slots=True)
+class ServiceHandler:
+    """Names a handler function in gemini_assistant_service, resolved when called.
+
+    The service imports this module, so this module cannot import the service at
+    module scope. Importing inside the call breaks the cycle, and keeps this
+    module light enough for the consistency test to read the registry without
+    pulling in the service, sqlalchemy and settings.
+
+    Resolving by name at call time also keeps the existing tests honest: they
+    monkeypatch attributes on the service module, and a reference captured at
+    import would freeze the pre-patch function.
+    """
+
+    name: str
+
+    def __call__(self, request: "AssistantRequest") -> "GeminiAssistantReply":
+        from app.modules.accounting.services import gemini_assistant_service
+
+        return getattr(gemini_assistant_service, self.name)(request)
+
+@dataclass(frozen=True, slots=True)
 class HandlerEntry:
     """One dispatched intent, bound to the gate that authorises it.
 
@@ -157,7 +194,17 @@ class HandlerEntry:
         return self.precondition is None or self.precondition(request)
 
 
-# Empty on purpose. Handlers are appended one commit at a time; the consistency
-# test in tests/test_assistant_handler_gate_coverage.py holds the invariant that
-# every producible intent is dispatched exactly once, inline or from here.
-ASSISTANT_HANDLERS: tuple[HandlerEntry, ...] = ()
+# Handlers are appended one commit at a time; the consistency test in
+# tests/test_assistant_handler_gate_coverage.py holds the invariant that every
+# producible intent is dispatched exactly once, inline or from here.
+ASSISTANT_HANDLERS: tuple[HandlerEntry, ...] = (
+    HandlerEntry(
+        intents=("user_question",),
+        permission=_CAN_READ_USERS,
+        denial=Denial(
+            arabic='🔒 ليس لديك صلاحية عرض بيانات المستخدمين.',
+            english="🔒 You don't have permission to view company user data.",
+        ),
+        handler=ServiceHandler("_handle_user_question"),
+    ),
+)

@@ -38,6 +38,7 @@ right permission set remains a review judgement.
 import ast
 import pathlib
 
+from app.modules.accounting.services import assistant_handler_registry
 from app.modules.accounting.services.assistant_handler_registry import (
     ASSISTANT_HANDLERS,
 )
@@ -208,27 +209,21 @@ def _producible_intents() -> set[str]:
 
 
 def _permission_sets() -> dict[str, frozenset[str]]:
-    """The `_CAN_*` role sets, read from the source rather than imported.
+    """The `_CAN_*` role sets.
 
-    Importing them would drag in the whole service, sqlalchemy and settings for
-    the sake of four literal sets.
+    They live in the registry module, not the service: a registry entry has to
+    name the set that gates it, and the service imports the registry, so the
+    service cannot own them without a cycle. The service imports them back under
+    the same names, which is why the AST gate detection above still works.
+
+    Read as objects rather than parsed out of source, so this compares against
+    the one definition rather than a transcription of it.
     """
-    sets: dict[str, frozenset[str]] = {}
-    for node in _module().body:
-        if not isinstance(node, ast.Assign):
-            continue
-        for target in node.targets:
-            if not (isinstance(target, ast.Name) and target.id.startswith("_CAN_")):
-                continue
-            call = node.value
-            if isinstance(call, ast.Call) and getattr(call.func, "id", "") == "frozenset":
-                literal = call.args[0] if call.args else None
-                if isinstance(literal, (ast.Set, ast.List, ast.Tuple)):
-                    sets[target.id] = frozenset(
-                        element.value for element in literal.elts
-                        if isinstance(element, ast.Constant)
-                    )
-    return sets
+    return {
+        name: value
+        for name, value in vars(assistant_handler_registry).items()
+        if name.startswith("_CAN_") and isinstance(value, frozenset)
+    }
 
 
 # ── guard the guard ──────────────────────────────────────────────────────────
@@ -249,7 +244,7 @@ def test_dispatch_is_still_detectable_in_at_least_one_form():
         "changed shape; _producible_intents needs updating."
     )
     assert _permission_sets(), (
-        f"No _CAN_* permission sets were found in {SERVICE.name}."
+        "No _CAN_* permission sets were found in assistant_handler_registry."
     )
 
 
@@ -281,8 +276,8 @@ def test_every_registered_handler_carries_a_real_permission():
         )
         assert entry.permission in known, (
             f"Registered handler for {sorted(entry.intents)} carries a "
-            f"permission set that is not one of the _CAN_* sets defined in "
-            f"{SERVICE.name}: {sorted(entry.permission)}. A bespoke role set "
+            f"permission set that is not one of the _CAN_* sets: "
+            f"{sorted(entry.permission)}. A bespoke role set "
             "here is how two places drift apart about who may read what."
         )
 

@@ -89,6 +89,10 @@ from app.modules.accounting.services.account_mapper import map_to_accounts
 from app.modules.accounting.services.assistant_handler_registry import (
     ASSISTANT_HANDLERS,
     AssistantRequest,
+    _CAN_CREATE_DRAFT,
+    _CAN_READ_AUDIT_LOGS,
+    _CAN_READ_REPORTS,
+    _CAN_READ_USERS,
 )
 from app.modules.accounting.services.audit_service import list_audit_logs
 from app.modules.accounting.services.reports_application_facade import (
@@ -129,12 +133,10 @@ def _scrub(d: dict) -> dict:
     return {k: v for k, v in d.items() if k.lower() not in _SENSITIVE}
 
 
-# ── Role permission matrix ────────────────────────────────────────────────────
+# The _CAN_* role sets that used to live here are defined in
+# assistant_handler_registry, so a registry entry can name the set that
+# gates it. They are imported above under the same names.
 
-_CAN_READ_REPORTS = frozenset({"admin", "accountant", "reviewer", "approver", "auditor", "viewer"})
-_CAN_READ_AUDIT_LOGS = frozenset({"admin", "auditor"})
-_CAN_READ_USERS = frozenset({"admin", "auditor"})
-_CAN_CREATE_DRAFT = frozenset({"admin", "accountant"})
 _PENDING_CONTEXT_TTL_SECONDS = 15 * 60
 
 
@@ -3414,6 +3416,38 @@ def _intent_clarification_reply(
     )
 
 
+def _handle_user_question(request: AssistantRequest) -> GeminiAssistantReply:
+    """Answer a question about this company's users.
+
+    Moved out of dispatch_gemini_assistant's if-chain unchanged. The locals are
+    unpacked from the request first so the body below is character-for-character
+    the branch it replaces, which is what makes this a move and not a rewrite.
+
+    It stays in this module rather than moving next to the registry so that the
+    helpers it calls resolve through this module's globals, which is what the
+    characterisation tests monkeypatch.
+    """
+    db = request.db
+    company_id = request.company_id
+    message = request.message
+    language = request.language
+    history = request.history
+    runtime_context = request.runtime_context
+
+    users = _tool_get_company_users(db, company_id)
+    context = _build_user_context(users)
+    gemini_reply = _call_gemini_for_answer(
+        message, context, language, history, runtime_context
+    )
+    reply = gemini_reply or _fallback_user_reply(users, language)
+    return GeminiAssistantReply(
+        reply=reply,
+        intent="answer_user_question",
+        confidence="high" if users else "low",
+        data_sources=["company_users"],
+    )
+
+
 def dispatch_gemini_assistant(
     db: Session,
     company_id: int,
@@ -3658,15 +3692,6 @@ def dispatch_gemini_assistant(
                 "🔒 ليس لديك صلاحية الوصول إلى سجلات التدقيق."
                 if language == "ar"
                 else "🔒 You don't have permission to access audit logs."
-            ),
-            intent="access_denied", confidence="high", data_sources=[],
-        )
-    if intent == "user_question" and user_role not in _CAN_READ_USERS:
-        return GeminiAssistantReply(
-            reply=(
-                "🔒 ليس لديك صلاحية عرض بيانات المستخدمين."
-                if language == "ar"
-                else "🔒 You don't have permission to view company user data."
             ),
             intent="access_denied", confidence="high", data_sources=[],
         )
@@ -4002,21 +4027,6 @@ def dispatch_gemini_assistant(
             intent="answer_journal_question",
             confidence="high" if entries else "low",
             data_sources=["journal_entries"],
-        )
-
-    # ── User question ────────────────────────────────────────────────────────
-    if intent == "user_question":
-        users = _tool_get_company_users(db, company_id)
-        context = _build_user_context(users)
-        gemini_reply = _call_gemini_for_answer(
-            message, context, language, history, runtime_context
-        )
-        reply = gemini_reply or _fallback_user_reply(users, language)
-        return GeminiAssistantReply(
-            reply=reply,
-            intent="answer_user_question",
-            confidence="high" if users else "low",
-            data_sources=["company_users"],
         )
 
     # ── Action request (semantic parser + mapper, rules fallback) ──────────
