@@ -3628,6 +3628,62 @@ def _handle_explain_question(request: AssistantRequest) -> GeminiAssistantReply:
     )
 
 
+def _handle_trace_question(request: AssistantRequest) -> GeminiAssistantReply:
+    """Trace which journal entries contain a given amount.
+
+    Moved out of dispatch_gemini_assistant's if-chain unchanged: the body
+    below is the branch, dedented. The locals it reads are unpacked from
+    the request first so nothing inside had to be rewritten.
+    """
+    db = request.db
+    company_id = request.company_id
+    message = request.message
+    language = request.language
+
+    amount = _extract_amount_from_message(message)
+    account_hint = _extract_account_hint(message)
+
+    if amount is None:
+        if language == "ar":
+            reply = "🤔 لم أتمكن من تحديد المبلغ. حدد المبلغ المطلوب تتبعه، مثل: 'من أدخل 1000؟'"
+        else:
+            reply = "🤔 I couldn't identify the amount. Please specify, e.g. 'Who entered 1000?'"
+        return GeminiAssistantReply(
+            reply=reply,
+            intent="clarification",
+            confidence="low",
+            data_sources=[],
+        )
+
+    matches = _tool_trace_amount(db, company_id, amount, account_hint)
+    if matches is None:
+        return GeminiAssistantReply(reply=_unavailable_journal_reply(language), intent="answer_trace_question", confidence="low", data_sources=[], grounding=_unavailable_journal_grounding())
+    evidence = [
+        EvidenceEntry(
+            entry_no=m["entry_no"],
+            date=m["entry_date"],
+            amount=m["amount"],
+            debit_account=", ".join(m.get("debit_accounts", [])),
+            credit_account=", ".join(m.get("credit_accounts", [])),
+            status=m["status"],
+            actor_name=m.get("created_by"),
+            description=m.get("description"),
+        )
+        for m in matches
+    ]
+
+    grounding = _build_journal_evidence(matches, amount)
+    reply = _deterministic_trace_reply(matches, amount, language)
+    return GeminiAssistantReply(
+        reply=reply,
+        intent="answer_trace_question",
+        confidence="high" if matches else "medium",
+        data_sources=["journal_entries", "audit_logs"] if matches else ["journal_entries"],
+        evidence=evidence,
+        grounding=grounding,
+    )
+
+
 def dispatch_gemini_assistant(
     db: Session,
     company_id: int,
@@ -3889,15 +3945,6 @@ def dispatch_gemini_assistant(
             ),
             intent="access_denied", confidence="high", data_sources=[],
         )
-    if intent == "trace_question" and user_role not in _CAN_READ_REPORTS:
-        return GeminiAssistantReply(
-            reply=(
-                "🔒 ليس لديك صلاحية الوصول إلى هذه البيانات."
-                if language == "ar"
-                else "🔒 You don't have permission to access this data."
-            ),
-            intent="access_denied", confidence="high", data_sources=[],
-        )
     if intent == "pl_contribution_question":
         grounded_period = (prior_grounding or {}).get("period") or {}
         try:
@@ -3974,51 +4021,6 @@ def dispatch_gemini_assistant(
                     intent="access_denied", confidence="high", data_sources=[],
                 )
             return entry.handler(assistant_request)
-
-    # ── Trace question (who entered / where did amount go) ────────────────────
-    if intent == "trace_question":
-        amount = _extract_amount_from_message(message)
-        account_hint = _extract_account_hint(message)
-
-        if amount is None:
-            if language == "ar":
-                reply = "🤔 لم أتمكن من تحديد المبلغ. حدد المبلغ المطلوب تتبعه، مثل: 'من أدخل 1000؟'"
-            else:
-                reply = "🤔 I couldn't identify the amount. Please specify, e.g. 'Who entered 1000?'"
-            return GeminiAssistantReply(
-                reply=reply,
-                intent="clarification",
-                confidence="low",
-                data_sources=[],
-            )
-
-        matches = _tool_trace_amount(db, company_id, amount, account_hint)
-        if matches is None:
-            return GeminiAssistantReply(reply=_unavailable_journal_reply(language), intent="answer_trace_question", confidence="low", data_sources=[], grounding=_unavailable_journal_grounding())
-        evidence = [
-            EvidenceEntry(
-                entry_no=m["entry_no"],
-                date=m["entry_date"],
-                amount=m["amount"],
-                debit_account=", ".join(m.get("debit_accounts", [])),
-                credit_account=", ".join(m.get("credit_accounts", [])),
-                status=m["status"],
-                actor_name=m.get("created_by"),
-                description=m.get("description"),
-            )
-            for m in matches
-        ]
-
-        grounding = _build_journal_evidence(matches, amount)
-        reply = _deterministic_trace_reply(matches, amount, language)
-        return GeminiAssistantReply(
-            reply=reply,
-            intent="answer_trace_question",
-            confidence="high" if matches else "medium",
-            data_sources=["journal_entries", "audit_logs"] if matches else ["journal_entries"],
-            evidence=evidence,
-            grounding=grounding,
-        )
 
     if intent == "structured_report_question" and structured_kind in {"balance_sheet", "trial_balance", "account_ledger", "general_ledger"}:
         if user_role not in _CAN_READ_REPORTS:

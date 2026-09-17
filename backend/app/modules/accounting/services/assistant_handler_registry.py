@@ -243,4 +243,13 @@ ASSISTANT_HANDLERS: tuple[HandlerEntry, ...] = (
         ),
         handler=ServiceHandler('_handle_explain_question'),
     ),
+    HandlerEntry(
+        intents=('trace_question',),
+        permission=_CAN_READ_REPORTS,
+        denial=Denial(
+            arabic='🔒 ليس لديك صلاحية الوصول إلى هذه البيانات.',
+            english="🔒 You don't have permission to access this data.",
+        ),
+        handler=ServiceHandler('_handle_trace_question'),
+    ),
 )
