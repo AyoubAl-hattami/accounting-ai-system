@@ -86,6 +86,10 @@ from app.modules.accounting.services.ai_providers.gemini_provider import (
     REQUEST_TIMEOUT_SECONDS as GEMINI_REQUEST_TIMEOUT_SECONDS,
 )
 from app.modules.accounting.services.account_mapper import map_to_accounts
+from app.modules.accounting.services.assistant_handler_registry import (
+    ASSISTANT_HANDLERS,
+    AssistantRequest,
+)
 from app.modules.accounting.services.audit_service import list_audit_logs
 from app.modules.accounting.services.reports_application_facade import (
     get_profit_and_loss,
@@ -3745,6 +3749,46 @@ def dispatch_gemini_assistant(
             confidence="low",
             data_sources=[],
         )
+    # ── Registered handlers ─────────────────────────────────────
+    # Empty at this commit: ASSISTANT_HANDLERS is (), so this loop does nothing
+    # and the if-chain below still answers everything. Handlers move into it one
+    # at a time.
+    #
+    # It sits HERE, and not above the chain, because two branches that do not
+    # test `intent` -- `if structured_followup:` and `if generic_without_context:`
+    # -- sit inside the chain and measurably preempt journal_question,
+    # report_question and structured_report_question today. Running a registered
+    # handler ahead of them would change which reply those messages get.
+    #
+    # `pl_contribution_question` is the one dispatched intent whose branch is
+    # above those two, so it cannot be registered here without moving past them.
+    # See assistant_handler_registry for the measurement.
+    if ASSISTANT_HANDLERS:
+        assistant_request = AssistantRequest(
+            db=db,
+            company_id=company_id,
+            user_role=user_role,
+            message=message,
+            language=language,
+            intent=intent,
+            page_context=page_context,
+            history=history,
+            runtime_context=runtime_context,
+            prior_grounding=prior_grounding,
+            structured_kind=structured_kind,
+            contribution_metric=contribution_metric,
+            orchestrated_account_target=orchestrated_account_target,
+        )
+        for entry in ASSISTANT_HANDLERS:
+            if not entry.matches(assistant_request):
+                continue
+            if user_role not in entry.permission:
+                return GeminiAssistantReply(
+                    reply=entry.denial.reply_for(language),
+                    intent="access_denied", confidence="high", data_sources=[],
+                )
+            return entry.handler(assistant_request)
+
     # ── Explain question (how/why a figure was formed) ────────────────────────
     if intent == "explain_question":
         # Fetch P&L data
