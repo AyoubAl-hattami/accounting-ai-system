@@ -15,6 +15,9 @@ class CreateAccountCommand:
     is_active: bool
     is_system: bool
     account_subtype: str | None = None
+    # Resolved before it reaches here: the route falls back to the company's
+    # base_currency, so the layers below never have to know about companies.
+    currency: str = "USD"
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +65,7 @@ class AccountDTO:
     created_at: datetime
     updated_at: datetime
     account_subtype: str | None = None
+    currency: str = "USD"
 
 
 @dataclass(frozen=True, slots=True)

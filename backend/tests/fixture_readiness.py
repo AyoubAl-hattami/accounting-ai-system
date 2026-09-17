@@ -32,6 +32,7 @@ FIXED_SEED_ASSIGNMENTS = {
 EXPECTED_HTTP_INTEGRATION_FILES = frozenset(
     {
         "api/test_company_user_invitations.py",
+        "test_account_currency.py",
         "test_ai_status.py",
         "test_ai_suggestions.py",
         "test_assistant_conversation_memory.py",
@@ -86,6 +87,7 @@ EXPECTED_SELF_CONTAINED_HTTP_FILES = frozenset(
 
 EXPECTED_FACTORY_BACKED_HTTP_FILES = frozenset(
     {
+        "test_account_currency.py",
         "api/test_company_user_invitations.py",
         "test_ai_status.py",
         "test_ai_suggestions.py",

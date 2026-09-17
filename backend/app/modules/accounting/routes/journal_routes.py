@@ -64,6 +64,8 @@ def validate_journal_accounts(
     company_id: int,
     payload: JournalEntryCreate | OpeningBalanceCreate,
 ):
+    currencies: dict[str, int] = {}
+
     for line in payload.lines:
         account = get_account(db=db, account_id=line.account_id)
 
@@ -84,6 +86,32 @@ def validate_journal_accounts(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Account {line.account_id} is inactive",
             )
+
+        currencies.setdefault(account.currency, account.id)
+
+    # One entry, one currency.
+    #
+    # An entry is valid when its debits equal its credits, and that comparison
+    # is only meaningful inside a single unit: 500 riyals on one side and 500
+    # dollars on the other balances arithmetically and means nothing. Allowing
+    # it would put a number in the trial balance that is the sum of two
+    # different things, which no later report could untangle.
+    #
+    # Moving value between currencies is a real operation with a rate and a
+    # gain or loss, and this system does not model it yet. Until it does,
+    # refusing is the honest answer -- a wrong number would be worse than a
+    # blocked entry.
+    if len(currencies) > 1:
+        named = ", ".join(sorted(currencies))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"A journal entry cannot mix currencies. This one touches "
+                f"{named}. Debits and credits only balance within one currency; "
+                f"record a transfer between currencies as two entries, one in "
+                f"each."
+            ),
+        )
 
 
 # The unique index behind the duplicate-entry_no check below.

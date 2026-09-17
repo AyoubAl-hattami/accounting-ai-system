@@ -5,6 +5,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     String,
     Text,
     UniqueConstraint,
@@ -34,6 +35,14 @@ class Account(Base):
             "'revenue', 'expense', 'other')",
             name="ck_accounts_account_subtype",
         ),
+        CheckConstraint(
+            "currency = upper(currency) AND length(currency) = 3",
+            name="ck_accounts_currency_iso",
+        ),
+        # Reports total one currency at a time, and always within one company.
+        # Declared here and not only in the migration: the CI drift check
+        # compares the models against the schema and fails on either one alone.
+        Index("ix_accounts_company_currency", "company_id", "currency"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -53,6 +62,17 @@ class Account(Base):
     # strictly by account_type; this only groups accounts for humans and helps
     # the assistant resolve "from the wallet" to a company-specific account.
     account_subtype: Mapped[str | None] = mapped_column(String(30), nullable=True)
+
+    # The currency this account is kept in.
+    #
+    # A company holding riyals and dollars keeps a separate account for each.
+    # Every line of one journal entry must reference accounts of the SAME
+    # currency, because debit == credit only means anything within one unit --
+    # and the reports total one currency at a time for the same reason.
+    #
+    # There is no conversion here and no rate table: this records which unit a
+    # balance is in, it does not translate between units.
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
 
     parent_id: Mapped[int | None] = mapped_column(
         ForeignKey("accounts.id", ondelete="RESTRICT"),

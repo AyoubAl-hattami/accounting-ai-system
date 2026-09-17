@@ -101,12 +101,15 @@ def create_account_endpoint(
                 detail="Parent account must belong to the same company",
             )
 
+    # Omitting the currency means "the currency this company keeps its books
+    # in". Only a company that actually holds more than one unit has to name it.
     command = CreateAccountCommand(
         company_id=payload.company_id,
         code=payload.code,
         name=payload.name,
         account_type=payload.account_type,
         account_subtype=payload.account_subtype,
+        currency=payload.currency or company.base_currency.upper(),
         parent_id=payload.parent_id,
         description=payload.description,
         is_active=payload.is_active,
