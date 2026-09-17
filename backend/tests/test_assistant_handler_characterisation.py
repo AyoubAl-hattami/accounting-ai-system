@@ -25,6 +25,8 @@ Deliberately recorded oddities, each with the assertion that pins it:
     ``reply.evidence`` empty, unlike ``trace_question``. Pinned by
     ``test_pl_contribution_populates_grounding_but_not_evidence``.
 """
+from decimal import Decimal
+
 import pytest
 
 from app.modules.accounting.schemas.gemini_assistant_schemas import PageContext
@@ -639,3 +641,33 @@ def test_trace_match_populates_both_evidence_and_grounding(monkeypatch):
     assert reply.reply == (
         "I found 1 journal entries containing 1,000.00.\n"
         "1. JE-71 | 2026-02-10 | Invoice 900 | posted | Debit amount 1,000.00")
+
+def test_trace_answers_a_negative_amount_as_its_positive(monkeypatch):
+    """RECORDED AS-IS: the sign is not read, so -5 is answered as 5.
+
+    _extract_amount_from_message scans for unsigned tokens only -- its pattern
+    has no sign, and its docstring says "positive" -- so a question about a
+    negative figure is silently answered about the positive one. The reply says
+    5.00 and never mentions that it changed what was asked. Filed, not fixed.
+    """
+    assert service._extract_amount_from_message("who entered -5?") == Decimal("5")
+    assert service._extract_amount_from_message(
+        "who entered -1000.50?") == Decimal("1000.50")
+    assert service._extract_amount_from_message(
+        "من أدخل -5؟") == Decimal("5")
+
+    asked = []
+
+    def trace(db, company_id, amount, account_hint):
+        asked.append(amount)
+        return []
+
+    monkeypatch.setattr(service, "_tool_trace_amount", trace)
+    reply = dispatch("who entered -5?")
+
+    assert asked == [Decimal("5")]
+    assert reply.intent == "answer_trace_question"
+    assert reply.reply == (
+        "No journal entries matching 5.00 were found in the current "
+        "company data.")
+    assert "-5" not in reply.reply
