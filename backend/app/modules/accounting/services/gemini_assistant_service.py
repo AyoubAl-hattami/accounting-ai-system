@@ -3448,6 +3448,43 @@ def _handle_user_question(request: AssistantRequest) -> GeminiAssistantReply:
     )
 
 
+def _handle_audit_question(request: AssistantRequest) -> GeminiAssistantReply:
+    """Answer a question about this company's audit log.
+
+    Moved out of dispatch_gemini_assistant's if-chain unchanged: the body
+    below is the branch, dedented. The locals it reads are unpacked from
+    the request first so nothing inside had to be rewritten.
+    """
+    db = request.db
+    company_id = request.company_id
+    message = request.message
+    language = request.language
+    history = request.history
+    runtime_context = request.runtime_context
+
+    action_filter = None
+    msg_lower = message.lower()
+    if any(w in msg_lower for w in ["role", "permission", "صلاحية", "دور"]):
+        action_filter = "update_company_user"
+    elif any(w in msg_lower for w in ["posted", "رحّل", "نشر"]):
+        action_filter = "post_journal_entry"
+    elif any(w in msg_lower for w in ["created", "أنشأ", "create"]):
+        action_filter = "create_journal_entry"
+
+    logs = _tool_get_recent_audit_logs(db, company_id, action=action_filter, limit=10)
+    context = _build_audit_context(logs)
+    gemini_reply = _call_gemini_for_answer(
+        message, context, language, history, runtime_context
+    )
+    reply = gemini_reply or _fallback_audit_reply(logs, language)
+    return GeminiAssistantReply(
+        reply=reply,
+        intent="answer_audit_question",
+        confidence="high" if logs else "low",
+        data_sources=["audit_logs"],
+    )
+
+
 def dispatch_gemini_assistant(
     db: Session,
     company_id: int,
@@ -3686,15 +3723,6 @@ def dispatch_gemini_assistant(
         intent = "action_request"
 
     # ── Access-denied checks ─────────────────────────────────────────────────
-    if intent == "audit_question" and user_role not in _CAN_READ_AUDIT_LOGS:
-        return GeminiAssistantReply(
-            reply=(
-                "🔒 ليس لديك صلاحية الوصول إلى سجلات التدقيق."
-                if language == "ar"
-                else "🔒 You don't have permission to access audit logs."
-            ),
-            intent="access_denied", confidence="high", data_sources=[],
-        )
     if intent == "action_request" and user_role not in _CAN_CREATE_DRAFT:
         return GeminiAssistantReply(
             reply=(
@@ -3987,30 +4015,6 @@ def dispatch_gemini_assistant(
             confidence="high",
             data_sources=["profit_loss_report"],
             grounding=grounding,
-        )
-
-    # ── Audit question ───────────────────────────────────────────────────────
-    if intent == "audit_question":
-        action_filter = None
-        msg_lower = message.lower()
-        if any(w in msg_lower for w in ["role", "permission", "صلاحية", "دور"]):
-            action_filter = "update_company_user"
-        elif any(w in msg_lower for w in ["posted", "رحّل", "نشر"]):
-            action_filter = "post_journal_entry"
-        elif any(w in msg_lower for w in ["created", "أنشأ", "create"]):
-            action_filter = "create_journal_entry"
-
-        logs = _tool_get_recent_audit_logs(db, company_id, action=action_filter, limit=10)
-        context = _build_audit_context(logs)
-        gemini_reply = _call_gemini_for_answer(
-            message, context, language, history, runtime_context
-        )
-        reply = gemini_reply or _fallback_audit_reply(logs, language)
-        return GeminiAssistantReply(
-            reply=reply,
-            intent="answer_audit_question",
-            confidence="high" if logs else "low",
-            data_sources=["audit_logs"],
         )
 
     # ── Journal question ─────────────────────────────────────────────────────

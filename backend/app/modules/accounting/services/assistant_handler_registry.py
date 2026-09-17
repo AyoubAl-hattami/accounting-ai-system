@@ -207,4 +207,13 @@ ASSISTANT_HANDLERS: tuple[HandlerEntry, ...] = (
         ),
         handler=ServiceHandler("_handle_user_question"),
     ),
+    HandlerEntry(
+        intents=('audit_question',),
+        permission=_CAN_READ_AUDIT_LOGS,
+        denial=Denial(
+            arabic='🔒 ليس لديك صلاحية الوصول إلى سجلات التدقيق.',
+            english="🔒 You don't have permission to access audit logs.",
+        ),
+        handler=ServiceHandler('_handle_audit_question'),
+    ),
 )
