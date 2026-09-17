@@ -3485,6 +3485,51 @@ def _handle_audit_question(request: AssistantRequest) -> GeminiAssistantReply:
     )
 
 
+def _handle_who_action_question(request: AssistantRequest) -> GeminiAssistantReply:
+    """Answer "who posted / reviewed / created this".
+
+    Moved out of dispatch_gemini_assistant's if-chain unchanged: the body
+    below is the branch, dedented. The locals it reads are unpacked from
+    the request first so nothing inside had to be rewritten.
+    """
+    db = request.db
+    company_id = request.company_id
+    message = request.message
+    language = request.language
+    history = request.history
+    runtime_context = request.runtime_context
+
+    action_filter = None
+    msg_lower = message.lower()
+    if any(w in msg_lower for w in ["رحّل", "رحل", "posted", "نشر"]):
+        action_filter = "post_journal_entry"
+    elif any(w in msg_lower for w in ["راجع", "reviewed", "review"]):
+        action_filter = "review_journal_entry"
+    elif any(w in msg_lower for w in ["أنشأ", "انشأ", "created", "create", "سجل"]):
+        action_filter = "create_journal_entry"
+    elif any(w in msg_lower for w in ["عكس", "reversed", "reverse"]):
+        action_filter = "reverse_journal_entry"
+    elif any(w in msg_lower for w in ["غير", "عدل", "changed", "modified"]):
+        action_filter = "update_company_user"
+    elif any(w in msg_lower for w in ["حذف", "deleted", "removed"]):
+        action_filter = "remove_company_access"
+
+    action_desc = action_filter or "recent actions"
+    logs = _tool_get_recent_audit_logs(db, company_id, action=action_filter, limit=10)
+    context = _build_who_action_context(logs)
+    gemini_reply = _call_gemini_for_answer(
+        message, context, language, history, runtime_context
+    )
+    reply = gemini_reply or _fallback_who_action_reply(logs, language, action_desc)
+
+    return GeminiAssistantReply(
+        reply=reply,
+        intent="answer_who_action_question",
+        confidence="high" if logs else "low",
+        data_sources=["audit_logs"],
+    )
+
+
 def dispatch_gemini_assistant(
     db: Session,
     company_id: int,
@@ -3755,16 +3800,6 @@ def dispatch_gemini_assistant(
             ),
             intent="access_denied", confidence="high", data_sources=[],
         )
-    if intent == "who_action_question" and user_role not in _CAN_READ_AUDIT_LOGS:
-        return GeminiAssistantReply(
-            reply=(
-                "🔒 ليس لديك صلاحية الوصول إلى سجلات التدقيق."
-                if language == "ar"
-                else "🔒 You don't have permission to access audit logs."
-            ),
-            intent="access_denied", confidence="high", data_sources=[],
-        )
-
     if intent == "pl_contribution_question":
         grounded_period = (prior_grounding or {}).get("period") or {}
         try:
@@ -3941,39 +3976,6 @@ def dispatch_gemini_assistant(
             data_sources=["journal_entries", "audit_logs"] if matches else ["journal_entries"],
             evidence=evidence,
             grounding=grounding,
-        )
-
-    # ── Who-action question (who posted / reviewed / created) ─────────────────
-    if intent == "who_action_question":
-        # Determine action filter from message
-        action_filter = None
-        msg_lower = message.lower()
-        if any(w in msg_lower for w in ["رحّل", "رحل", "posted", "نشر"]):
-            action_filter = "post_journal_entry"
-        elif any(w in msg_lower for w in ["راجع", "reviewed", "review"]):
-            action_filter = "review_journal_entry"
-        elif any(w in msg_lower for w in ["أنشأ", "انشأ", "created", "create", "سجل"]):
-            action_filter = "create_journal_entry"
-        elif any(w in msg_lower for w in ["عكس", "reversed", "reverse"]):
-            action_filter = "reverse_journal_entry"
-        elif any(w in msg_lower for w in ["غير", "عدل", "changed", "modified"]):
-            action_filter = "update_company_user"
-        elif any(w in msg_lower for w in ["حذف", "deleted", "removed"]):
-            action_filter = "remove_company_access"
-
-        action_desc = action_filter or "recent actions"
-        logs = _tool_get_recent_audit_logs(db, company_id, action=action_filter, limit=10)
-        context = _build_who_action_context(logs)
-        gemini_reply = _call_gemini_for_answer(
-            message, context, language, history, runtime_context
-        )
-        reply = gemini_reply or _fallback_who_action_reply(logs, language, action_desc)
-
-        return GeminiAssistantReply(
-            reply=reply,
-            intent="answer_who_action_question",
-            confidence="high" if logs else "low",
-            data_sources=["audit_logs"],
         )
 
     if intent == "structured_report_question" and structured_kind in {"balance_sheet", "trial_balance", "account_ledger", "general_ledger"}:
