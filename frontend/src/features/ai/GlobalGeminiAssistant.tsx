@@ -86,7 +86,7 @@ export default function GlobalGeminiAssistant({
           onClick={() => setIsOpen((prev) => !prev)}
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.94 }}
-          className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-solid bg-gradient-primary text-primary-foreground shadow-[0_10px_30px_-8px_var(--primary-glow)] transition-[box-shadow,filter] duration-normal ease-emphasized hover:brightness-110 hover:shadow-[0_16px_44px_-10px_var(--primary-glow)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-[image:var(--gradient-ai)] text-white shadow-[0_10px_30px_-8px_var(--ai-glow)] transition-[box-shadow,filter] duration-normal ease-emphasized hover:brightness-110 hover:shadow-[0_16px_44px_-10px_var(--ai-glow)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           title={isOpen ? tc.cancelAction : tc.askAI}
           aria-label={isOpen ? tc.cancelAction : tc.askAI}
           aria-expanded={isOpen}

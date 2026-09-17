@@ -110,6 +110,22 @@
   --positive: #047857;
   --negative: #be123c;
 
+  /* ── The assistant ─────────────────────────────────────────────────────── */
+  /* One accent, reserved. No data token uses fuchsia or this cyan, so anything
+     wearing it is unambiguously the assistant and not a figure. It is spent
+     only on surfaces the model produced or drives -- the panel, its launcher,
+     grounding cards, suggestions. Nothing else in the app glows. */
+  --ai:        #a21caf;
+  --ai-2:      #0891b2;
+  --ai-soft:   #fdf2ff;
+  --ai-border: rgba(162, 28, 175, 0.24);
+  --ai-glow:   rgba(162, 28, 175, 0.22);
+
+  /* The numerals outrank the chrome. In an accounting screen the figures are
+     the reason the page exists, so they sit a step above body text rather than
+     level with it. */
+  --numeral: #050a16;
+
   /* ── Report / chart series — a controlled cool ramp, not a rainbow ─────── */
   --chart-1: #2a5fe8;
   --chart-2: #7a4dff;
@@ -126,6 +142,7 @@
   --gradient-brand:     linear-gradient(135deg, #2a5fe8 0%, #6d43f5 55%, #06b6d4 100%);
   --gradient-card:      linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0));
   --gradient-nav-active:linear-gradient(90deg, rgba(42, 95, 232, 0.14), rgba(109, 67, 245, 0.05));
+  --gradient-ai:        linear-gradient(135deg, var(--ai) 0%, var(--ai-2) 100%);
 
   --glass:        rgba(255, 255, 255, 0.74);
   --glass-border: rgba(255, 255, 255, 0.65);
@@ -291,6 +308,19 @@ html.dark {
   --positive: #34d399;
   --negative: #fb7185;
 
+  /* ── The assistant ─────────────────────────────────────────────────────── */
+  /* Brighter and hotter than anything in the data ramp, and far enough from the
+     indigo credit token that a grounding card cannot be mistaken for a figure.
+     The glow is heavier here because on a dark ground light, not hue, is what
+     reads as presence. */
+  --ai:        #e879f9;
+  --ai-2:      #22d3ee;
+  --ai-soft:   rgba(232, 121, 249, 0.12);
+  --ai-border: rgba(232, 121, 249, 0.30);
+  --ai-glow:   rgba(232, 121, 249, 0.34);
+
+  --numeral: #f4f8ff;
+
   /* ── Report / chart series — calm cool ramp, one warm accent ───────────── */
   --chart-1: #60a5fa;
   --chart-2: #a5b4fc;
@@ -308,6 +338,7 @@ html.dark {
   --gradient-brand:     linear-gradient(135deg, #60a5fa 0%, #a5b4fc 55%, #38bdf8 100%);
   --gradient-card:      linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0));
   --gradient-nav-active:linear-gradient(90deg, rgba(96, 165, 250, 0.18), rgba(96, 165, 250, 0.04));
+  --gradient-ai:        linear-gradient(135deg, var(--ai) 0%, var(--ai-2) 100%);
 
   /* The sidebar and topbar both use `.glass`. Sitting it *below* the page
      colour is what gives the shell its frame: chrome recedes, content comes
@@ -465,6 +496,52 @@ html.dark {
    ════════════════════════════════════════════════════════════════════════════ */
 
 @layer components {
+  /* ── The assistant's surfaces ──────────────────────────────────────────────
+     Everything below is the only glow in the app. Applying `.ai-surface` to a
+     card is what marks it as the model's output rather than the ledger's. */
+
+  .ai-surface {
+    position: relative;
+    border: 1px solid var(--ai-border);
+    background:
+      linear-gradient(180deg, var(--ai-soft), transparent 70%),
+      var(--surface-raised);
+    box-shadow: 0 0 0 1px var(--ai-border), 0 18px 40px -22px var(--ai-glow);
+  }
+
+  /* A hairline of the accent along the top edge, the way a lit panel catches
+     light on its leading edge. */
+  .ai-surface::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 1px;
+    background: var(--gradient-ai);
+    opacity: 0.9;
+  }
+
+  .ai-accent {
+    background: var(--gradient-ai);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .ai-glow {
+    box-shadow: 0 10px 30px -10px var(--ai-glow), 0 0 0 1px var(--ai-border);
+  }
+
+  /* ── Figures ───────────────────────────────────────────────────────────────
+     Tabular so columns of money line up on the decimal, and a step brighter
+     than body text so the numbers lead the page. */
+  .numeral {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+    color: var(--numeral);
+    letter-spacing: -0.01em;
+  }
+
   /* ── Surfaces ────────────────────────────────────────────────────────── */
 
   /* A card is a solid surface plus a top-edge sheen. The sheen is what stops
