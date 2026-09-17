@@ -3559,6 +3559,75 @@ def _handle_journal_question(request: AssistantRequest) -> GeminiAssistantReply:
     )
 
 
+def _handle_explain_question(request: AssistantRequest) -> GeminiAssistantReply:
+    """Explain how or why a reported figure was formed.
+
+    Moved out of dispatch_gemini_assistant's if-chain unchanged: the body
+    below is the branch, dedented. The locals it reads are unpacked from
+    the request first so nothing inside had to be rewritten.
+    """
+    db = request.db
+    company_id = request.company_id
+    message = request.message
+    language = request.language
+    history = request.history
+    page_context = request.page_context
+    runtime_context = request.runtime_context
+
+    start_date, end_date, period_label = _extract_date_range(
+        message=message,
+        page_start=page_context.filters.start_date,
+        page_end=page_context.filters.end_date,
+    )
+    pl_data = _tool_get_profit_loss(db, company_id, start_date, end_date)
+    # Fetch journal entries with full line details
+    entries = _tool_get_journal_entries_with_lines(db, company_id, status="posted")
+    # Check if balance sheet is relevant
+    msg_lower = message.lower()
+    bs_data = None
+    if any(w in msg_lower for w in [
+        "أصول", "اصول", "assets", "ميزانية", "balance",
+        "بنك", "bank", "رصيد",
+    ]):
+        bs_data = _tool_get_balance_sheet_data(db, company_id)
+
+    # Build evidence list
+    evidence = [
+        EvidenceEntry(
+            entry_no=e["entry_no"],
+            date=e["entry_date"],
+            amount=e.get("total_debit"),
+            debit_account=", ".join(
+                l["account_name"] for l in e.get("lines", []) if l["debit"] > 0
+            ),
+            credit_account=", ".join(
+                l["account_name"] for l in e.get("lines", []) if l["credit"] > 0
+            ),
+            status=e["status"],
+            description=e.get("description"),
+        )
+        for e in entries[:10]
+    ]
+
+    context = _build_explain_context(pl_data, entries, bs_data)
+    gemini_reply = _call_gemini_for_answer(
+        message, context, language, history, runtime_context
+    )
+    reply = gemini_reply or _fallback_explain_reply(pl_data, entries, language, bs_data)
+
+    data_sources = ["profit_loss_report", "journal_entries"]
+    if bs_data:
+        data_sources.append("balance_sheet")
+
+    return GeminiAssistantReply(
+        reply=reply,
+        intent="answer_explain_question",
+        confidence="high" if entries else "medium",
+        data_sources=data_sources,
+        evidence=evidence,
+    )
+
+
 def dispatch_gemini_assistant(
     db: Session,
     company_id: int,
@@ -3811,7 +3880,7 @@ def dispatch_gemini_assistant(
     # It was dispatched at line 3641 with no gate at all, so a role outside
     # _CAN_READ_REPORTS received real journal entries: number, date, description
     # and amount.
-    if intent in ("report_question", "balance_question", "explain_question", "pl_contribution_question") and user_role not in _CAN_READ_REPORTS:
+    if intent in ("report_question", "balance_question", "pl_contribution_question") and user_role not in _CAN_READ_REPORTS:
         return GeminiAssistantReply(
             reply=(
                 "🔒 ليس لديك صلاحية الوصول إلى هذه البيانات."
@@ -3905,62 +3974,6 @@ def dispatch_gemini_assistant(
                     intent="access_denied", confidence="high", data_sources=[],
                 )
             return entry.handler(assistant_request)
-
-    # ── Explain question (how/why a figure was formed) ────────────────────────
-    if intent == "explain_question":
-        # Fetch P&L data
-        start_date, end_date, period_label = _extract_date_range(
-            message=message,
-            page_start=page_context.filters.start_date,
-            page_end=page_context.filters.end_date,
-        )
-        pl_data = _tool_get_profit_loss(db, company_id, start_date, end_date)
-        # Fetch journal entries with full line details
-        entries = _tool_get_journal_entries_with_lines(db, company_id, status="posted")
-        # Check if balance sheet is relevant
-        msg_lower = message.lower()
-        bs_data = None
-        if any(w in msg_lower for w in [
-            "أصول", "اصول", "assets", "ميزانية", "balance",
-            "بنك", "bank", "رصيد",
-        ]):
-            bs_data = _tool_get_balance_sheet_data(db, company_id)
-
-        # Build evidence list
-        evidence = [
-            EvidenceEntry(
-                entry_no=e["entry_no"],
-                date=e["entry_date"],
-                amount=e.get("total_debit"),
-                debit_account=", ".join(
-                    l["account_name"] for l in e.get("lines", []) if l["debit"] > 0
-                ),
-                credit_account=", ".join(
-                    l["account_name"] for l in e.get("lines", []) if l["credit"] > 0
-                ),
-                status=e["status"],
-                description=e.get("description"),
-            )
-            for e in entries[:10]
-        ]
-
-        context = _build_explain_context(pl_data, entries, bs_data)
-        gemini_reply = _call_gemini_for_answer(
-            message, context, language, history, runtime_context
-        )
-        reply = gemini_reply or _fallback_explain_reply(pl_data, entries, language, bs_data)
-
-        data_sources = ["profit_loss_report", "journal_entries"]
-        if bs_data:
-            data_sources.append("balance_sheet")
-
-        return GeminiAssistantReply(
-            reply=reply,
-            intent="answer_explain_question",
-            confidence="high" if entries else "medium",
-            data_sources=data_sources,
-            evidence=evidence,
-        )
 
     # ── Trace question (who entered / where did amount go) ────────────────────
     if intent == "trace_question":
