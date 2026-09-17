@@ -3684,6 +3684,45 @@ def _handle_trace_question(request: AssistantRequest) -> GeminiAssistantReply:
     )
 
 
+def _handle_report_question(request: AssistantRequest) -> GeminiAssistantReply:
+    """Answer a profit-and-loss or balance question.
+
+    Moved out of dispatch_gemini_assistant's if-chain unchanged: the body
+    below is the branch, dedented. The locals it reads are unpacked from
+    the request first so nothing inside had to be rewritten.
+    """
+    db = request.db
+    company_id = request.company_id
+    message = request.message
+    language = request.language
+    page_context = request.page_context
+
+    start_date, end_date, period_label = _extract_date_range(
+        message=message,
+        page_start=page_context.filters.start_date,
+        page_end=page_context.filters.end_date,
+    )
+    # 2. Fetch data — always returns a dict with numeric values (never {})
+    data = _tool_get_profit_loss(db, company_id, start_date, end_date)
+    grounding = _build_profit_loss_grounding(data, company_id, start_date, end_date, period_label, _requested_profit_metric(message))
+    if grounding.status == "unavailable":
+        return GeminiAssistantReply(
+            reply=_grounding_failure_reply(language),
+            intent="answer_report_question",
+            confidence="low",
+            data_sources=[],
+            grounding=grounding,
+        )
+    reply = _fallback_report_reply(data, language, start_date, end_date, period_label)
+    return GeminiAssistantReply(
+        reply=reply,
+        intent="answer_report_question",
+        confidence="high",
+        data_sources=["profit_loss_report"],
+        grounding=grounding,
+    )
+
+
 def dispatch_gemini_assistant(
     db: Session,
     company_id: int,
@@ -3936,7 +3975,7 @@ def dispatch_gemini_assistant(
     # It was dispatched at line 3641 with no gate at all, so a role outside
     # _CAN_READ_REPORTS received real journal entries: number, date, description
     # and amount.
-    if intent in ("report_question", "balance_question", "pl_contribution_question") and user_role not in _CAN_READ_REPORTS:
+    if intent == "pl_contribution_question" and user_role not in _CAN_READ_REPORTS:
         return GeminiAssistantReply(
             reply=(
                 "🔒 ليس لديك صلاحية الوصول إلى هذه البيانات."
@@ -4033,34 +4072,6 @@ def dispatch_gemini_assistant(
             page_context,
             structured_kind,
             account_target=orchestrated_account_target,
-        )
-
-    # ── Report / P&L question ────────────────────────────────────────────────
-    if intent in ("report_question", "balance_question"):
-        # 1. Resolve date range: message temporal keywords take priority over page filters
-        start_date, end_date, period_label = _extract_date_range(
-            message=message,
-            page_start=page_context.filters.start_date,
-            page_end=page_context.filters.end_date,
-        )
-        # 2. Fetch data — always returns a dict with numeric values (never {})
-        data = _tool_get_profit_loss(db, company_id, start_date, end_date)
-        grounding = _build_profit_loss_grounding(data, company_id, start_date, end_date, period_label, _requested_profit_metric(message))
-        if grounding.status == "unavailable":
-            return GeminiAssistantReply(
-                reply=_grounding_failure_reply(language),
-                intent="answer_report_question",
-                confidence="low",
-                data_sources=[],
-                grounding=grounding,
-            )
-        reply = _fallback_report_reply(data, language, start_date, end_date, period_label)
-        return GeminiAssistantReply(
-            reply=reply,
-            intent="answer_report_question",
-            confidence="high",
-            data_sources=["profit_loss_report"],
-            grounding=grounding,
         )
 
     # ── Action request (semantic parser + mapper, rules fallback) ──────────
