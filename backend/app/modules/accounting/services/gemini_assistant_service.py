@@ -3723,6 +3723,40 @@ def _handle_report_question(request: AssistantRequest) -> GeminiAssistantReply:
     )
 
 
+def _handle_action_request_intent(request: AssistantRequest) -> GeminiAssistantReply:
+    """Turn a transaction message into a draft for confirmation.
+
+    Moved out of dispatch_gemini_assistant's if-chain unchanged: the body
+    below is the branch, dedented. The locals it reads are unpacked from
+    the request first so nothing inside had to be rewritten.
+    """
+    db = request.db
+    company_id = request.company_id
+    message = request.message
+    language = request.language
+    history = request.history
+    runtime_context = request.runtime_context
+
+    result = _handle_action_request(
+        db,
+        company_id,
+        message,
+        language,
+        runtime_context,
+        history=history,
+    )
+    return GeminiAssistantReply(
+        reply=result.reply,
+        intent="create_journal_draft" if result.suggested_action else "clarification",
+        confidence="high" if result.suggested_action else "medium",
+        data_sources=["accounts", "semantic_parser"],
+        suggested_action=result.suggested_action,
+        pending_transaction=result.pending_transaction,
+        clarification_options=result.clarification_options,
+        pending_context_token=result.pending_context_token,
+    )
+
+
 def dispatch_gemini_assistant(
     db: Session,
     company_id: int,
@@ -3961,15 +3995,6 @@ def dispatch_gemini_assistant(
         intent = "action_request"
 
     # ── Access-denied checks ─────────────────────────────────────────────────
-    if intent == "action_request" and user_role not in _CAN_CREATE_DRAFT:
-        return GeminiAssistantReply(
-            reply=(
-                "🔒 ليس لديك صلاحية إنشاء قيود محاسبية. هذه الصلاحية للمحاسب والمدير فقط."
-                if language == "ar"
-                else "🔒 You don't have permission to create journal entries. Requires admin or accountant role."
-            ),
-            intent="access_denied", confidence="high", data_sources=[],
-        )
     # pl_contribution_question belongs here because its handler answers with
     # profit_loss_report + journal_entries -- the same data this gate protects.
     # It was dispatched at line 3641 with no gate at all, so a role outside
@@ -4072,27 +4097,6 @@ def dispatch_gemini_assistant(
             page_context,
             structured_kind,
             account_target=orchestrated_account_target,
-        )
-
-    # ── Action request (semantic parser + mapper, rules fallback) ──────────
-    if intent == "action_request":
-        result = _handle_action_request(
-            db,
-            company_id,
-            message,
-            language,
-            runtime_context,
-            history=history,
-        )
-        return GeminiAssistantReply(
-            reply=result.reply,
-            intent="create_journal_draft" if result.suggested_action else "clarification",
-            confidence="high" if result.suggested_action else "medium",
-            data_sources=["accounts", "semantic_parser"],
-            suggested_action=result.suggested_action,
-            pending_transaction=result.pending_transaction,
-            clarification_options=result.clarification_options,
-            pending_context_token=result.pending_context_token,
         )
 
     # ── Conversation-aware retry ─────────────────────────────────────────────

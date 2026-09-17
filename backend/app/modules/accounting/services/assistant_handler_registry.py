@@ -261,4 +261,13 @@ ASSISTANT_HANDLERS: tuple[HandlerEntry, ...] = (
         ),
         handler=ServiceHandler('_handle_report_question'),
     ),
+    HandlerEntry(
+        intents=('action_request',),
+        permission=_CAN_CREATE_DRAFT,
+        denial=Denial(
+            arabic='🔒 ليس لديك صلاحية إنشاء قيود محاسبية. هذه الصلاحية للمحاسب والمدير فقط.',
+            english="🔒 You don't have permission to create journal entries. Requires admin or accountant role.",
+        ),
+        handler=ServiceHandler('_handle_action_request_intent'),
+    ),
 )
