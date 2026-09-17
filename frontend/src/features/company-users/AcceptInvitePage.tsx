@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { AlertCircle, ArrowRight, CheckCircle2, Loader2, UserPlus } from 'lucide-react';
 import apiClient from '../../api/client';
+import { errorMessage } from '../../api/errorMessage';
 import { useAuth } from '../../auth/AuthContext';
 import { useI18n } from '../../i18n';
 import { ThemeToggleButton } from '../../components/ui/ThemeToggle';
@@ -48,8 +49,7 @@ export default function AcceptInvitePage() {
         setInviteData(response.data);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
-        const detail = err.response?.data?.detail;
-        setError(detail || t.companyUsersPage.invalidInvitation);
+        setError(errorMessage(err, t.companyUsersPage.invalidInvitation));
       } finally {
         setIsLoading(false);
       }
@@ -85,8 +85,7 @@ export default function AcceptInvitePage() {
       setSuccess(true);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      const detail = err.response?.data?.detail;
-      setError(detail || t.companyUsersPage.acceptFailed);
+      setError(errorMessage(err, t.companyUsersPage.acceptFailed));
     } finally {
       setIsSubmitting(false);
     }

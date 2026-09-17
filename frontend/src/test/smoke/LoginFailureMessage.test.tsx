@@ -7,6 +7,7 @@ import { I18nProvider } from '../../i18n';
 import { ThemeProvider } from '../../theme';
 import { en } from '../../i18n/translations';
 import { isExpiredSession } from '../../api/client';
+import { errorMessage } from '../../api/errorMessage';
 
 /* A wrong password showed nothing at all.
  *
@@ -145,5 +146,70 @@ describe('the login form says why a sign-in failed', () => {
       'aria-describedby',
       'login-error',
     );
+  });
+});
+
+describe('errorMessage normalises what FastAPI sends', () => {
+  it('keeps a plain string detail', () => {
+    expect(errorMessage(unauthorized('/auth/login', 'Invalid email or password'), 'fallback'))
+      .toBe('Invalid email or password');
+  });
+
+  it('reads a 422 validation array instead of handing React an object', () => {
+    // This is the shape that turned the login page white.
+    const validation = {
+      response: {
+        status: 422,
+        data: {
+          detail: [
+            { loc: ['body', 'email'], msg: 'value is not a valid email address' },
+            { loc: ['body', 'password'], msg: 'String should have at least 8 characters' },
+          ],
+        },
+      },
+    };
+    expect(errorMessage(validation, 'fallback')).toBe(
+      'value is not a valid email address. String should have at least 8 characters',
+    );
+  });
+
+  it('reads the object form the forced-password-change gate uses', () => {
+    const gated = {
+      response: {
+        status: 403,
+        data: {
+          detail: {
+            code: 'PASSWORD_CHANGE_REQUIRED',
+            message: 'You must change your temporary password before using the system.',
+          },
+        },
+      },
+    };
+    expect(errorMessage(gated, 'fallback')).toBe(
+      'You must change your temporary password before using the system.',
+    );
+  });
+
+  it.each([
+    ['no response at all', new Error('Network Error')],
+    ['no detail', { response: { status: 500, data: {} } }],
+    ['a blank detail', { response: { status: 400, data: { detail: '   ' } } }],
+    ['an array with nothing readable', { response: { status: 422, data: { detail: [{}] } } }],
+    ['null', null],
+  ])('falls back on %s', (_label, error) => {
+    expect(errorMessage(error, 'fallback')).toBe('fallback');
+  });
+
+  it('always returns a string, so React can never be handed an object', () => {
+    const shapes: unknown[] = [
+      unauthorized('/auth/login', 'text'),
+      { response: { data: { detail: [{ msg: 'a' }] } } },
+      { response: { data: { detail: { message: 'b' } } } },
+      { response: { data: { detail: 42 } } },
+      undefined,
+    ];
+    for (const shape of shapes) {
+      expect(typeof errorMessage(shape, 'fallback')).toBe('string');
+    }
   });
 });

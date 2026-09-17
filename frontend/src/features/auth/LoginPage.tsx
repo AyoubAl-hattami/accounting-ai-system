@@ -7,6 +7,7 @@ import { useI18n } from '../../i18n';
 import { ThemeToggleButton } from '../../components/ui/ThemeToggle';
 import { defaultAuthenticatedRoute } from '../../auth/defaultRoute';
 import { safeRedirectTarget } from '../../auth/safeRedirect';
+import { errorMessage } from '../../api/errorMessage';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -56,7 +57,7 @@ export default function LoginPage() {
         setError(
           axiosError.response?.status === 401
             ? t.login.invalidCredentials
-            : axiosError.response?.data?.detail || t.login.invalidCredentials,
+            : errorMessage(err, t.login.invalidCredentials),
         );
       } else {
         setError(t.login.networkError);
