@@ -225,4 +225,13 @@ ASSISTANT_HANDLERS: tuple[HandlerEntry, ...] = (
         ),
         handler=ServiceHandler('_handle_who_action_question'),
     ),
+    HandlerEntry(
+        intents=('journal_question',),
+        permission=_CAN_READ_REPORTS,
+        denial=Denial(
+            arabic='🔒 ليس لديك صلاحية الوصول إلى هذه البيانات.',
+            english="🔒 You don't have permission to access this data.",
+        ),
+        handler=ServiceHandler('_handle_journal_question'),
+    ),
 )

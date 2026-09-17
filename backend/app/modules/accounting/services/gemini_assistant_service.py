@@ -3530,6 +3530,35 @@ def _handle_who_action_question(request: AssistantRequest) -> GeminiAssistantRep
     )
 
 
+def _handle_journal_question(request: AssistantRequest) -> GeminiAssistantReply:
+    """Answer a question about this company's journal entries.
+
+    Moved out of dispatch_gemini_assistant's if-chain unchanged: the body
+    below is the branch, dedented. The locals it reads are unpacked from
+    the request first so nothing inside had to be rewritten.
+    """
+    db = request.db
+    company_id = request.company_id
+    message = request.message
+    language = request.language
+    history = request.history
+    runtime_context = request.runtime_context
+
+    entries = _tool_get_recent_journal_entries(db, company_id, limit=5)
+    total = count_journal_entries(db=db, company_id=company_id)
+    context = _build_journal_context(entries, total)
+    gemini_reply = _call_gemini_for_answer(
+        message, context, language, history, runtime_context
+    )
+    reply = gemini_reply or _fallback_journal_reply(entries, total, language)
+    return GeminiAssistantReply(
+        reply=reply,
+        intent="answer_journal_question",
+        confidence="high" if entries else "low",
+        data_sources=["journal_entries"],
+    )
+
+
 def dispatch_gemini_assistant(
     db: Session,
     company_id: int,
@@ -3782,7 +3811,7 @@ def dispatch_gemini_assistant(
     # It was dispatched at line 3641 with no gate at all, so a role outside
     # _CAN_READ_REPORTS received real journal entries: number, date, description
     # and amount.
-    if intent in ("report_question", "balance_question", "journal_question", "explain_question", "pl_contribution_question") and user_role not in _CAN_READ_REPORTS:
+    if intent in ("report_question", "balance_question", "explain_question", "pl_contribution_question") and user_role not in _CAN_READ_REPORTS:
         return GeminiAssistantReply(
             reply=(
                 "🔒 ليس لديك صلاحية الوصول إلى هذه البيانات."
@@ -4017,22 +4046,6 @@ def dispatch_gemini_assistant(
             confidence="high",
             data_sources=["profit_loss_report"],
             grounding=grounding,
-        )
-
-    # ── Journal question ─────────────────────────────────────────────────────
-    if intent == "journal_question":
-        entries = _tool_get_recent_journal_entries(db, company_id, limit=5)
-        total = count_journal_entries(db=db, company_id=company_id)
-        context = _build_journal_context(entries, total)
-        gemini_reply = _call_gemini_for_answer(
-            message, context, language, history, runtime_context
-        )
-        reply = gemini_reply or _fallback_journal_reply(entries, total, language)
-        return GeminiAssistantReply(
-            reply=reply,
-            intent="answer_journal_question",
-            confidence="high" if entries else "low",
-            data_sources=["journal_entries"],
         )
 
     # ── Action request (semantic parser + mapper, rules fallback) ──────────
