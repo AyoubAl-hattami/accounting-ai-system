@@ -20,6 +20,8 @@ import ReportHeader from '../components/ReportHeader';
 import ReportSummaryTile from '../components/ReportSummaryTile';
 import ReportExportButtons from '../components/ReportExportButtons';
 import ReportDateField from '../components/ReportDateField';
+import ReportCurrencyField from '../components/ReportCurrencyField';
+import { useReportCurrency } from '../components/useReportCurrency';
 import ReportSearchField from '../components/ReportSearchField';
 import MoneyAmount from '../../../components/ui/MoneyAmount';
 import { useGeneralLedger, LEDGER_ACCOUNT_PAGE_SIZE } from './useGeneralLedger';
@@ -80,6 +82,9 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
     setAccountSkip(0);
   }, [startDate, endDate]);
 
+  // One report per currency: the picker chooses which, never a sum of both.
+  const reportCurrency = useReportCurrency(selectedCompanyId);
+
   const {
     data,
     isLoading: reportLoading,
@@ -87,6 +92,7 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
     fetchReport,
   } = useGeneralLedger({
     companyId: selectedCompanyId,
+    currency: reportCurrency.currency,
     startDate,
     endDate,
     accountSkip,
@@ -163,6 +169,7 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
       const { downloadFile } = await import('../../../lib/downloadFile');
       await downloadFile('/reports/general-ledger/export.csv', {
         company_id: selectedCompanyId,
+        currency: reportCurrency.currency,
         start_date: startDate,
         end_date: endDate,
       }, 'general-ledger.csv');
@@ -180,6 +187,7 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
       const { downloadFile } = await import('../../../lib/downloadFile');
       await downloadFile('/reports/general-ledger/export.pdf', {
         company_id: selectedCompanyId,
+        currency: reportCurrency.currency,
         start_date: startDate,
         end_date: endDate,
       }, 'general-ledger.pdf');
@@ -251,6 +259,13 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
         transition={{ duration: 0.3, delay: 0.05 }}
         className="filter-bar"
       >
+        {reportCurrency.hasChoice && (
+          <ReportCurrencyField
+            value={reportCurrency.selected}
+            options={reportCurrency.available}
+            onChange={reportCurrency.setCurrency}
+          />
+        )}
         <ReportDateField
           label={t.common.startDate}
           value={startDate}

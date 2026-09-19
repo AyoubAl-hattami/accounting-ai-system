@@ -39,6 +39,8 @@ export interface Account {
   name: string;
   account_type: string;
   account_subtype: AccountSubtype | null;
+  /** The unit this account is kept in; fixed once the account exists. */
+  currency: string;
   parent_id: number | null;
   description: string | null;
   is_active: boolean;
@@ -153,6 +155,8 @@ export interface TrialBalanceLine {
 }
 
 export interface TrialBalanceRead {
+  /** The one currency every figure in this report is in. */
+  currency: string | null;
   company_id: number;
   as_of_date: string | null;
   total_debit: string;
@@ -173,6 +177,8 @@ export interface ProfitAndLossLine {
 }
 
 export interface ProfitAndLossRead {
+  /** The one currency every figure in this report is in. */
+  currency: string | null;
   company_id: number;
   start_date: string | null;
   end_date: string | null;
@@ -193,6 +199,8 @@ export interface BalanceSheetLine {
 }
 
 export interface BalanceSheetRead {
+  /** The one currency every figure in this report is in. */
+  currency: string | null;
   company_id: number;
   as_of_date: string | null;
   total_assets: string;
@@ -222,6 +230,8 @@ export interface AccountLedgerLine {
 }
 
 export interface AccountLedgerRead {
+  /** The one currency every figure in this report is in. */
+  currency: string | null;
   company_id: number;
   account_id: number;
   account_code: string;
@@ -240,6 +250,8 @@ export interface AccountLedgerRead {
 
 // ── General Ledger (all accounts) ──
 export interface GeneralLedgerRead {
+  /** The one currency every figure in this report is in. */
+  currency: string | null;
   company_id: number;
   start_date: string | null;
   end_date: string | null;

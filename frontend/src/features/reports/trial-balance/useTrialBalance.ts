@@ -5,10 +5,12 @@ import { dataEvents } from '../../../lib/dataEvents';
 
 interface UseTrialBalanceOptions {
   companyId: number | null;
+  /** Null means the company's own currency. */
+  currency?: string | null;
   asOfDate: string | null;
 }
 
-export function useTrialBalance({ companyId, asOfDate }: UseTrialBalanceOptions) {
+export function useTrialBalance({ companyId, currency, asOfDate }: UseTrialBalanceOptions) {
   const [data, setData] = useState<TrialBalanceRead | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +23,7 @@ export function useTrialBalance({ companyId, asOfDate }: UseTrialBalanceOptions)
 
     try {
       let url = `/reports/trial-balance?company_id=${companyId}`;
+      if (currency) url += `&currency=${encodeURIComponent(currency)}`;
       if (asOfDate) {
         url += `&as_of_date=${asOfDate}`;
       }
@@ -32,7 +35,7 @@ export function useTrialBalance({ companyId, asOfDate }: UseTrialBalanceOptions)
     } finally {
       setIsLoading(false);
     }
-  }, [companyId, asOfDate]);
+  }, [companyId, currency, asOfDate]);
 
   // Auto-refetch when posted journal data changes (post/review/void/reverse)
   useEffect(() => {

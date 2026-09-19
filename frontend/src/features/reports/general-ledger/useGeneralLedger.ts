@@ -5,6 +5,8 @@ import { dataEvents } from '../../../lib/dataEvents';
 
 interface UseGeneralLedgerOptions {
   companyId: number | null;
+  /** Null means the company's own currency. */
+  currency?: string | null;
   startDate: string | null;
   endDate: string | null;
   accountSkip?: number;
@@ -15,6 +17,7 @@ export const LEDGER_ACCOUNT_PAGE_SIZE = 50;
 
 export function useGeneralLedger({
   companyId,
+  currency,
   startDate,
   endDate,
   accountSkip = 0,
@@ -31,6 +34,7 @@ export function useGeneralLedger({
 
     try {
       let url = `/reports/general-ledger?company_id=${companyId}`;
+      if (currency) url += `&currency=${encodeURIComponent(currency)}`;
       if (startDate) url += `&start_date=${startDate}`;
       if (endDate) url += `&end_date=${endDate}`;
       // Paged by account, never by line: a page that split an account would
@@ -44,7 +48,7 @@ export function useGeneralLedger({
     } finally {
       setIsLoading(false);
     }
-  }, [companyId, startDate, endDate, accountSkip]);
+  }, [companyId, currency, startDate, endDate, accountSkip]);
 
   // Auto-refetch when posted journal data changes (post/review/void/reverse)
   useEffect(() => {

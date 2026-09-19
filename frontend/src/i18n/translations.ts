@@ -285,6 +285,10 @@ export const en: Translations = {
     subtypeRevenue: 'Revenue',
     subtypeExpense: 'Expense',
     subtypeOther: 'Other',
+    currency: 'Currency',
+    currencyCompanyDefault: "Company's own currency",
+    currencyHelp:
+      'The unit this account is kept in. It cannot be changed later: every figure posted to it is in this currency.',
     typeAsset: 'Asset',
     typeLiability: 'Liability',
     typeEquity: 'Equity',
@@ -551,6 +555,7 @@ export const en: Translations = {
     shared: {
       filters: 'Filters',
       accountsShown: 'accounts shown',
+      currency: 'Currency',
       linesShown: 'lines shown',
       noMatchTitle: 'No matching accounts',
       noMatchDescription: 'No accounts match the current search or filters.',
@@ -1352,6 +1357,10 @@ export const ar: Translations = {
     subtypeRevenue: 'إيرادات',
     subtypeExpense: 'مصروفات',
     subtypeOther: 'أخرى',
+    currency: 'العملة',
+    currencyCompanyDefault: 'عملة الشركة',
+    currencyHelp:
+      'العملة التي يُمسك بها هذا الحساب. لا يمكن تغييرها لاحقًا: كل مبلغ يُسجّل فيه يكون بهذه العملة.',
     typeAsset: 'أصول',
     typeLiability: 'التزامات',
     typeEquity: 'حقوق ملكية',
@@ -1618,6 +1627,7 @@ export const ar: Translations = {
     shared: {
       filters: 'عوامل التصفية',
       accountsShown: 'حساب معروض',
+      currency: 'العملة',
       linesShown: 'بند معروض',
       noMatchTitle: 'لا توجد حسابات مطابقة',
       noMatchDescription: 'لا توجد حسابات مطابقة للبحث أو عوامل التصفية الحالية.',

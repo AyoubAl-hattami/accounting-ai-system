@@ -409,6 +409,7 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
                     <th scope="col">{t.accountsPage.code}</th>
                     <th scope="col">{t.accountsPage.name}</th>
                     <th scope="col">{t.accountsPage.type}</th>
+                    <th scope="col">{t.accountsPage.currency}</th>
                     <th scope="col">{t.accountsPage.parentCode}</th>
                     <th scope="col">{t.common.status}</th>
                     <th scope="col">{t.accountsPage.origin}</th>
@@ -434,6 +435,7 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
                       <td>
                         <AccountTypeBadge type={acc.account_type} />
                       </td>
+                      <td className="numeric text-xs text-muted-foreground">{acc.currency}</td>
                       <td className="numeric text-xs text-muted-foreground">{parentCodeOf(acc)}</td>
                       <td>
                         <span className={`badge ${acc.is_active ? 'tone-success' : 'tone-neutral'}`}>
