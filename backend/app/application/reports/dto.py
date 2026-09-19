@@ -9,6 +9,9 @@ from decimal import Decimal
 class TrialBalanceQuery:
     company_id: int
     as_of_date: date | None = None
+    # None only on the way in; the repository resolves it to the company's
+    # base_currency before any figure is summed.
+    currency: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,12 +19,18 @@ class ProfitAndLossQuery:
     company_id: int
     start_date: date | None = None
     end_date: date | None = None
+    # None only on the way in; the repository resolves it to the company's
+    # base_currency before any figure is summed.
+    currency: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class BalanceSheetQuery:
     company_id: int
     as_of_date: date | None = None
+    # None only on the way in; the repository resolves it to the company's
+    # base_currency before any figure is summed.
+    currency: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +42,9 @@ class AccountLedgerQuery:
     # None means every line in the window. The exporters pass None explicitly.
     line_skip: int | None = None
     line_limit: int | None = None
+    # None only on the way in; the repository resolves it to the company's
+    # base_currency before any figure is summed.
+    currency: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +55,9 @@ class GeneralLedgerQuery:
     # None means every account. The exporters pass None explicitly.
     account_skip: int | None = None
     account_limit: int | None = None
+    # None only on the way in; the repository resolves it to the company's
+    # base_currency before any figure is summed.
+    currency: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +82,8 @@ class TrialBalanceRead:
     total_credit_balance: Decimal
     is_balanced: bool
     lines: list[TrialBalanceLine]
+    # The one unit every figure in this report is in.
+    currency: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +105,8 @@ class ProfitAndLossRead:
     net_profit: Decimal
     income_lines: list[ProfitAndLossLine]
     expense_lines: list[ProfitAndLossLine]
+    # The one unit every figure in this report is in.
+    currency: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +134,8 @@ class BalanceSheetRead:
     asset_lines: list[BalanceSheetLine]
     liability_lines: list[BalanceSheetLine]
     equity_lines: list[BalanceSheetLine]
+    # The one unit every figure in this report is in.
+    currency: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +171,8 @@ class AccountLedgerRead:
     total_lines: int = 0
     line_skip: int | None = None
     line_limit: int | None = None
+    # The one unit every figure in this report is in.
+    currency: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,3 +185,5 @@ class GeneralLedgerRead:
     total_accounts: int = 0
     account_skip: int | None = None
     account_limit: int | None = None
+    # The one unit every figure in this report is in.
+    currency: str | None = None

@@ -1,10 +1,11 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, true
 from sqlalchemy.orm import Session
 
 from app.modules.accounting.models.account import Account
+from app.modules.accounting.models.company import Company
 from app.modules.accounting.models.journal_entry import JournalEntry
 from app.modules.accounting.models.journal_line import JournalLine
 from app.modules.accounting.models.fiscal_year import FiscalYear
@@ -75,10 +76,21 @@ def _find_fiscal_year_for_report_date(
     return fiscal_year
 
 
+def _in_currency(currency: str | None):
+    """Restrict a report to accounts kept in one currency.
+
+    None means no restriction, and exists only so these functions stay callable
+    on their own; the repository adapter below always passes a resolved
+    currency, so no report reaching a user ever totals two units together.
+    """
+    return true() if currency is None else Account.currency == currency
+
+
 def get_trial_balance(
     db: Session,
     company_id: int,
     as_of_date: date | None = None,
+    currency: str | None = None,
 ) -> TrialBalanceRead:
     posted_filter = _official_entry_filter(end_date=as_of_date)
 
@@ -122,7 +134,7 @@ def get_trial_balance(
             JournalEntry.id == JournalLine.journal_entry_id,
             isouter=True,
         )
-        .where(Account.company_id == company_id)
+        .where(Account.company_id == company_id, _in_currency(currency))
         .group_by(
             Account.id,
             Account.code,
@@ -173,6 +185,7 @@ def get_trial_balance(
         )
 
     return TrialBalanceRead(
+        currency=currency,
         company_id=company_id,
         as_of_date=as_of_date,
         total_debit=total_debit,
@@ -189,6 +202,7 @@ def get_profit_and_loss(
     company_id: int,
     start_date: date | None = None,
     end_date: date | None = None,
+    currency: str | None = None,
 ) -> ProfitAndLossRead:
     posted_filter = _official_entry_filter(start_date=start_date, end_date=end_date)
 
@@ -234,6 +248,7 @@ def get_profit_and_loss(
         )
         .where(
             Account.company_id == company_id,
+            _in_currency(currency),
             Account.account_type.in_(["income", "expense"]),
         )
         .group_by(
@@ -288,6 +303,7 @@ def get_profit_and_loss(
     net_profit = total_income - total_expenses
 
     return ProfitAndLossRead(
+        currency=currency,
         company_id=company_id,
         start_date=start_date,
         end_date=end_date,
@@ -303,6 +319,7 @@ def get_balance_sheet(
     db: Session,
     company_id: int,
     as_of_date: date | None = None,
+    currency: str | None = None,
 ) -> BalanceSheetRead:
     effective_date = as_of_date or date.today()
     fiscal_year = _find_fiscal_year_for_report_date(
@@ -354,6 +371,7 @@ def get_balance_sheet(
         )
         .where(
             Account.company_id == company_id,
+            _in_currency(currency),
             Account.account_type.in_(["asset", "liability", "equity"]),
         )
         .group_by(
@@ -426,6 +444,7 @@ def get_balance_sheet(
         company_id=company_id,
         start_date=fiscal_year.start_date,
         end_date=effective_date,
+        currency=currency,
     )
     current_year_earnings = current_period_profit_and_loss.net_profit
 
@@ -437,6 +456,7 @@ def get_balance_sheet(
             company_id=company_id,
             start_date=None,
             end_date=prior_period_end,
+            currency=currency,
         )
         prior_year_earnings = prior_profit_and_loss.net_profit
 
@@ -445,6 +465,7 @@ def get_balance_sheet(
     total_liabilities_and_equity = total_liabilities + total_equity
 
     return BalanceSheetRead(
+        currency=currency,
         company_id=company_id,
         as_of_date=effective_date,
         total_assets=total_assets,
@@ -472,6 +493,8 @@ def get_account_ledger(
     line_limit: int | None = None,
 ) -> AccountLedgerRead | None:
     account = db.scalar(
+        # No currency filter: a ledger is one account, so it is already in one
+        # unit. The result reports which, from the account itself.
         select(Account).where(
             Account.id == account_id,
             Account.company_id == company_id,
@@ -618,6 +641,7 @@ def _ledger_from_rows(
         page = lines
 
     return AccountLedgerRead(
+        currency=account.currency,
         company_id=company_id,
         account_id=account.id,
         account_code=account.code,
@@ -645,6 +669,7 @@ def get_general_ledger(
     end_date: date | None = None,
     account_skip: int | None = None,
     account_limit: int | None = None,
+    currency: str | None = None,
 ) -> GeneralLedgerRead:
     """Every account's ledger, in a fixed number of queries.
 
@@ -660,14 +685,14 @@ def get_general_ledger(
     """
     account_statement = (
         select(Account)
-        .where(Account.company_id == company_id)
+        .where(Account.company_id == company_id, _in_currency(currency))
         .order_by(Account.code.asc())
     )
 
     total_accounts = db.scalar(
         select(func.count())
         .select_from(Account)
-        .where(Account.company_id == company_id)
+        .where(Account.company_id == company_id, _in_currency(currency))
     ) or 0
 
     if account_skip is not None:
@@ -679,6 +704,7 @@ def get_general_ledger(
 
     if not accounts:
         return GeneralLedgerRead(
+            currency=currency,
             company_id=company_id,
             start_date=start_date,
             end_date=end_date,
@@ -783,6 +809,7 @@ def get_general_ledger(
         )
 
     return GeneralLedgerRead(
+        currency=currency,
         company_id=company_id,
         start_date=start_date,
         end_date=end_date,
@@ -796,10 +823,36 @@ class SqlAlchemyReportRepository(ReportRepository):
     def __init__(self, db: Session) -> None:
         self._db = db
 
+    def currencies_in_use(self, company_id: int) -> tuple[str, list[str]]:
+        """The company's base currency, and every currency its accounts are kept in.
+
+        The base always comes first and is always present, even before any
+        account exists, so a picker built from this is never empty.
+        """
+        base = self._currency(company_id, None)
+        used = set(
+            self._db.scalars(
+                select(Account.currency)
+                .where(Account.company_id == company_id)
+                .distinct()
+            ).all()
+        )
+        return base, [base] + sorted(used - {base})
+
+    def _currency(self, company_id: int, requested: str | None) -> str:
+        """The requested currency, or the company's own when none was named."""
+        if requested:
+            return requested.strip().upper()
+        base = self._db.scalar(
+            select(Company.base_currency).where(Company.id == company_id)
+        )
+        return (base or "USD").upper()
+
     def get_trial_balance(self, query: TrialBalanceQuery) -> TrialBalanceRead:
         return get_trial_balance(
             db=self._db,
             company_id=query.company_id,
+            currency=self._currency(query.company_id, query.currency),
             as_of_date=query.as_of_date,
         )
 
@@ -807,6 +860,7 @@ class SqlAlchemyReportRepository(ReportRepository):
         return get_profit_and_loss(
             db=self._db,
             company_id=query.company_id,
+            currency=self._currency(query.company_id, query.currency),
             start_date=query.start_date,
             end_date=query.end_date,
         )
@@ -815,6 +869,7 @@ class SqlAlchemyReportRepository(ReportRepository):
         return get_balance_sheet(
             db=self._db,
             company_id=query.company_id,
+            currency=self._currency(query.company_id, query.currency),
             as_of_date=query.as_of_date,
         )
 
@@ -835,6 +890,7 @@ class SqlAlchemyReportRepository(ReportRepository):
         return get_general_ledger(
             db=self._db,
             company_id=query.company_id,
+            currency=self._currency(query.company_id, query.currency),
             start_date=query.start_date,
             end_date=query.end_date,
             account_skip=query.account_skip,

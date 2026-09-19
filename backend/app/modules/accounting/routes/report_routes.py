@@ -48,12 +48,30 @@ router = APIRouter(
 )
 
 
+@router.get("/currencies")
+def report_currencies_endpoint(
+    company_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Which currencies this company's reports can be run in.
+
+    Every report totals one currency at a time, so a company that keeps riyal
+    and dollar accounts has two trial balances, not one. This is what a report
+    page offers as its currency choice.
+    """
+    ensure_company_access(db=db, current_user=current_user, company_id=company_id)
+    base, currencies = SqlAlchemyReportRepository(db).currencies_in_use(company_id)
+    return {"base_currency": base, "currencies": currencies}
+
+
 @router.get(
     "/trial-balance",
     response_model=TrialBalanceRead,
 )
 def trial_balance_endpoint(
     company_id: int = Query(..., ge=1),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),  # the company's own when omitted
     as_of_date: date | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -66,7 +84,7 @@ def trial_balance_endpoint(
 
     repository = SqlAlchemyReportRepository(db)
     return GetTrialBalance(repository).execute(
-        TrialBalanceQuery(company_id=company_id, as_of_date=as_of_date)
+        TrialBalanceQuery(company_id=company_id, as_of_date=as_of_date, currency=currency)
     )
 
 
@@ -76,6 +94,7 @@ def trial_balance_endpoint(
 )
 def profit_and_loss_endpoint(
     company_id: int = Query(..., ge=1),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),  # the company's own when omitted
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
     db: Session = Depends(get_db),
@@ -93,6 +112,7 @@ def profit_and_loss_endpoint(
             company_id=company_id,
             start_date=start_date,
             end_date=end_date,
+            currency=currency,
         )
     )
 
@@ -103,6 +123,7 @@ def profit_and_loss_endpoint(
 )
 def balance_sheet_endpoint(
     company_id: int = Query(..., ge=1),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),  # the company's own when omitted
     as_of_date: date | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -116,7 +137,7 @@ def balance_sheet_endpoint(
     repository = SqlAlchemyReportRepository(db)
     try:
         return GetBalanceSheet(repository).execute(
-            BalanceSheetQuery(company_id=company_id, as_of_date=as_of_date)
+            BalanceSheetQuery(company_id=company_id, as_of_date=as_of_date, currency=currency)
         )
     except MissingFiscalYearForReportError as exc:
         raise HTTPException(
@@ -175,6 +196,7 @@ def account_ledger_endpoint(
 )
 def general_ledger_endpoint(
     company_id: int = Query(..., ge=1),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),  # the company's own when omitted
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
     # Paged by ACCOUNT, never by line: a page that split an account would show
@@ -200,5 +222,6 @@ def general_ledger_endpoint(
             end_date=end_date,
             account_skip=account_skip,
             account_limit=account_limit,
+            currency=currency,
         )
     )

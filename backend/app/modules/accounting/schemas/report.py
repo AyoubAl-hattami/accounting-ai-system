@@ -19,6 +19,9 @@ class TrialBalanceLine(BaseModel):
 
 class TrialBalanceRead(BaseModel):
     company_id: int
+    # The one unit every figure in this report is in. A company that keeps
+    # riyal and dollar accounts gets one report per currency, never a sum of both.
+    currency: str | None = None
     as_of_date: date | None = None
 
     total_debit: Decimal
@@ -43,6 +46,9 @@ class ProfitAndLossLine(BaseModel):
 
 class ProfitAndLossRead(BaseModel):
     company_id: int
+    # The one unit every figure in this report is in. A company that keeps
+    # riyal and dollar accounts gets one report per currency, never a sum of both.
+    currency: str | None = None
     start_date: date | None = None
     end_date: date | None = None
 
@@ -64,6 +70,9 @@ class BalanceSheetLine(BaseModel):
 
 class BalanceSheetRead(BaseModel):
     company_id: int
+    # The one unit every figure in this report is in. A company that keeps
+    # riyal and dollar accounts gets one report per currency, never a sum of both.
+    currency: str | None = None
     as_of_date: date | None = None
 
     total_assets: Decimal
@@ -95,6 +104,9 @@ class AccountLedgerLine(BaseModel):
 
 class AccountLedgerRead(BaseModel):
     company_id: int
+    # The one unit every figure in this report is in. A company that keeps
+    # riyal and dollar accounts gets one report per currency, never a sum of both.
+    currency: str | None = None
 
     account_id: int
     account_code: str
@@ -115,6 +127,9 @@ class AccountLedgerRead(BaseModel):
     line_limit: int | None = None
 class GeneralLedgerRead(BaseModel):
     company_id: int
+    # The one unit every figure in this report is in. A company that keeps
+    # riyal and dollar accounts gets one report per currency, never a sum of both.
+    currency: str | None = None
 
     start_date: date | None = None
     end_date: date | None = None
