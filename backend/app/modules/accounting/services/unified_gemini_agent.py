@@ -1,13 +1,15 @@
 """
 Unified Gemini Agent Service.
 
-Gemini is the autonomous brain of the agent:
+Gemini reads the request and decides which accounting tools to call:
 - Understands user requests in Arabic, English, or any language without Regex intent routing.
-- Autonomously decides whether to query Project Knowledge (via Gemini File Search),
-  invoke Live Accounting Database Tools (via Function Calling), or both (Hybrid).
+- Answers only from live database tools, whose results are this company's data.
 - Enforces strict tenant isolation (company_id forced from auth) and RBAC permissions.
 - Action/mutation proposals require explicit user confirmation before execution.
-- Returns grounded responses with verifiable source citations and grounding cards.
+
+It answers about THIS COMPANY'S BOOKS, not about the application's source
+code. A Gemini File Search index of the repository used to sit beside the
+tools; it was removed, and the reasoning is in the commit that removed it.
 """
 
 from __future__ import annotations
@@ -25,7 +27,6 @@ from app.modules.accounting.schemas.gemini_assistant_schemas import (
     ConversationTurn,
     GeminiAssistantReply,
     PageContext,
-    SourceCitation,
     SuggestedAction,
 )
 from app.modules.accounting.services.accounting_tool_registry import (
@@ -41,9 +42,6 @@ from app.modules.accounting.services.ai_providers.gemini_provider import (
 from app.modules.accounting.services.gemini_assistant_service import (
     detect_message_language,
 )
-from app.modules.accounting.services.project_knowledge_service import (
-    ProjectKnowledgeService,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +49,9 @@ MAX_AGENT_TURNS = 5
 
 # One agent request is not one Gemini call.
 #
-# The loop below can make up to MAX_AGENT_TURNS model calls plus a file-search
-# store lookup, and the per-call timeout D2 set bounds each call, not the
-# request. Five bounded calls in a row still outlast the 60s
+# The loop below can make up to MAX_AGENT_TURNS model calls, and the per-call
+# timeout D2 set bounds each call, not the request. Five bounded calls in a
+# row still outlast the 60s
 # proxy_read_timeout in nginx.production.conf, so the request carries its own
 # deadline and every call is bounded by whichever is smaller -- the D2 per-call
 # timeout, or what is left of the budget.
@@ -120,7 +118,7 @@ def dispatch_unified_agent(
     Primary dispatcher for the Unified Gemini Agent.
     - Uses GEMINI_MODEL dynamically from settings (default gemini-3.6-flash).
     - If Gemini API is not configured, delegates to deterministic fallback.
-    - LLM autonomously decides whether to use Project Knowledge File Search, Accounting Tools, or answer directly.
+    - LLM autonomously decides which accounting tools to call, if any.
     """
     api_key = getattr(settings, "GEMINI_API_KEY", "").strip()
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-3.6-flash")
@@ -147,34 +145,20 @@ def dispatch_unified_agent(
 
     try:
         # The client-level timeout bounds anything that does not go through
-        # _generate_content_within_budget -- the store lookup below, and any
-        # call added later that forgets to pass the deadline.
+        # _generate_content_within_budget -- any call added later that forgets
+        # to pass the deadline.
         client = genai.Client(
             api_key=api_key,
             http_options={"timeout": int(GEMINI_REQUEST_TIMEOUT_SECONDS * 1000)},
         )
 
-        # 1. Project Knowledge Tool (File Search Store)
-        pk_service = ProjectKnowledgeService(
-            api_key=api_key,
-            timeout_seconds=GEMINI_REQUEST_TIMEOUT_SECONDS,
-        )
-        store_name = pk_service.get_or_create_store()
-
-        tools: list[types.Tool] = [
-            types.Tool(
-                file_search=types.FileSearch(
-                    file_search_store_names=[store_name],
-                )
-            ),
-        ]
-
-        # 2. Accounting Tools (Function Calling)
+        # 1. Accounting Tools (Function Calling)
+        tools: list[types.Tool] = []
         function_declarations = AccountingToolRegistry.get_tool_declarations_for_role(user_role)
         if function_declarations:
             tools.append(types.Tool(function_declarations=function_declarations))
 
-        # 3. System Instructions & Grounding Contract
+        # 2. System Instructions & Grounding Contract
         full_system_instruction = (
             f"{CORE_SYSTEM_INSTRUCTIONS}\n\n"
             f"--- RUNTIME CONTEXT ---\n"
@@ -194,7 +178,7 @@ def dispatch_unified_agent(
             ),
         )
 
-        # 4. Assemble contents
+        # 3. Assemble contents
         contents: list[types.Content] = []
         if history:
             for turn in history[-6:]:
@@ -204,11 +188,10 @@ def dispatch_unified_agent(
         contents.append(types.Content(role="user", parts=[types.Part.from_text(text=message)]))
 
         data_sources: list[str] = []
-        citations: list[SourceCitation] = []
         captured_suggested_action: SuggestedAction | None = None
         final_reply_text = ""
 
-        # 5. Multi-turn Tool Calling Execution Loop
+        # 4. Multi-turn Tool Calling Execution Loop
         for turn_idx in range(MAX_AGENT_TURNS):
             response = _generate_content_within_budget(
                 client=client,
@@ -217,19 +200,6 @@ def dispatch_unified_agent(
                 config=config,
                 deadline=deadline,
             )
-
-            # Check for citations / grounding metadata
-            if response.candidates and response.candidates[0].grounding_metadata:
-                gm = response.candidates[0].grounding_metadata
-                if gm.grounding_chunks:
-                    for chunk in gm.grounding_chunks:
-                        if chunk.retrieved_context and chunk.retrieved_context.title:
-                            title = chunk.retrieved_context.title
-                            snippet = chunk.retrieved_context.text if hasattr(chunk.retrieved_context, "text") else None
-                            if not any(c.file_path == title for c in citations):
-                                citations.append(SourceCitation(file_path=title, title=title, snippet=snippet))
-                                if "project_knowledge" not in data_sources:
-                                    data_sources.append("project_knowledge")
 
             # Check for Function Calls
             if response.function_calls:
@@ -283,7 +253,6 @@ def dispatch_unified_agent(
             intent="unified_agent_response",
             confidence="high",
             data_sources=data_sources,
-            citations=citations,
             suggested_action=captured_suggested_action,
         )
 

@@ -211,11 +211,6 @@ def test_a_failing_provider_answers_from_the_fallback_inside_the_budget(monkeypa
     returns an answer well inside the proxy budget."""
     monkeypatch.setattr(unified_gemini_agent.settings, "GEMINI_API_KEY", "probe-key")
     monkeypatch.setattr(unified_gemini_agent.genai, "Client", _AlwaysUnavailable)
-    monkeypatch.setattr(
-        unified_gemini_agent.ProjectKnowledgeService,
-        "get_or_create_store",
-        lambda self: "fileSearchStores/probe",
-    )
 
     seen: dict[str, object] = {}
 

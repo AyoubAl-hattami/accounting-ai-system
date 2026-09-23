@@ -156,22 +156,6 @@ function MessageBubble({ message, dir, language }: { message: GeminiMessage; dir
           </p>
         ))}
         <GroundingCards message={message} language={language} dir={dir} />
-        {message.metadata?.citations && message.metadata.citations.length > 0 && (
-          <div className="mt-2 pt-1.5 border-t border-border-subtle flex flex-wrap gap-1">
-            <span className="text-[10px] font-semibold text-subtle-foreground block w-full">
-              {language === 'ar' ? 'المصادر:' : 'Sources:'}
-            </span>
-            {message.metadata.citations.map((c, idx) => (
-              <span
-                key={idx}
-                className="inline-flex items-center gap-1 rounded bg-surface-overlay px-1.5 py-0.5 text-[10px] text-primary font-mono"
-                title={c.snippet || c.file_path}
-              >
-                📁 {c.file_path}
-              </span>
-            ))}
-          </div>
-        )}
         <p className="text-[10px] text-subtle-foreground mt-1.5">
           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </p>

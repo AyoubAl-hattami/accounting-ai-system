@@ -260,10 +260,6 @@ class GeneralLedgerGrounding(BaseModel):
     accounts: list[dict[str, object]] = Field(default_factory=list)
     summary: ReportSummary | None = None
     reference: ReportReference | None = None
-class SourceCitation(BaseModel):
-    file_path: str
-    title: str | None = None
-    snippet: str | None = None
 
 
 class GeminiAssistantReply(BaseModel):
@@ -271,7 +267,6 @@ class GeminiAssistantReply(BaseModel):
     intent: str  # e.g. "answer_report_question", "create_journal_draft", "access_denied", "clarification"
     confidence: str = Field(default="medium", pattern="^(high|medium|low)$")
     data_sources: list[str] = Field(default_factory=list)
-    citations: list[SourceCitation] = Field(default_factory=list)
     suggested_action: SuggestedAction | None = None
     pending_transaction: PendingTransaction | None = None
     clarification_options: list[ClarificationOption] = Field(default_factory=list)

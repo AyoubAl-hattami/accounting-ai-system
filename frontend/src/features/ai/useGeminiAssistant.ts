@@ -16,17 +16,10 @@ export interface GeminiMessage {
   timestamp: Date;
 }
 
-export interface SourceCitation {
-  file_path: string;
-  title?: string | null;
-  snippet?: string | null;
-}
-
 export interface AssistantMessageMetadata {
   intent?: string;
   suggested_action?: SuggestedAction | null;
   grounding?: unknown;
-  citations?: SourceCitation[];
 }
 
 export interface AssistantConversation {
@@ -71,7 +64,6 @@ export interface GeminiAssistantReply {
   intent: string;
   confidence: 'high' | 'medium' | 'low';
   data_sources: string[];
-  citations?: SourceCitation[];
   suggested_action?: SuggestedAction | null;
   pending_transaction?: PendingTransaction | null;
   clarification_options?: ClarificationOption[];

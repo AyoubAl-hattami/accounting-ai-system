@@ -1,1 +1,0 @@
-"""Accounting scripts package."""
