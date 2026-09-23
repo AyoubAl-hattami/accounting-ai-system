@@ -89,6 +89,7 @@ from app.modules.accounting.services.ai_providers.gemini_provider import (
 )
 from app.modules.accounting.services.report_grounding import (
     balance_sheet_grounding,
+    general_ledger_grounding,
     trial_balance_grounding,
 )
 from app.modules.accounting.services.account_mapper import map_to_accounts
@@ -3329,9 +3330,17 @@ def _structured_report_reply(
                 reply = f"ميزان المراجعة:\n{arabic_totals}" if language == "ar" else f"Trial Balance:\n{english_totals}\n" + ("The trial balance is balanced." if is_balanced else "The trial balance is not balanced.")
             return GeminiAssistantReply(reply=reply,intent="answer_trial_balance_question",confidence="high",data_sources=["trial_balance_report"],grounding=grounding)
         if kind == "general_ledger":
-            report=get_general_ledger(db=db,company_id=company_id,start_date=start_date,end_date=end_date); accounts=report.accounts[:20]
-            rows=[{"account_id":a.account_id,"account_code":a.account_code,"account_name":a.account_name,"account_type":a.account_type,"opening_balance":_report_amount(a.opening_balance),"total_debit":_report_amount(sum((x.debit for x in a.lines),Decimal("0.00"))),"total_credit":_report_amount(sum((x.credit for x in a.lines),Decimal("0.00"))),"closing_balance":_report_amount(a.closing_balance),"entry_count":len(a.lines)} for a in accounts]
-            grounding=GeneralLedgerGrounding(status="grounded",kind="general_ledger",requested_metric=metric,period=_report_period(start_date,end_date,label or "All available data"),accounts=rows,summary=ReportSummary(total_accounts=len(report.accounts),returned_accounts=len(rows),has_more=len(report.accounts)>len(rows)),reference=ReportReference(type="report",report="general_ledger",filters={"start_date":start_date.isoformat() if start_date else None,"end_date":end_date.isoformat() if end_date else None}))
+            report=get_general_ledger(db=db,company_id=company_id,start_date=start_date,end_date=end_date)
+            # Built in report_grounding now; byte-identical output asserted in
+            # tests/test_structured_grounding_parity.py against a card
+            # captured before the move.
+            grounding = general_ledger_grounding(
+                report,
+                start_date=start_date,
+                end_date=end_date,
+                requested_metric=metric,
+                label=label,
+            )
             return GeminiAssistantReply(reply=("General Ledger account summary." if language != "ar" else "ملخص حسابات دفتر الأستاذ العام."),intent="answer_general_ledger_question",confidence="high",data_sources=["general_ledger_report"],grounding=grounding)
         # The NLU entity is a routing hint. The established extractor remains
         # authoritative for exact user-provided names and codes.

@@ -78,7 +78,9 @@ from app.modules.accounting.services.reports_application_facade import (
 )
 from app.core.clock import get_today_date
 from app.modules.accounting.services.report_grounding import (
+    account_totals,
     balance_sheet_grounding,
+    general_ledger_grounding,
     profit_and_loss_grounding,
     trial_balance_grounding,
 )
@@ -94,6 +96,10 @@ logger = logging.getLogger(__name__)
 # list costs tokens without adding evidence, and the count of what was left
 # out travels with it.
 _LEDGER_LINES_SHOWN = 20
+
+# The general ledger card shows 20 accounts; the payload matches it, so the
+# model and the card describe the same page.
+_GENERAL_LEDGER_ACCOUNTS_SHOWN = 20
 
 
 def _lifecycle_envelope(entries: list[dict[str, Any]]) -> dict[str, Any]:
@@ -329,24 +335,57 @@ def tool_get_account_ledger(
 
 def tool_get_general_ledger(
     db: Session, company_id: int, start_date: str | None = None, end_date: str | None = None
-) -> dict[str, Any]:
+) -> ToolExecutionResult:
+    """The general ledger, and the card for it.
+
+    Every call raised AttributeError: it read gl.total_debit and
+    gl.total_credit, which GeneralLedgerRead does not have. The report is a
+    list of accounts, each carrying its own lines, and a total means summing
+    them -- which is what the card has always done and what account_totals
+    does now, in one place.
+
+    The figures are named for what they cover. [D3] paginates this report, so
+    `accounts` can be a page of a longer ledger, and a sum over a page is not
+    the ledger's total.
+    """
     sd = date.fromisoformat(start_date) if start_date else None
     ed = date.fromisoformat(end_date) if end_date else None
     gl = get_general_ledger(db=db, company_id=company_id, start_date=sd, end_date=ed)
-    return {
-        "total_debit": float(gl.total_debit),
-        "total_credit": float(gl.total_credit),
-        "accounts_count": len(gl.accounts),
-        "accounts": [
+
+    shown = gl.accounts[:_GENERAL_LEDGER_ACCOUNTS_SHOWN]
+    debit_shown = Decimal("0.00")
+    credit_shown = Decimal("0.00")
+    rows = []
+    for account in shown:
+        debit, credit = account_totals(account)
+        debit_shown += debit
+        credit_shown += credit
+        rows.append(
             {
-                "code": a.account_code,
-                "name": a.account_name,
-                "opening_balance": float(a.opening_balance),
-                "closing_balance": float(a.closing_balance),
+                "code": account.account_code,
+                "name": account.account_name,
+                "opening_balance": float(account.opening_balance),
+                "total_debit": float(debit),
+                "total_credit": float(credit),
+                "closing_balance": float(account.closing_balance),
+                "entry_count": len(account.lines),
             }
-            for a in gl.accounts[:20]
-        ],
+        )
+
+    data = {
+        "currency": gl.currency,
+        "period": {"start_date": start_date, "end_date": end_date},
+        "accounts_total": gl.total_accounts or len(gl.accounts),
+        "accounts_shown": len(rows),
+        "truncated": (gl.total_accounts or len(gl.accounts)) > len(rows),
+        "debit_of_shown_accounts": float(debit_shown),
+        "credit_of_shown_accounts": float(credit_shown),
+        "accounts": rows,
     }
+    return ToolExecutionResult(
+        data=data,
+        grounding=general_ledger_grounding(gl, start_date=sd, end_date=ed),
+    )
 
 
 def tool_get_accounts(
@@ -791,9 +830,18 @@ def tool_get_customer_statement(
     sd = date.fromisoformat(start_date) if start_date else date(date.today().year, 1, 1)
     ed = date.fromisoformat(end_date) if end_date else date.today()
     repo = SqlAlchemyReportRepository(db)
-    stmt = GetPartnerStatement(repo).execute(
-        PartnerStatementQuery(company_id=company_id, partner_id=partner_id, currency="", date_from=sd, date_to=ed)
-    )
+    try:
+        stmt = GetPartnerStatement(repo).execute(
+            PartnerStatementQuery(company_id=company_id, partner_id=partner_id, currency="", date_from=sd, date_to=ed)
+        )
+    except ValueError:
+        # The repository raises for a partner this company does not have,
+        # which is an ordinary thing for a model to ask about -- it guesses
+        # ids. An answer of "no such partner" is the answer; an exception
+        # reaching the model as "Error executing get_customer_statement:
+        # Partner 1 not found for company 24599" leaks an internal message
+        # and reads like a fault.
+        return {"error": f"Partner {partner_id} not found in this company."}
     return {
         "partner_id": stmt.partner_id,
         "partner_name": stmt.partner_name,

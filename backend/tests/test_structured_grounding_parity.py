@@ -347,6 +347,189 @@ def test_the_trial_balance_card_is_unchanged(seeded_company, accounting_factory)
     assert card == TRIAL_BALANCE_GOLDEN
 
 
+GENERAL_LEDGER_GOLDEN = {
+        "accounts": [
+            {
+                "account_code": "1000",
+                "account_id": "<id>",
+                "account_name": "Assets",
+                "account_type": "asset",
+                "closing_balance": "0.00",
+                "entry_count": 0,
+                "opening_balance": "0.00",
+                "total_credit": "0.00",
+                "total_debit": "0.00"
+            },
+            {
+                "account_code": "1110",
+                "account_id": "<id>",
+                "account_name": "Main Bank",
+                "account_type": "asset",
+                "closing_balance": "2500.00",
+                "entry_count": 2,
+                "opening_balance": "0.00",
+                "total_credit": "1500.00",
+                "total_debit": "4000.00"
+            },
+            {
+                "account_code": "1200",
+                "account_id": "<id>",
+                "account_name": "Accounts Receivable",
+                "account_type": "asset",
+                "closing_balance": "0.00",
+                "entry_count": 0,
+                "opening_balance": "0.00",
+                "total_credit": "0.00",
+                "total_debit": "0.00"
+            },
+            {
+                "account_code": "2000",
+                "account_id": "<id>",
+                "account_name": "Liabilities",
+                "account_type": "liability",
+                "closing_balance": "0.00",
+                "entry_count": 0,
+                "opening_balance": "0.00",
+                "total_credit": "0.00",
+                "total_debit": "0.00"
+            },
+            {
+                "account_code": "2100",
+                "account_id": "<id>",
+                "account_name": "Accounts Payable",
+                "account_type": "liability",
+                "closing_balance": "0.00",
+                "entry_count": 0,
+                "opening_balance": "0.00",
+                "total_credit": "0.00",
+                "total_debit": "0.00"
+            },
+            {
+                "account_code": "3000",
+                "account_id": "<id>",
+                "account_name": "Equity",
+                "account_type": "equity",
+                "closing_balance": "0.00",
+                "entry_count": 0,
+                "opening_balance": "0.00",
+                "total_credit": "0.00",
+                "total_debit": "0.00"
+            },
+            {
+                "account_code": "3100",
+                "account_id": "<id>",
+                "account_name": "Owner Capital",
+                "account_type": "equity",
+                "closing_balance": "0.00",
+                "entry_count": 0,
+                "opening_balance": "0.00",
+                "total_credit": "0.00",
+                "total_debit": "0.00"
+            },
+            {
+                "account_code": "3200",
+                "account_id": "<id>",
+                "account_name": "Retained Earnings",
+                "account_type": "equity",
+                "closing_balance": "0.00",
+                "entry_count": 0,
+                "opening_balance": "0.00",
+                "total_credit": "0.00",
+                "total_debit": "0.00"
+            },
+            {
+                "account_code": "4000",
+                "account_id": "<id>",
+                "account_name": "Income",
+                "account_type": "income",
+                "closing_balance": "0.00",
+                "entry_count": 0,
+                "opening_balance": "0.00",
+                "total_credit": "0.00",
+                "total_debit": "0.00"
+            },
+            {
+                "account_code": "4100",
+                "account_id": "<id>",
+                "account_name": "Sales Revenue",
+                "account_type": "income",
+                "closing_balance": "4000.00",
+                "entry_count": 1,
+                "opening_balance": "0.00",
+                "total_credit": "4000.00",
+                "total_debit": "0.00"
+            },
+            {
+                "account_code": "5000",
+                "account_id": "<id>",
+                "account_name": "Expenses",
+                "account_type": "expense",
+                "closing_balance": "0.00",
+                "entry_count": 0,
+                "opening_balance": "0.00",
+                "total_credit": "0.00",
+                "total_debit": "0.00"
+            },
+            {
+                "account_code": "5100",
+                "account_id": "<id>",
+                "account_name": "Rent Expense",
+                "account_type": "expense",
+                "closing_balance": "1500.00",
+                "entry_count": 1,
+                "opening_balance": "0.00",
+                "total_credit": "0.00",
+                "total_debit": "1500.00"
+            },
+            {
+                "account_code": "5200",
+                "account_id": "<id>",
+                "account_name": "Software Expense",
+                "account_type": "expense",
+                "closing_balance": "0.00",
+                "entry_count": 0,
+                "opening_balance": "0.00",
+                "total_credit": "0.00",
+                "total_debit": "0.00"
+            }
+        ],
+        "kind": "general_ledger",
+        "period": {
+            "as_of_date": None,
+            "end_date": None,
+            "label": "all available data",
+            "start_date": None
+        },
+        "reference": {
+            "filters": {
+                "end_date": None,
+                "start_date": None
+            },
+            "report": "general_ledger",
+            "type": "report"
+        },
+        "requested_metric": "accounts",
+        "status": "grounded",
+        "summary": {
+            "has_more": False,
+            "returned_accounts": 13,
+            "returned_entries": 0,
+            "total_accounts": 13,
+            "total_entries": 0
+        }
+    }
+
+
+def test_the_general_ledger_card_is_unchanged(seeded_company, accounting_factory):
+    card = _card(
+        accounting_factory.db,
+        seeded_company.company.id,
+        "show me the general ledger",
+        "general_ledger",
+    )
+    assert card == GENERAL_LEDGER_GOLDEN
+
+
 # ── The tool builds the same card, and honours the date it was given ─────────
 
 def test_the_tool_and_the_handler_build_the_same_card(seeded_company, accounting_factory):
@@ -496,3 +679,84 @@ def test_the_trial_balance_tool_and_handler_build_the_same_card(seeded_company, 
         handler_card.pop(field)
         tool_card.pop(field)
     assert tool_card == handler_card
+
+
+def test_the_general_ledger_tool_can_be_called_at_all(seeded_company, accounting_factory):
+    """It read gl.total_debit and gl.total_credit. GeneralLedgerRead has
+    neither: the report is a list of accounts, and a total means summing their
+    lines -- which is what the card has always done."""
+    from app.modules.accounting.services.accounting_tool_registry import (
+        AccountingToolRegistry,
+    )
+
+    result = AccountingToolRegistry.execute_tool(
+        tool_name="get_general_ledger",
+        args={},
+        db=accounting_factory.db,
+        company_id=seeded_company.company.id,
+        user_role="admin",
+    )
+
+    assert result.error is None, result.error
+    bank = next(row for row in result.data["accounts"] if row["code"] == "1110")
+    assert bank["total_debit"] == 4000.0
+    assert bank["total_credit"] == 1500.0
+    assert bank["closing_balance"] == 2500.0
+    assert bank["entry_count"] == 2
+
+    # Named for what they cover: [D3] paginates this report, so a sum over the
+    # accounts shown is not the ledger's total.
+    assert "total_debit" not in result.data and "total_credit" not in result.data
+    assert result.data["debit_of_shown_accounts"] == 5500.0
+    assert result.data["accounts_shown"] == len(result.data["accounts"])
+    assert result.grounding.kind == "general_ledger"
+
+
+def test_the_general_ledger_tool_and_handler_build_the_same_card(seeded_company, accounting_factory):
+    from app.modules.accounting.services.accounting_tool_registry import (
+        AccountingToolRegistry,
+    )
+
+    handler_card = _card(
+        accounting_factory.db,
+        seeded_company.company.id,
+        "show me the general ledger",
+        "general_ledger",
+    )
+    tool = AccountingToolRegistry.execute_tool(
+        tool_name="get_general_ledger",
+        args={},
+        db=accounting_factory.db,
+        company_id=seeded_company.company.id,
+        user_role="admin",
+    )
+    tool_card = _normalise(json.loads(tool.grounding.model_dump_json()))
+
+    for field in ("requested_metric", "period"):
+        handler_card.pop(field)
+        tool_card.pop(field)
+    assert tool_card == handler_card
+
+
+def test_a_statement_for_a_partner_that_does_not_exist_is_an_answer(accounting_factory):
+    """The repository raises for an unknown partner, and a model guessing ids
+    is ordinary. "No such partner" is the answer; an exception reaching the
+    model leaks an internal message and reads like a fault."""
+    from app.modules.accounting.services.accounting_tool_registry import (
+        AccountingToolRegistry,
+    )
+
+    bootstrap = accounting_factory.create_accounting_bootstrap(role="admin")
+    result = AccountingToolRegistry.execute_tool(
+        tool_name="get_customer_statement",
+        args={"partner_id": 999999},
+        db=accounting_factory.db,
+        company_id=bootstrap.company.id,
+        user_role="admin",
+    )
+
+    assert result.error is None
+    assert result.data["error"] == "Partner 999999 not found in this company."
+    assert str(bootstrap.company.id) not in result.data["error"], (
+        "The company id is not the user's business and not the model's."
+    )

@@ -24,11 +24,13 @@ from decimal import Decimal
 
 from app.application.reports.dto import (
     BalanceSheetRead,
+    GeneralLedgerRead,
     ProfitAndLossRead,
     TrialBalanceRead,
 )
 from app.modules.accounting.schemas.gemini_assistant_schemas import (
     BalanceSheetGrounding,
+    GeneralLedgerGrounding,
     ReportSummary,
     ProfitAndLossGrounding,
     ProfitAndLossMetrics,
@@ -229,5 +231,85 @@ def trial_balance_grounding(
             type="report",
             report="trial_balance",
             filters={"end_date": report.as_of_date.isoformat() if report.as_of_date else None},
+        ),
+    )
+
+
+GENERAL_LEDGER_ACCOUNTS_SHOWN = 20
+
+
+def _report_period_for(
+    start_date: date | None, end_date: date | None, label: str | None
+) -> ReportPeriod:
+    return ReportPeriod(
+        start_date=start_date.isoformat() if start_date else None,
+        end_date=end_date.isoformat() if end_date else None,
+        label=label or ALL_AVAILABLE_DATA,
+    )
+
+
+def account_totals(account) -> tuple[Decimal, Decimal]:
+    """Debit and credit totals for one ledger account, summed from its lines.
+
+    AccountLedgerRead carries opening and closing balances and no totals, so
+    every caller that wants them sums the lines. Two callers did it inline;
+    this is the one place that does it now.
+    """
+    debit = sum((line.debit for line in account.lines), Decimal("0.00"))
+    credit = sum((line.credit for line in account.lines), Decimal("0.00"))
+    return debit, credit
+
+
+def general_ledger_grounding(
+    report: GeneralLedgerRead,
+    *,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    requested_metric: str | None = None,
+    label: str | None = None,
+) -> GeneralLedgerGrounding:
+    """The card for a general ledger, from the report itself.
+
+    Moved verbatim out of _structured_report_reply, including two details
+    that look like mistakes and are not: the 20-account cap, and
+    total_accounts counting the accounts in the REPORT rather than
+    report.total_accounts, which [D3] added for the paginated case. Changing
+    either would change the card, and this commit moves it.
+    """
+    accounts = report.accounts[:GENERAL_LEDGER_ACCOUNTS_SHOWN]
+    rows = []
+    for account in accounts:
+        debit, credit = account_totals(account)
+        rows.append(
+            {
+                "account_id": account.account_id,
+                "account_code": account.account_code,
+                "account_name": account.account_name,
+                "account_type": account.account_type,
+                "opening_balance": report_amount(account.opening_balance),
+                "total_debit": report_amount(debit),
+                "total_credit": report_amount(credit),
+                "closing_balance": report_amount(account.closing_balance),
+                "entry_count": len(account.lines),
+            }
+        )
+    return GeneralLedgerGrounding(
+        status="grounded",
+        kind="general_ledger",
+        requested_metric=requested_metric,
+        period=_report_period_for(start_date, end_date, label),
+        accounts=rows,
+        summary=ReportSummary(
+            total_accounts=len(report.accounts),
+            returned_accounts=len(rows),
+            has_more=len(report.accounts) > len(rows),
+        ),
+        reference=ReportReference(
+            type="report",
+            report="general_ledger",
+            filters={
+                "start_date": start_date.isoformat() if start_date else None,
+                "end_date": end_date.isoformat() if end_date else None,
+            },
         ),
     )
