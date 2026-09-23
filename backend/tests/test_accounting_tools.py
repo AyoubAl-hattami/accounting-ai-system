@@ -357,3 +357,86 @@ def test_get_account_ledger_reports_the_currency_the_report_is_in(monkeypatch):
     )
 
     assert result["currency"] == "YER"
+
+
+# ── Draft and void entries ───────────────────────────────────────────────────
+#
+# These two tools list entries at every status, and said nothing about what a
+# status means. A draft is a real row with a real amount; nothing in the
+# payload said it is in no report. The report tools filter to
+# REPORTABLE_ENTRY_STATUSES because they produce figures; these produce a
+# list, so they label instead -- filtering here would answer "what happened to
+# JE-42?" with "no such entry".
+
+from app.application.reports.policies import REPORTABLE_ENTRY_STATUSES
+
+
+def _entry(entry_id, entry_no, status, amount):
+    line = MagicMock()
+    line.debit, line.credit = Decimal(amount), Decimal("0")
+    entry = MagicMock()
+    entry.id, entry.entry_no, entry.status = entry_id, entry_no, status
+    entry.entry_date, entry.description = date(2026, 1, 5), f"{status} entry"
+    entry.lines = [line]
+    return entry
+
+
+SAMPLE = [
+    _entry(1, "JE-POSTED", "posted", "1500"),
+    _entry(2, "JE-DRAFT", "draft", "777.77"),
+    _entry(3, "JE-VOID", "void", "888.88"),
+    _entry(4, "JE-REVERSED", "reversed", "200"),
+]
+
+
+def test_journal_entries_label_what_counts_in_reports(monkeypatch):
+    monkeypatch.setattr(registry, "list_journal_entries", lambda **kwargs: SAMPLE)
+
+    result = registry.tool_get_journal_entries(db=MagicMock(), company_id=1)
+
+    labelled = {entry["entry_no"]: entry["counts_in_reports"] for entry in result["entries"]}
+    assert labelled == {
+        "JE-POSTED": True,
+        "JE-DRAFT": False,
+        "JE-VOID": False,
+        "JE-REVERSED": True,
+    }
+    assert result["reportable_statuses"] == list(REPORTABLE_ENTRY_STATUSES)
+    assert "never add it to a total" in result["note"]
+
+
+def test_the_draft_is_still_listed(monkeypatch):
+    """Labelling, not filtering: a voided entry the user asks about must still
+    be findable, and the answer is 'it was voided', not 'it does not exist'."""
+    monkeypatch.setattr(registry, "list_journal_entries", lambda **kwargs: SAMPLE)
+
+    result = registry.tool_get_journal_entries(db=MagicMock(), company_id=1)
+
+    assert {entry["entry_no"] for entry in result["entries"]} == {
+        "JE-POSTED", "JE-DRAFT", "JE-VOID", "JE-REVERSED",
+    }
+
+
+def test_trace_amount_labels_the_entry_it_found(monkeypatch):
+    db = MagicMock()
+    db.scalars.return_value.all.return_value = [SAMPLE[1]]
+
+    result = registry.tool_trace_amount(db=db, company_id=1, amount=777.77)
+
+    assert len(result["entries"]) == 1
+    found = result["entries"][0]
+    assert found["entry_no"] == "JE-DRAFT"
+    assert found["status"] == "draft"
+    assert found["counts_in_reports"] is False
+    assert result["reportable_statuses"] == list(REPORTABLE_ENTRY_STATUSES)
+
+
+def test_the_policy_is_read_not_restated():
+    """If ("posted", "reversed") ever changes, these tools change with it."""
+    import inspect
+
+    source = inspect.getsource(registry)
+    assert 'REPORTABLE_ENTRY_STATUSES' in source
+    assert '"posted"' not in source.split("_lifecycle_envelope")[0].split("def tool_get_journal_entries")[-1], (
+        "A status literal in the tool would drift from the policy it copies."
+    )

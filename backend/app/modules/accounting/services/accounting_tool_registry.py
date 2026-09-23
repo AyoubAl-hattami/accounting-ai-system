@@ -68,6 +68,7 @@ from app.modules.accounting.services.reports_application_facade import (
     get_profit_and_loss,
     get_trial_balance,
 )
+from app.application.reports.policies import REPORTABLE_ENTRY_STATUSES
 from app.application.reports.aging_dto import AgingQuery
 from app.application.reports.statement_dto import PartnerStatementQuery
 from app.application.reports.use_cases import GetAgingReport, GetPartnerStatement
@@ -79,6 +80,32 @@ logger = logging.getLogger(__name__)
 # list costs tokens without adding evidence, and the count of what was left
 # out travels with it.
 _LEDGER_LINES_SHOWN = 20
+
+
+def _lifecycle_envelope(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    """Wrap a lifecycle listing with what the statuses in it mean.
+
+    These two tools list entries at every status, which is deliberate and
+    matches the deterministic handlers: a user asking what happened to an
+    entry has to be able to see that it was voided. What was missing is the
+    consequence -- a draft is a real row with a real amount, and nothing in
+    the payload said it is not in any report.
+
+    Filtering them out instead was the other option and it is the wrong one
+    here: it would answer "what happened to JE-42?" with "no such entry",
+    which is worse than a labelled draft. The report tools do filter, because
+    they produce figures; these produce a list.
+    """
+    return {
+        "entries": entries,
+        "reportable_statuses": list(REPORTABLE_ENTRY_STATUSES),
+        "note": (
+            "Only entries whose status is in reportable_statuses affect report "
+            "totals. An entry with counts_in_reports=false exists but is not "
+            "part of any reported figure; state its status when mentioning it, "
+            "and never add it to a total."
+        ),
+    }
 
 
 @dataclass
@@ -296,7 +323,7 @@ def tool_get_accounts(
 
 def tool_get_journal_entries(
     db: Session, company_id: int, entry_no: str | None = None, status: str | None = None, limit: int = 10
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     entries = list_journal_entries(db=db, company_id=company_id, status=status, limit=min(limit, 50))
     result = []
     e_no = entry_no.strip() if entry_no else None
@@ -309,15 +336,16 @@ def tool_get_journal_entries(
             "entry_date": str(e.entry_date),
             "description": e.description,
             "status": e.status,
+            "counts_in_reports": e.status in REPORTABLE_ENTRY_STATUSES,
             "total_debit": float(sum(l.debit for l in e.lines)),
             "total_credit": float(sum(l.credit for l in e.lines)),
         })
-    return result
+    return _lifecycle_envelope(result)
 
 
 def tool_trace_amount(
     db: Session, company_id: int, amount: float, account_hint: str | None = None
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     target = Decimal(str(amount))
     line_match = or_(JournalLineModel.debit == target, JournalLineModel.credit == target)
     stmt = (
@@ -341,11 +369,12 @@ def tool_trace_amount(
             "entry_date": str(e.entry_date),
             "description": e.description,
             "status": e.status,
+            "counts_in_reports": e.status in REPORTABLE_ENTRY_STATUSES,
             "matched_amount": float(target),
             "total_amount": float(sum(l.debit for l in e.lines)),
             "match_side": "debit" if any(l.debit == target for l in matched_lines) else "credit",
         })
-    return result
+    return _lifecycle_envelope(result)
 
 
 def tool_get_audit_logs(
