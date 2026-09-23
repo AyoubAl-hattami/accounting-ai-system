@@ -252,10 +252,20 @@ def calculate_file_sha256(file_path: Path) -> str:
 class ProjectKnowledgeService:
     """Manages indexing and querying project knowledge in Gemini File Search."""
 
-    def __init__(self, api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        timeout_seconds: float | None = None,
+    ) -> None:
         self.api_key = (api_key or getattr(settings, "GEMINI_API_KEY", "")).strip()
         self.repo_root = get_repo_root()
         self.manifest_path = get_manifest_path()
+        # None means the SDK default, which is no limit at all. That is the
+        # right answer for the CLI, where indexing uploads hundreds of files
+        # and nobody is waiting on a socket, and the wrong one inside a
+        # request: get_or_create_store() runs on every agent turn, so the
+        # caller there passes the same per-call timeout D2 set.
+        self.timeout_seconds = timeout_seconds
         self._client: genai.Client | None = None
 
     @property
@@ -263,7 +273,12 @@ class ProjectKnowledgeService:
         if self._client is None:
             if not self.api_key:
                 raise ValueError("GEMINI_API_KEY is not configured.")
-            self._client = genai.Client(api_key=self.api_key)
+            http_options = (
+                {"timeout": int(self.timeout_seconds * 1000)}
+                if self.timeout_seconds is not None
+                else None
+            )
+            self._client = genai.Client(api_key=self.api_key, http_options=http_options)
         return self._client
 
     def load_manifest(self) -> dict[str, Any]:

@@ -84,6 +84,7 @@ from app.modules.accounting.services.gemini_agent_contract import (
 )
 from app.modules.accounting.services.ai_providers.gemini_provider import (
     REQUEST_TIMEOUT_SECONDS as GEMINI_REQUEST_TIMEOUT_SECONDS,
+    model_calls_enabled,
 )
 from app.modules.accounting.services.account_mapper import map_to_accounts
 from app.modules.accounting.services.assistant_handler_registry import (
@@ -978,7 +979,9 @@ def _call_gemini_for_answer(
     api_key = getattr(settings, "GEMINI_API_KEY", "").strip()
     model = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash").strip()
 
-    if not api_key:
+    # `not model_calls_enabled()` reads the same as `not api_key` on purpose:
+    # the caller's fallback for both is the rules answer.
+    if not api_key or not model_calls_enabled():
         return None
 
     history_data: list[dict[str, str]] = []

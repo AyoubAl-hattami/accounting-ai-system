@@ -10,6 +10,9 @@ No API keys are logged or exposed to the frontend.
 
 import json
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from google import genai
 
@@ -50,6 +53,36 @@ REQUEST_TIMEOUT_SECONDS = 20.0
 # google-genai documents HttpOptions.timeout as milliseconds and divides by
 # 1000.0 before handing it to httpx.
 _TIMEOUT_MS = int(REQUEST_TIMEOUT_SECONDS * 1000)
+
+
+# Per-call timeouts bound one call, not one REQUEST. An assistant request can
+# chain two of them, which D2 measured at 40s worst case -- fine on its own,
+# and over the 60s proxy budget the moment something runs before it.
+#
+# The unified agent is that something: when its own budget is spent it degrades
+# to the deterministic assistant, and a degradation that opens fresh 20s calls
+# is not a degradation. Inside this context the model-backed paths answer
+# `None`, which is the same answer they already give when no key is configured
+# -- every caller has a deterministic branch for it, because that branch is
+# what runs in every test and in every deployment without a key.
+_MODEL_CALLS_ENABLED: ContextVar[bool] = ContextVar(
+    "accounting_model_calls_enabled", default=True
+)
+
+
+def model_calls_enabled() -> bool:
+    """False inside `model_calls_suppressed()`; True everywhere else."""
+    return _MODEL_CALLS_ENABLED.get()
+
+
+@contextmanager
+def model_calls_suppressed() -> Iterator[None]:
+    """Answer from deterministic logic only, making no provider call."""
+    token = _MODEL_CALLS_ENABLED.set(False)
+    try:
+        yield
+    finally:
+        _MODEL_CALLS_ENABLED.reset(token)
 
 
 def _build_prompt(
