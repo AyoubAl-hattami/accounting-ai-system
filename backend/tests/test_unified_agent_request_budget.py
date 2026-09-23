@@ -108,11 +108,18 @@ def test_the_timeout_is_real_against_a_slow_server():
     """
     import json
     import threading
-    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
     delay = [0.0]
 
     class _Handler(BaseHTTPRequestHandler):
+        # HTTP/1.1, so the connection is kept alive between the two calls
+        # below. On the default HTTP/1.0 the server closes after each
+        # response while httpx keeps the socket pooled, and the NEXT call
+        # fails with "connection aborted" instead of doing what it is here to
+        # do. That failed once in a full-suite run and passed alone.
+        protocol_version = "HTTP/1.1"
+
         def do_POST(self):  # noqa: N802 - name fixed by BaseHTTPRequestHandler
             time.sleep(delay[0])
             body = json.dumps(
@@ -135,7 +142,9 @@ def test_the_timeout_is_real_against_a_slow_server():
         def log_message(self, *args):
             pass
 
-    class _QuietServer(HTTPServer):
+    class _QuietServer(ThreadingHTTPServer):
+        daemon_threads = True
+
         def handle_error(self, request, client_address):
             pass  # the aborted connection IS the assertion below
 

@@ -47,7 +47,6 @@ from app.modules.accounting.services.assistant_conversation_service import (
     record_confirmation_event,
 )
 from app.modules.accounting.services.gemini_assistant_service import dispatch_gemini_assistant
-from app.modules.accounting.services.unified_gemini_agent import dispatch_unified_agent
 from app.modules.accounting.services.ai_accounting_application_facade import (
     create_journal_entry,
     find_fiscal_period_for_date,
@@ -128,6 +127,12 @@ def get_ai_status_endpoint(
     "/gemini-assistant",
     response_model=GeminiAssistantReply,
     status_code=status.HTTP_200_OK,
+    # Stateless twin of POST /ai/conversations/{id}/messages, kept for the
+    # tests that drive the assistant without a conversation. It is not in the
+    # public schema: the product calls the conversation route, and a second
+    # public entry point onto the same data is what let a second set of role
+    # gates exist long enough to be measured leaking.
+    include_in_schema=False,
 )
 def gemini_assistant_chat_endpoint(
     payload: GeminiAssistantRequest,
@@ -135,9 +140,10 @@ def gemini_assistant_chat_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Gemini Assistant endpoint.
+    Gemini Assistant endpoint (test-only; the product uses the conversation route).
     - Requires authentication and company membership (any role).
-    - Dispatches to Gemini (if configured) or rules fallback.
+    - Dispatches through the same function the conversation route dispatches
+      through, with the same arguments, so the two cannot answer differently.
     - Never executes mutations — only returns SuggestedAction for confirmation.
     - Never exposes secrets, tokens, or cross-company data.
     """
@@ -149,7 +155,17 @@ def gemini_assistant_chat_endpoint(
 
     user_role = company_user.role if company_user else "viewer"
 
-    return dispatch_unified_agent(
+    # Every argument the request carries is forwarded.
+    #
+    # pending_transaction and pending_context_token were accepted by the
+    # schema and then dropped here, so the second turn of a clarification
+    # arrived with no memory of the first: "دفعت 300 كهربا" asked bank or
+    # cash, and answering "الصندوق" got "what would you like to record?".
+    #
+    # prior_grounding has no value to pass: it is read from persisted
+    # conversation messages, and this route has no conversation. That is the
+    # one argument the two callers legitimately differ on.
+    return dispatch_gemini_assistant(
         db=db,
         company_id=payload.company_id,
         user_role=user_role,
@@ -157,6 +173,8 @@ def gemini_assistant_chat_endpoint(
         page_context=payload.page_context,
         language=payload.language,
         history=payload.history,
+        pending_transaction=payload.pending_transaction,
+        pending_context_token=payload.pending_context_token,
     )
 
 
