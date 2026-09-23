@@ -47,6 +47,7 @@ from app.modules.accounting.services.assistant_conversation_service import (
     record_confirmation_event,
 )
 from app.modules.accounting.services.gemini_assistant_service import dispatch_gemini_assistant
+from app.modules.accounting.services.unified_gemini_agent import dispatch_unified_agent
 from app.modules.accounting.services.ai_accounting_application_facade import (
     create_journal_entry,
     find_fiscal_period_for_date,
@@ -148,7 +149,7 @@ def gemini_assistant_chat_endpoint(
 
     user_role = company_user.role if company_user else "viewer"
 
-    return dispatch_gemini_assistant(
+    return dispatch_unified_agent(
         db=db,
         company_id=payload.company_id,
         user_role=user_role,
@@ -156,8 +157,6 @@ def gemini_assistant_chat_endpoint(
         page_context=payload.page_context,
         language=payload.language,
         history=payload.history,
-        pending_transaction=payload.pending_transaction,
-        pending_context_token=payload.pending_context_token,
     )
 
 

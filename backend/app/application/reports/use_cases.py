@@ -1,5 +1,6 @@
 """Accounting report application use cases."""
 
+from app.application.reports.aging_dto import AgingQuery, AgingReportRead
 from app.application.reports.dto import (
     AccountLedgerQuery,
     AccountLedgerRead,
@@ -13,6 +14,10 @@ from app.application.reports.dto import (
     TrialBalanceRead,
 )
 from app.application.reports.ports import ReportRepository
+from app.application.reports.statement_dto import (
+    PartnerStatementQuery,
+    PartnerStatementRead,
+)
 
 
 class GetTrialBalance:
@@ -53,3 +58,19 @@ class GetGeneralLedger:
 
     def execute(self, query: GeneralLedgerQuery) -> GeneralLedgerRead:
         return self._repository.get_general_ledger(query)
+
+
+class GetAgingReport:
+    def __init__(self, repository: ReportRepository) -> None:
+        self._repository = repository
+
+    def execute(self, query: AgingQuery) -> AgingReportRead:
+        return self._repository.get_aging_report(query)
+
+
+class GetPartnerStatement:
+    def __init__(self, repository: ReportRepository) -> None:
+        self._repository = repository
+
+    def execute(self, query: PartnerStatementQuery) -> PartnerStatementRead:
+        return self._repository.get_partner_statement(query)

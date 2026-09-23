@@ -7,6 +7,9 @@ import {
   BookOpen,
   Building2,
   ChevronLeft,
+  Clock,
+  CreditCard,
+  FileMinus,
   FileText,
   Globe,
   LayoutDashboard,
@@ -14,6 +17,7 @@ import {
   LogOut,
   Menu,
   Receipt,
+  RefreshCcw,
   Scale,
   Settings,
   Shield,
@@ -126,6 +130,12 @@ export default function AppShell({
       items: [
         { icon: BookOpen, label: t.nav.journalEntries, path: '/journal-entries' },
         { icon: Receipt, label: t.nav.accounts, path: '/accounts' },
+        { icon: Users, label: t.nav.partners, path: '/partners' },
+        { icon: FileText, label: t.nav.invoices, path: '/invoices' },
+        { icon: Receipt, label: t.nav.bills, path: '/bills' },
+        { icon: CreditCard, label: t.nav.payments, path: '/payments' },
+        { icon: FileMinus, label: t.nav.creditNotes, path: '/credit-notes' },
+        { icon: RefreshCcw, label: t.nav.refunds, path: '/refunds' },
       ],
     },
     {
@@ -136,6 +146,7 @@ export default function AppShell({
         { icon: Scale, label: t.nav.balanceSheet, path: '/reports/balance-sheet' },
         { icon: BookMarked, label: t.nav.accountLedger, path: '/reports/account-ledger' },
         { icon: Library, label: t.nav.generalLedger, path: '/reports/general-ledger' },
+        { icon: Clock, label: t.nav.agingReports, path: '/reports/aging' },
       ],
     },
     {
