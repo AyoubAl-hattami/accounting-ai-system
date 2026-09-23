@@ -62,6 +62,13 @@ from app.modules.accounting.services.assistant_handler_registry import (
     _CAN_READ_USERS,
 )
 from app.modules.accounting.services.company_user_service import list_company_users
+# The trace query and the evidence card, from the deterministic path. One
+# definition of each: see tool_trace_amount for why a second was worse than
+# an import of the module that owns them.
+from app.modules.accounting.services.gemini_assistant_service import (
+    _build_journal_evidence,
+    _tool_trace_amount,
+)
 from app.modules.accounting.services.reports_application_facade import (
     get_account_ledger,
     get_balance_sheet,
@@ -359,36 +366,58 @@ def tool_get_journal_entries(
 
 def tool_trace_amount(
     db: Session, company_id: int, amount: float, account_hint: str | None = None
-) -> dict[str, Any]:
+) -> ToolExecutionResult:
+    """Trace an exact amount, and carry the evidence card for what it found.
+
+    The query is the deterministic path's, not a second one. This tool had
+    written its own: a join with DISTINCT, ordered by date alone, with no
+    actor, no source, no match reason and no total count -- which is most of
+    what JournalEvidenceGrounding records, so it could not have produced a
+    card at all. The one in gemini_assistant_service orders posted entries
+    first, resolves who created and who posted each one, counts the matches
+    beyond the page, and says which side matched. Two implementations of
+    "find this amount" is one more than a ledger should have.
+
+    account_hint is accepted and ignored, here and in the handler this
+    delegates to. It was declared in the tool schema and never read; leaving
+    the parameter keeps the declaration honest about what a caller may send
+    while the behaviour stays what it has always been.
+    """
     target = Decimal(str(amount))
-    line_match = or_(JournalLineModel.debit == target, JournalLineModel.credit == target)
-    stmt = (
-        select(JournalEntryModel)
-        .join(JournalLineModel, JournalLineModel.journal_entry_id == JournalEntryModel.id)
-        .where(
-            JournalEntryModel.company_id == company_id,
-            JournalLineModel.company_id == company_id,
-            line_match,
-        )
-        .distinct()
-        .order_by(JournalEntryModel.entry_date.desc())
-        .limit(10)
+    matches = _tool_trace_amount(
+        db=db, company_id=company_id, amount=target, account_hint=account_hint
     )
-    entries = list(db.scalars(stmt).all())
-    result = []
-    for e in entries:
-        matched_lines = [l for l in e.lines if l.debit == target or l.credit == target]
-        result.append({
-            "entry_no": e.entry_no,
-            "entry_date": str(e.entry_date),
-            "description": e.description,
-            "status": e.status,
-            "counts_in_reports": e.status in REPORTABLE_ENTRY_STATUSES,
-            "matched_amount": float(target),
-            "total_amount": float(sum(l.debit for l in e.lines)),
-            "match_side": "debit" if any(l.debit == target for l in matched_lines) else "credit",
-        })
-    return _lifecycle_envelope(result)
+    if matches is None:
+        return ToolExecutionResult(
+            data={"error": f"The trace for {target} could not be completed."},
+            error="trace_failed",
+        )
+
+    entries = [
+        {
+            "entry_no": match["entry_no"],
+            "entry_date": match["entry_date"],
+            "description": match["description"],
+            "status": match["status"],
+            "counts_in_reports": match["status"] in REPORTABLE_ENTRY_STATUSES,
+            "matched_amount": match["total_debit"] if match["match_reason"] == "debit_line" else match["total_credit"],
+            "total_debit": match["total_debit"],
+            "total_credit": match["total_credit"],
+            "match_side": "debit" if match["match_reason"] == "debit_line" else "credit",
+            "debit_accounts": match["debit_accounts"],
+            "credit_accounts": match["credit_accounts"],
+            "created_by": match["created_by"],
+        }
+        for match in matches
+    ]
+    data = _lifecycle_envelope(entries)
+    data["query"] = {"amount": target.quantize(Decimal("0.01")).to_eng_string()}
+    data["total_matches"] = int(matches[0]["total_matches"]) if matches else 0
+
+    return ToolExecutionResult(
+        data=data,
+        grounding=_build_journal_evidence(matches, target) if matches else None,
+    )
 
 
 def tool_get_audit_logs(

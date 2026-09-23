@@ -418,17 +418,27 @@ def test_the_draft_is_still_listed(monkeypatch):
 
 
 def test_trace_amount_labels_the_entry_it_found(monkeypatch):
-    db = MagicMock()
-    db.scalars.return_value.all.return_value = [SAMPLE[1]]
+    """The tool now delegates its query and returns a ToolExecutionResult
+    carrying an evidence card; the labelling this test exists for is on the
+    payload inside it."""
+    match = {
+        "id": 2, "entry_no": "JE-DRAFT", "entry_date": "2026-01-05",
+        "description": "draft entry", "status": "draft", "source_type": "manual",
+        "amount": Decimal("777.77"), "total_debit": "777.77", "total_credit": "777.77",
+        "match_reason": "debit_line", "debit_accounts": ["Expenses"],
+        "credit_accounts": ["Main Bank"], "created_by": None, "posted_by": None,
+        "total_matches": 1,
+    }
+    monkeypatch.setattr(registry, "_tool_trace_amount", lambda **kwargs: [match])
 
-    result = registry.tool_trace_amount(db=db, company_id=1, amount=777.77)
+    result = registry.tool_trace_amount(db=MagicMock(), company_id=1, amount=777.77)
 
-    assert len(result["entries"]) == 1
-    found = result["entries"][0]
+    assert len(result.data["entries"]) == 1
+    found = result.data["entries"][0]
     assert found["entry_no"] == "JE-DRAFT"
     assert found["status"] == "draft"
     assert found["counts_in_reports"] is False
-    assert result["reportable_statuses"] == list(REPORTABLE_ENTRY_STATUSES)
+    assert result.data["reportable_statuses"] == list(REPORTABLE_ENTRY_STATUSES)
 
 
 def test_the_policy_is_read_not_restated():
