@@ -44,6 +44,7 @@ from app.modules.accounting.services.ai_providers.gemini_provider import (
 from app.modules.accounting.services.gemini_assistant_service import (
     detect_message_language,
 )
+from app.modules.accounting.services import grounding_gate
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +210,7 @@ def answer_with_tools(
 
         data_sources: list[str] = []
         captured_suggested_action: SuggestedAction | None = None
+        groundings: list[Any] = []
         final_reply_text = ""
 
         # 4. Multi-turn Tool Calling Execution Loop
@@ -239,6 +241,9 @@ def answer_with_tools(
                     )
                     if exec_result.is_mutation_proposal and exec_result.suggested_action:
                         captured_suggested_action = exec_result.suggested_action
+
+                    if exec_result.grounding is not None:
+                        groundings.append(exec_result.grounding)
 
                     if exec_result.data_source and exec_result.data_source not in data_sources:
                         data_sources.append(exec_result.data_source)
@@ -278,12 +283,31 @@ def answer_with_tools(
             logger.info("The model returned no text; the tool stage declines.")
             return None
 
+        # The card, if anything vouches for what the model wrote.
+        #
+        # The reply is built AFTER the loop, from a grounding the model never
+        # received: it read the flattened figures in the tool payload, and the
+        # card was built from the DTO behind that payload. So a figure in the
+        # card cannot be one the model edited -- and whether the SENTENCE
+        # matches the card is what the gate decides.
+        decision = grounding_gate.decide(final_reply_text, groundings)
+        if groundings and not decision.attach:
+            logger.info(
+                "No verified card attached (%s): %s",
+                decision.reason,
+                decision.unvouched,
+            )
+
         return GeminiAssistantReply(
             reply=final_reply_text,
             intent="unified_agent_response",
-            confidence="high",
+            # "high" is a claim about the figures, so it is earned the same way
+            # the badge is. An unvouched answer may still be a good answer; it
+            # is not a verified one.
+            confidence="high" if decision.verified else "medium",
             data_sources=data_sources,
             suggested_action=captured_suggested_action,
+            grounding=decision.grounding,
         )
 
     except Exception as exc:

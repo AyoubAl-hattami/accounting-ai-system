@@ -19,6 +19,7 @@ from decimal import Decimal
 from typing import Any, Callable
 
 from google.genai import types
+from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -68,6 +69,9 @@ from app.modules.accounting.services.reports_application_facade import (
     get_profit_and_loss,
     get_trial_balance,
 )
+from app.modules.accounting.services.report_grounding import (
+    profit_and_loss_grounding,
+)
 from app.application.reports.policies import REPORTABLE_ENTRY_STATUSES
 from app.application.reports.aging_dto import AgingQuery
 from app.application.reports.statement_dto import PartnerStatementQuery
@@ -115,17 +119,23 @@ class ToolExecutionResult:
     suggested_action: SuggestedAction | None = None
     data_source: str = "database"
     error: str | None = None
+    # The card for this result, built from the DTO the service returned.
+    # It travels beside the data, never inside it: the model reads `data`,
+    # and this is attached to the reply afterwards, if the gate vouches.
+    grounding: BaseModel | None = None
 
 
 # ── 1. Read Tools Implementation ──────────────────────────────────────────────
 
 def tool_get_profit_loss(
     db: Session, company_id: int, start_date: str | None = None, end_date: str | None = None
-) -> dict[str, Any]:
+) -> ToolExecutionResult:
+    """The report, flattened for the model, and the card, built from the same
+    object. The model gets the first and never sees the second."""
     sd = date.fromisoformat(start_date) if start_date else None
     ed = date.fromisoformat(end_date) if end_date else None
     report = get_profit_and_loss(db=db, company_id=company_id, start_date=sd, end_date=ed)
-    return {
+    data = {
         "total_revenue": float(report.total_income),
         "total_expenses": float(report.total_expenses),
         "net_profit": float(report.net_profit),
@@ -139,6 +149,10 @@ def tool_get_profit_loss(
             for l in report.expense_lines if float(l.amount) != 0
         ][:15],
     }
+    return ToolExecutionResult(
+        data=data,
+        grounding=profit_and_loss_grounding(report, start_date=sd, end_date=ed),
+    )
 
 
 def tool_get_balance_sheet(db: Session, company_id: int, as_of_date: str | None = None) -> dict[str, Any]:
