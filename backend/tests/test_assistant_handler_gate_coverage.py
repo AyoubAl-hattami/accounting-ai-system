@@ -406,12 +406,11 @@ TOOL_REST_EQUIVALENT = {
     "get_credit_notes": ("credit_note_routes.py", "list_credit_notes_endpoint"),
     "get_credit_note_details": ("credit_note_routes.py", "get_credit_note_endpoint"),
     "get_refunds": ("refund_routes.py", "list_refunds_endpoint"),
-    # The proposal tools mutate nothing: they return a draft the user has to
+    # The proposal tool mutates nothing: it returns a draft the user has to
     # confirm, and /confirm-action re-validates it. Compared against the create
     # route anyway, because proposing an entry only an accountant may create is
     # an invitation to a 403 one step later.
     "propose_journal_entry": ("journal_routes.py", "create_journal_entry_endpoint"),
-    "propose_credit_note": ("credit_note_routes.py", "create_credit_note_endpoint"),
 }
 
 
@@ -536,6 +535,38 @@ def test_tool_registry_imports_the_permission_vocabulary_and_defines_none():
         "These permission names gate tools but are not imported from "
         f"{PERMISSION_SOURCE}: {sorted(missing)}. Wherever they come from, it "
         "is not the one definition."
+    )
+
+
+def _declared_tool_names() -> set[str]:
+    """Tool names in TOOL_DECLARATIONS, which is what the model is offered."""
+    found: set[str] = set()
+    for node in ast.walk(_tool_registry_module()):
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(
+            isinstance(target, ast.Name) and target.id == "TOOL_DECLARATIONS"
+            for target in node.targets
+        ):
+            continue
+        for element in getattr(node.value, "elts", []):
+            for keyword in getattr(element, "keywords", []):
+                if keyword.arg == "name" and isinstance(keyword.value, ast.Constant):
+                    found.add(keyword.value.value)
+    return found
+
+
+def test_what_is_offered_and_what_is_handled_are_the_same_set():
+    """A declaration with no handler is a tool the model can call and the
+    registry then refuses as unknown; a handler with no declaration is a gate
+    nothing reaches. Removing a tool means removing both, and the two lists
+    are 300 lines apart."""
+    declared = _declared_tool_names()
+    handled = set(_tool_permission_names())
+    assert declared, "No FunctionDeclaration names were parsed; the shape changed."
+    assert declared == handled, (
+        f"offered but not handled: {sorted(declared - handled)}; "
+        f"handled but not offered: {sorted(handled - declared)}"
     )
 
 

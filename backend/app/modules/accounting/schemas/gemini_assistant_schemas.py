@@ -127,9 +127,14 @@ class SuggestedJournalPayload(BaseModel):
 
 
 class SuggestedAction(BaseModel):
-    type: str  # "create_journal_entry_draft", "create_credit_note", etc.
+    # Widened to `SuggestedJournalPayload | dict` for a credit-note proposal
+    # that had no confirm branch; the tool is gone and so is the union. The
+    # union also meant a journal payload that failed validation fell through
+    # to `dict` and was carried anyway, which is not a thing this type should
+    # let happen.
+    type: str  # "create_journal_entry_draft"
     requires_confirmation: bool = True
-    payload: SuggestedJournalPayload | dict[str, Any]
+    payload: SuggestedJournalPayload
 
 
 # ── Evidence (structured data backing an answer) ──────────────────────────────

@@ -33,7 +33,6 @@ from app.modules.accounting.models.credit_note import (
 from app.modules.accounting.models.invoice import Invoice as InvoiceModel, InvoiceLine as InvoiceLineModel
 from app.modules.accounting.models.journal_entry import JournalEntry as JournalEntryModel
 from app.modules.accounting.models.journal_line import JournalLine as JournalLineModel
-from app.modules.accounting.models.partner import Partner as PartnerModel
 from app.modules.accounting.models.payment import Payment as PaymentModel, PaymentAllocation as PaymentAllocationModel
 from app.modules.accounting.models.refund import Refund as RefundModel
 from app.modules.accounting.schemas.gemini_assistant_schemas import (
@@ -559,50 +558,6 @@ def tool_get_refunds(
     ]
 
 
-def tool_propose_credit_note(
-    db: Session,
-    company_id: int,
-    partner_id: int,
-    note_type: str,
-    credit_note_no: str,
-    amount: float,
-    description: str,
-    issue_date: str | None = None,
-    account_code_or_name: str | None = None,
-) -> ToolExecutionResult:
-    # Build a validated proposal for creating a Credit Note or Debit Note
-    partner = db.scalar(select(PartnerModel).where(PartnerModel.id == partner_id, PartnerModel.company_id == company_id))
-    if not partner:
-        return ToolExecutionResult(
-            data={"error": f"Partner {partner_id} not found in company."},
-            error="Partner not found",
-        )
-
-    currency = partner.currency or "USD"
-    suggested_action = SuggestedAction(
-        type="create_credit_note",
-        payload={
-            "company_id": company_id,
-            "partner_id": partner_id,
-            "partner_name": partner.name,
-            "note_type": note_type,
-            "credit_note_no": credit_note_no,
-            "issue_date": issue_date or str(date.today()),
-            "currency": currency,
-            "amount": amount,
-            "description": description,
-        },
-    )
-    return ToolExecutionResult(
-        data={
-            "proposal": "Credit/Debit Note creation proposed. Requires user confirmation in UI before execution.",
-            "details": suggested_action.payload,
-        },
-        is_mutation_proposal=True,
-        suggested_action=suggested_action,
-    )
-
-
 def tool_get_payments(
     db: Session,
     company_id: int,
@@ -1038,25 +993,6 @@ TOOL_DECLARATIONS = [
             required=["debit_account", "credit_account", "amount", "description"],
         ),
     ),
-    types.FunctionDeclaration(
-        name="propose_credit_note",
-        description="Propose a new Credit Note or Debit Note. Does not write directly; prepares a validated proposal for user confirmation.",
-        parameters=types.Schema(
-            type="OBJECT",
-            properties={
-                "partner_id": types.Schema(type="INTEGER", description="Partner ID"),
-                "note_type": types.Schema(
-                    type="STRING",
-                    description="customer_credit_note or vendor_debit_note",
-                ),
-                "credit_note_no": types.Schema(type="STRING", description="Credit note number"),
-                "amount": types.Schema(type="NUMBER", description="Amount"),
-                "description": types.Schema(type="STRING", description="Reason / description"),
-                "issue_date": types.Schema(type="STRING", description="Issue date YYYY-MM-DD (optional)"),
-            },
-            required=["partner_id", "note_type", "credit_note_no", "amount", "description"],
-        ),
-    ),
 ]
 
 
@@ -1087,7 +1023,6 @@ class AccountingToolRegistry:
         "get_credit_note_details": (tool_get_credit_note_details, _CAN_READ_CREDIT_NOTES, False),
         "get_refunds": (tool_get_refunds, _CAN_READ_CREDIT_NOTES, False),
         "propose_journal_entry": (tool_propose_journal_entry, _CAN_CREATE_DRAFT, True),
-        "propose_credit_note": (tool_propose_credit_note, _CAN_CREATE_DRAFT, True),
     }
 
     @classmethod

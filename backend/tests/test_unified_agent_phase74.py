@@ -22,7 +22,6 @@ from app.modules.accounting.services.accounting_tool_registry import (
     tool_get_credit_notes,
     tool_get_invoice_details,
     tool_get_refunds,
-    tool_propose_credit_note,
 )
 
 
@@ -31,48 +30,20 @@ def test_phase74_tools_rbac_declarations():
     assert "get_credit_notes" in viewer_tools
     assert "get_credit_note_details" in viewer_tools
     assert "get_refunds" in viewer_tools
-    assert "propose_credit_note" not in viewer_tools
 
     accountant_tools = [d.name for d in AccountingToolRegistry.get_tool_declarations_for_role("accountant")]
     assert "get_credit_notes" in accountant_tools
     assert "get_credit_note_details" in accountant_tools
     assert "get_refunds" in accountant_tools
-    assert "propose_credit_note" in accountant_tools
 
+    # propose_credit_note was here. It built a SuggestedAction of type
+    # "create_credit_note" that /confirm-action rejects with 422 -- its
+    # action_type is pattern-locked to create_journal_entry_draft -- and that
+    # the panel renders by reading payload.entry_date, which a credit-note
+    # payload has no such field for. The tool is gone; see the commit.
     admin_tools = [d.name for d in AccountingToolRegistry.get_tool_declarations_for_role("admin")]
-    assert "propose_credit_note" in admin_tools
-
-
-def test_propose_credit_note_creates_mutation_proposal_without_db_mutation():
-    mock_db = MagicMock()
-    mock_partner = MagicMock()
-    mock_partner.id = 1
-    mock_partner.name = "Customer Alpha"
-    mock_partner.currency = "USD"
-
-    mock_db.scalar.return_value = mock_partner
-
-    res = tool_propose_credit_note(
-        db=mock_db,
-        company_id=1,
-        partner_id=1,
-        note_type="customer_credit_note",
-        credit_note_no="CN-PROP-001",
-        amount=200.0,
-        description="Return item",
-        issue_date="2026-01-20",
-        account_code_or_name="Sales Returns",
-    )
-
-    assert res.is_mutation_proposal is True
-    assert res.suggested_action is not None
-    assert res.suggested_action.type == "create_credit_note"
-    assert res.suggested_action.requires_confirmation is True
-    assert "Credit/Debit Note creation proposed" in res.data["proposal"]
-    assert res.data["details"]["amount"] == 200.0
-    # Crucial: No DB mutation / commit
-    assert not mock_db.commit.called
-    assert not mock_db.add.called
+    assert "propose_credit_note" not in admin_tools
+    assert "propose_journal_entry" in admin_tools
 
 
 def _in_memory_db() -> Session:
