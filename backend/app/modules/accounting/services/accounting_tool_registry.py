@@ -76,7 +76,9 @@ from app.modules.accounting.services.reports_application_facade import (
     get_profit_and_loss,
     get_trial_balance,
 )
+from app.core.clock import get_today_date
 from app.modules.accounting.services.report_grounding import (
+    balance_sheet_grounding,
     profit_and_loss_grounding,
 )
 from app.application.reports.policies import REPORTABLE_ENTRY_STATUSES
@@ -162,9 +164,19 @@ def tool_get_profit_loss(
     )
 
 
-def tool_get_balance_sheet(db: Session, company_id: int, as_of_date: str | None = None) -> dict[str, Any]:
-    bs = get_balance_sheet(db=db, company_id=company_id)
-    return {
+def tool_get_balance_sheet(
+    db: Session, company_id: int, as_of_date: str | None = None
+) -> ToolExecutionResult:
+    """The balance sheet as of a date, and the card for it.
+
+    as_of_date was accepted and dropped: the call went out with no date at
+    all, so "what did we own at the end of March?" was answered with today's
+    figures and nothing said otherwise. The deterministic path has always
+    passed it.
+    """
+    as_of = date.fromisoformat(as_of_date) if as_of_date else get_today_date()
+    bs = get_balance_sheet(db=db, company_id=company_id, as_of_date=as_of)
+    data = {
         "total_assets": float(bs.total_assets),
         "total_liabilities": float(bs.total_liabilities),
         "total_equity": float(bs.total_equity),
@@ -182,7 +194,9 @@ def tool_get_balance_sheet(db: Session, company_id: int, as_of_date: str | None 
             {"account_name": l.account_name, "account_code": l.account_code, "amount": float(l.amount)}
             for l in bs.equity_lines if float(l.amount) != 0
         ][:15],
+        "as_of_date": bs.as_of_date.isoformat() if bs.as_of_date else None,
     }
+    return ToolExecutionResult(data=data, grounding=balance_sheet_grounding(bs))
 
 
 def tool_get_trial_balance(

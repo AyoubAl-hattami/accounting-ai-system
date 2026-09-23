@@ -11,9 +11,10 @@ server-side after the model has finished, and only if the gate vouches for
 what the model wrote. That is the whole guarantee: the figures in the card
 cannot be the model's, because the model was never given them to edit.
 
-This module holds one builder today. The other four kinds live inline in
-gemini_assistant_service._structured_report_reply and move here one at a
-time, each with its output asserted byte-identical first.
+The kinds move here one at a time out of
+gemini_assistant_service._structured_report_reply, each with its output
+asserted byte-identical first -- tests/test_structured_grounding_parity.py
+holds a card captured from the code before its builder was extracted.
 """
 
 from __future__ import annotations
@@ -21,12 +22,15 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from app.application.reports.dto import ProfitAndLossRead
+from app.application.reports.dto import BalanceSheetRead, ProfitAndLossRead
 from app.modules.accounting.schemas.gemini_assistant_schemas import (
+    BalanceSheetGrounding,
     ProfitAndLossGrounding,
     ProfitAndLossMetrics,
     ProfitAndLossPeriod,
     ProfitAndLossReference,
+    ReportPeriod,
+    ReportReference,
 )
 
 # What a period with no dates is called, matching the deterministic path.
@@ -95,5 +99,69 @@ def profit_and_loss_grounding(
         ),
         reference=ProfitAndLossReference(
             type="report", report="profit_and_loss", filters=filters
+        ),
+    )
+
+
+BALANCE_SHEET_ACCOUNTS_SHOWN = 50
+
+
+def balance_sheet_grounding(
+    report: BalanceSheetRead,
+    *,
+    requested_metric: str = "assets",
+) -> BalanceSheetGrounding:
+    """The card for a balance sheet, from the report itself.
+
+    Moved verbatim out of _structured_report_reply: the metric names, the
+    section order, the 50-account cap and the "As of <date>" label are what
+    that code produced, and the parity test compares a card built here against
+    one captured before the move.
+    """
+    as_of = report.as_of_date
+    metrics: dict[str, str | bool] = {
+        "total_assets": report_amount(report.total_assets),
+        "total_liabilities": report_amount(report.total_liabilities),
+        "total_equity": report_amount(report.total_equity),
+        "current_year_earnings": report_amount(report.current_year_earnings),
+        "prior_year_earnings": report_amount(report.prior_year_earnings),
+        "liabilities_and_equity": report_amount(report.total_liabilities_and_equity),
+        "difference": report_amount(report.total_assets - report.total_liabilities_and_equity),
+        "is_balanced": report.total_assets == report.total_liabilities_and_equity,
+    }
+    sections = [
+        {
+            "section": name,
+            "total": report_amount(total),
+            "accounts": [
+                {
+                    "account_id": line.account_id,
+                    "account_code": line.account_code,
+                    "account_name": line.account_name,
+                    "balance": report_amount(line.amount),
+                }
+                for line in lines[:BALANCE_SHEET_ACCOUNTS_SHOWN]
+            ],
+        }
+        for name, total, lines in (
+            ("assets", report.total_assets, report.asset_lines),
+            ("liabilities", report.total_liabilities, report.liability_lines),
+            ("equity", report.total_equity, report.equity_lines),
+        )
+    ]
+    return BalanceSheetGrounding(
+        status="grounded",
+        kind="balance_sheet",
+        requested_metric=requested_metric,
+        period=ReportPeriod(
+            as_of_date=as_of.isoformat() if as_of else None,
+            label=f"As of {as_of}",
+        ),
+        metrics=metrics,
+        sections=sections,
+        reference=ReportReference(
+            type="report",
+            report="balance_sheet",
+            filters={"as_of_date": as_of.isoformat() if as_of else None},
         ),
     )

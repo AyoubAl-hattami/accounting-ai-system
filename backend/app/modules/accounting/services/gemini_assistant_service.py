@@ -87,6 +87,9 @@ from app.modules.accounting.services.ai_providers.gemini_provider import (
     model_calls_enabled,
     request_budget,
 )
+from app.modules.accounting.services.report_grounding import (
+    balance_sheet_grounding,
+)
 from app.modules.accounting.services.account_mapper import map_to_accounts
 from app.modules.accounting.services.assistant_handler_registry import (
     ASSISTANT_HANDLERS,
@@ -3294,10 +3297,12 @@ def _structured_report_reply(
         if kind == "balance_sheet":
             report = get_balance_sheet(db=db, company_id=company_id, as_of_date=end_date or get_today_date())
             as_of = report.as_of_date
-            metrics = {"total_assets": _report_amount(report.total_assets), "total_liabilities": _report_amount(report.total_liabilities), "total_equity": _report_amount(report.total_equity), "current_year_earnings": _report_amount(report.current_year_earnings), "prior_year_earnings": _report_amount(report.prior_year_earnings), "liabilities_and_equity": _report_amount(report.total_liabilities_and_equity), "difference": _report_amount(report.total_assets - report.total_liabilities_and_equity), "is_balanced": report.total_assets == report.total_liabilities_and_equity}
-            sections = [{"section": name, "total": _report_amount(total), "accounts": [{"account_id": line.account_id, "account_code": line.account_code, "account_name": line.account_name, "balance": _report_amount(line.amount)} for line in lines[:50]]} for name, total, lines in (("assets", report.total_assets, report.asset_lines), ("liabilities", report.total_liabilities, report.liability_lines), ("equity", report.total_equity, report.equity_lines))]
-            grounding = BalanceSheetGrounding(status="grounded", kind="balance_sheet", requested_metric=metric, period=ReportPeriod(as_of_date=as_of.isoformat() if as_of else None, label=f"As of {as_of}"), metrics=metrics, sections=sections, reference=ReportReference(type="report", report="balance_sheet", filters={"as_of_date": as_of.isoformat() if as_of else None}))
-            m=metrics
+            # The card is built in report_grounding now, so the tool path can
+            # build the same one from the same DTO. Byte-identical output is
+            # asserted in tests/test_structured_grounding_parity.py against a
+            # card captured before the move.
+            grounding = balance_sheet_grounding(report, requested_metric=metric)
+            m = grounding.metrics
             reply=(f"Balance Sheet as of {as_of}:\nTotal assets: {m['total_assets']}\nTotal liabilities: {m['total_liabilities']}\nTotal equity: {m['total_equity']}\nLiabilities and equity: {m['liabilities_and_equity']}\nDifference: {m['difference']}\n" + ("The balance sheet is balanced according to the accounting data." if m["is_balanced"] else "The balance sheet is not balanced according to the accounting data.")) if language != "ar" else f"الميزانية العمومية حتى {as_of}:\nإجمالي الأصول: {m['total_assets']}\nإجمالي الالتزامات: {m['total_liabilities']}\nإجمالي حقوق الملكية: {m['total_equity']}\nالالتزامات وحقوق الملكية: {m['liabilities_and_equity']}\nالفرق: {m['difference']}"
             return GeminiAssistantReply(reply=reply, intent="answer_balance_sheet_question", confidence="high", data_sources=["balance_sheet_report"], grounding=grounding)
         if kind == "trial_balance":
