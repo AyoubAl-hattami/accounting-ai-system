@@ -78,6 +78,7 @@ from app.modules.accounting.services.reports_application_facade import (
 )
 from app.core.clock import get_today_date
 from app.modules.accounting.services.report_grounding import (
+    account_ledger_grounding,
     account_totals,
     balance_sheet_grounding,
     general_ledger_grounding,
@@ -246,7 +247,7 @@ def tool_get_trial_balance(
 
 def tool_get_account_ledger(
     db: Session, company_id: int, account_identifier: str, start_date: str | None = None, end_date: str | None = None
-) -> dict[str, Any]:
+) -> ToolExecutionResult:
     # Resolve the account, and refuse to guess between several.
     #
     # This matched code OR name-contains and took .first(), so "expense"
@@ -273,29 +274,35 @@ def tool_get_account_ledger(
             ).all()
         )
         if len(matches) > 1:
-            return {
-                "error": (
-                    f"'{identifier}' matches {len(matches)} accounts. Ask which "
-                    "one is meant, by code."
-                ),
-                "candidates": [
-                    {"code": match.code, "name": match.name} for match in matches[:10]
-                ],
-            }
+            return ToolExecutionResult(
+                data={
+                    "error": (
+                        f"'{identifier}' matches {len(matches)} accounts. Ask "
+                        "which one is meant, by code."
+                    ),
+                    "candidates": [
+                        {"code": match.code, "name": match.name} for match in matches[:10]
+                    ],
+                }
+            )
         acc = matches[0] if matches else None
     if not acc:
-        return {"error": f"Account '{account_identifier}' not found in company chart of accounts."}
+        return ToolExecutionResult(
+            data={"error": f"Account '{account_identifier}' not found in company chart of accounts."}
+        )
 
     sd = date.fromisoformat(start_date) if start_date else None
     ed = date.fromisoformat(end_date) if end_date else None
     ledger = get_account_ledger(db=db, company_id=company_id, account_id=acc.id, start_date=sd, end_date=ed)
     if ledger is None:
-        return {
-            "error": (
-                f"The ledger for account '{acc.code} - {acc.name}' could not be "
-                "produced for that period."
-            )
-        }
+        return ToolExecutionResult(
+            data={
+                "error": (
+                    f"The ledger for account '{acc.code} - {acc.name}' could not be "
+                    "produced for that period."
+                )
+            }
+        )
 
     # Debits and credits are summed from the lines returned, and said so.
     #
@@ -304,7 +311,7 @@ def tool_get_account_ledger(
     # window totals from a page would be worse than not having them: [D3]
     # paginates this report, so `lines` can be a page of a longer window.
     shown = ledger.lines[:_LEDGER_LINES_SHOWN]
-    return {
+    data = {
         "account_id": acc.id,
         "account_code": acc.code,
         "account_name": acc.name,
@@ -331,6 +338,10 @@ def tool_get_account_ledger(
             for line in shown
         ],
     }
+    return ToolExecutionResult(
+        data=data,
+        grounding=account_ledger_grounding(ledger, acc, start_date=sd, end_date=ed),
+    )
 
 
 def tool_get_general_ledger(

@@ -273,14 +273,14 @@ def test_get_account_ledger_returns_a_ledger(monkeypatch):
         db=_db_returning(_account()), company_id=1, account_identifier="1110"
     )
 
-    assert "error" not in result, result
-    assert result["account_code"] == "1110"
-    assert result["opening_balance"] == 100.0
-    assert result["closing_balance"] == 400.0
-    assert result["debit_of_shown_lines"] == 300.0
-    assert result["credit_of_shown_lines"] == 50.0
-    assert result["truncated"] is False
-    assert [entry["entry_no"] for entry in result["entries"]] == ["JE-1", "JE-2"]
+    assert "error" not in result.data, result
+    assert result.data["account_code"] == "1110"
+    assert result.data["opening_balance"] == 100.0
+    assert result.data["closing_balance"] == 400.0
+    assert result.data["debit_of_shown_lines"] == 300.0
+    assert result.data["credit_of_shown_lines"] == 50.0
+    assert result.data["truncated"] is False
+    assert [entry["entry_no"] for entry in result.data["entries"]] == ["JE-1", "JE-2"]
 
 
 def test_get_account_ledger_says_when_it_is_showing_a_page(monkeypatch):
@@ -294,10 +294,10 @@ def test_get_account_ledger_says_when_it_is_showing_a_page(monkeypatch):
         db=_db_returning(_account()), company_id=1, account_identifier="1110"
     )
 
-    assert result["lines_shown"] == registry._LEDGER_LINES_SHOWN
-    assert result["lines_total"] == 500
-    assert result["truncated"] is True
-    assert "total_debit" not in result and "total_credit" not in result, (
+    assert result.data["lines_shown"] == registry._LEDGER_LINES_SHOWN
+    assert result.data["lines_total"] == 500
+    assert result.data["truncated"] is True
+    assert "total_debit" not in result.data and "total_credit" not in result.data, (
         "A figure named like a window total must not be a page sum."
     )
 
@@ -309,7 +309,7 @@ def test_get_account_ledger_reports_an_unavailable_report(monkeypatch):
         db=_db_returning(_account()), company_id=1, account_identifier="1110"
     )
 
-    assert "could not be produced" in result["error"]
+    assert "could not be produced" in result.data["error"]
 
 
 def test_get_account_ledger_refuses_to_guess_between_accounts(monkeypatch):
@@ -328,8 +328,8 @@ def test_get_account_ledger_refuses_to_guess_between_accounts(monkeypatch):
         db=_db_returning(None, matches=candidates), company_id=1, account_identifier="expense"
     )
 
-    assert "matches 3 accounts" in result["error"]
-    assert [candidate["code"] for candidate in result["candidates"]] == ["5000", "5100", "5200"]
+    assert "matches 3 accounts" in result.data["error"]
+    assert [candidate["code"] for candidate in result.data["candidates"]] == ["5000", "5100", "5200"]
 
 
 def test_get_account_ledger_takes_an_exact_code_over_a_name_match(monkeypatch):
@@ -339,7 +339,7 @@ def test_get_account_ledger_takes_an_exact_code_over_a_name_match(monkeypatch):
 
     result = registry.tool_get_account_ledger(db=db, company_id=1, account_identifier="1110")
 
-    assert result["account_code"] == "1110"
+    assert result.data["account_code"] == "1110"
     # One query: the code matched, so the name search never ran.
     assert db.scalars.call_count == 1
 
@@ -356,7 +356,7 @@ def test_get_account_ledger_reports_the_currency_the_report_is_in(monkeypatch):
         db=_db_returning(_account(currency="USD")), company_id=1, account_identifier="1110"
     )
 
-    assert result["currency"] == "YER"
+    assert result.data["currency"] == "YER"
 
 
 # ── Draft and void entries ───────────────────────────────────────────────────

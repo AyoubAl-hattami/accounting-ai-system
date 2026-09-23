@@ -23,12 +23,14 @@ from datetime import date
 from decimal import Decimal
 
 from app.application.reports.dto import (
+    AccountLedgerRead,
     BalanceSheetRead,
     GeneralLedgerRead,
     ProfitAndLossRead,
     TrialBalanceRead,
 )
 from app.modules.accounting.schemas.gemini_assistant_schemas import (
+    AccountLedgerGrounding,
     BalanceSheetGrounding,
     GeneralLedgerGrounding,
     ReportSummary,
@@ -308,6 +310,82 @@ def general_ledger_grounding(
             type="report",
             report="general_ledger",
             filters={
+                "start_date": start_date.isoformat() if start_date else None,
+                "end_date": end_date.isoformat() if end_date else None,
+            },
+        ),
+    )
+
+
+ACCOUNT_LEDGER_ENTRIES_SHOWN = 20
+
+
+def account_ledger_grounding(
+    report: AccountLedgerRead,
+    account,
+    *,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    requested_metric: str | None = None,
+    label: str | None = None,
+) -> AccountLedgerGrounding:
+    """The card for one account's ledger, from the report itself.
+
+    Moved verbatim out of _structured_report_reply, including the hardcoded
+    "posted" status on every entry. That is not a claim the report makes --
+    AccountLedgerLine carries no status, and the underlying query is the
+    reportable-statuses one, so "posted" is the inline code's shorthand for
+    "this came from the report". It is carried across unchanged because this
+    commit moves the card; whether the card should say something it has not
+    checked is a question for its own commit, and it is written down here so
+    that question has somewhere to start.
+
+    ``account`` is the resolved account row -- the report knows its id, code
+    and name, but not its type, which the card shows.
+    """
+    entries = report.lines[:ACCOUNT_LEDGER_ENTRIES_SHOWN]
+    debit, credit = account_totals(report)
+    return AccountLedgerGrounding(
+        status="grounded",
+        kind="account_ledger",
+        requested_metric=requested_metric,
+        period=_report_period_for(start_date, end_date, label),
+        account={
+            "account_id": account.id,
+            "account_code": account.code,
+            "account_name": account.name,
+            "account_type": account.account_type,
+        },
+        metrics={
+            "opening_balance": report_amount(report.opening_balance),
+            "total_debit": report_amount(debit),
+            "total_credit": report_amount(credit),
+            "closing_balance": report_amount(report.closing_balance),
+        },
+        entries=[
+            {
+                "journal_entry_id": line.journal_entry_id,
+                "entry_number": line.entry_no,
+                "entry_date": line.entry_date.isoformat(),
+                "description": line.description or "",
+                "status": "posted",
+                "source": "accounting_report",
+                "debit": report_amount(line.debit),
+                "credit": report_amount(line.credit),
+                "running_balance": report_amount(line.running_balance),
+            }
+            for line in entries
+        ],
+        summary=ReportSummary(
+            total_entries=len(report.lines),
+            returned_entries=len(entries),
+            has_more=len(report.lines) > len(entries),
+        ),
+        reference=ReportReference(
+            type="report",
+            report="account_ledger",
+            filters={
+                "account_id": account.id,
                 "start_date": start_date.isoformat() if start_date else None,
                 "end_date": end_date.isoformat() if end_date else None,
             },

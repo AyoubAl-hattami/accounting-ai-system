@@ -31,11 +31,20 @@ PAGE = PageContext(page="dashboard", route="/dashboard")
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
+# Entry numbers are JE-<random hex> from the factory, so they differ per run
+# like ids and dates do.
+_VOLATILE_KEYS = {"entry_number", "entry_no"}
+
+
 def _normalise(value):
-    """Ids and dates vary per run; nothing else may."""
+    """Ids, dates and generated entry numbers vary per run; nothing else may."""
     if isinstance(value, dict):
         return {
-            key: ("<id>" if key.endswith("_id") and isinstance(value[key], int) else _normalise(value[key]))
+            key: (
+                "<id>" if key.endswith("_id") and isinstance(value[key], int)
+                else "<entry>" if key in _VOLATILE_KEYS
+                else _normalise(value[key])
+            )
             for key in sorted(value)
         }
     if isinstance(value, list):
@@ -530,6 +539,81 @@ def test_the_general_ledger_card_is_unchanged(seeded_company, accounting_factory
     assert card == GENERAL_LEDGER_GOLDEN
 
 
+ACCOUNT_LEDGER_GOLDEN = {
+        "account": {
+            "account_code": "1110",
+            "account_id": "<id>",
+            "account_name": "Main Bank",
+            "account_type": "asset"
+        },
+        "entries": [
+            {
+                "credit": "0.00",
+                "debit": "4000.00",
+                "description": "cash in",
+                "entry_date": "<date>",
+                "entry_number": "<entry>",
+                "journal_entry_id": "<id>",
+                "running_balance": "4000.00",
+                "source": "accounting_report",
+                "status": "posted"
+            },
+            {
+                "credit": "1500.00",
+                "debit": "0.00",
+                "description": "paid",
+                "entry_date": "<date>",
+                "entry_number": "<entry>",
+                "journal_entry_id": "<id>",
+                "running_balance": "2500.00",
+                "source": "accounting_report",
+                "status": "posted"
+            }
+        ],
+        "kind": "account_ledger",
+        "metrics": {
+            "closing_balance": "2500.00",
+            "opening_balance": "0.00",
+            "total_credit": "1500.00",
+            "total_debit": "4000.00"
+        },
+        "period": {
+            "as_of_date": None,
+            "end_date": None,
+            "label": "all available data",
+            "start_date": None
+        },
+        "reference": {
+            "filters": {
+                "account_id": "<id>",
+                "end_date": None,
+                "start_date": None
+            },
+            "report": "account_ledger",
+            "type": "report"
+        },
+        "requested_metric": "balance",
+        "status": "grounded",
+        "summary": {
+            "has_more": False,
+            "returned_accounts": 0,
+            "returned_entries": 2,
+            "total_accounts": 0,
+            "total_entries": 2
+        }
+    }
+
+
+def test_the_account_ledger_card_is_unchanged(seeded_company, accounting_factory):
+    card = _card(
+        accounting_factory.db,
+        seeded_company.company.id,
+        "show me the ledger for account 1110",
+        "account_ledger", "1110",
+    )
+    assert card == ACCOUNT_LEDGER_GOLDEN
+
+
 # ── The tool builds the same card, and honours the date it was given ─────────
 
 def test_the_tool_and_the_handler_build_the_same_card(seeded_company, accounting_factory):
@@ -760,3 +844,54 @@ def test_a_statement_for_a_partner_that_does_not_exist_is_an_answer(accounting_f
     assert str(bootstrap.company.id) not in result.data["error"], (
         "The company id is not the user's business and not the model's."
     )
+
+
+def test_the_account_ledger_tool_and_handler_build_the_same_card(seeded_company, accounting_factory):
+    """The last of the four, and the one whose tool was already repaired in
+    RAG-8; it now carries the card that repair made possible."""
+    from app.modules.accounting.services.accounting_tool_registry import (
+        AccountingToolRegistry,
+    )
+
+    handler_card = _card(
+        accounting_factory.db,
+        seeded_company.company.id,
+        "show me the ledger for account 1110",
+        "account_ledger",
+        "1110",
+    )
+    tool = AccountingToolRegistry.execute_tool(
+        tool_name="get_account_ledger",
+        args={"account_identifier": "1110"},
+        db=accounting_factory.db,
+        company_id=seeded_company.company.id,
+        user_role="admin",
+    )
+    tool_card = _normalise(json.loads(tool.grounding.model_dump_json()))
+
+    for field in ("requested_metric", "period"):
+        handler_card.pop(field)
+        tool_card.pop(field)
+    assert tool_card == handler_card
+
+
+def test_the_account_ledger_card_says_posted_without_checking(seeded_company, accounting_factory):
+    """Recorded, not fixed.
+
+    Every entry in this card carries status "posted". AccountLedgerLine has
+    no status field, and the query behind it filters to the reportable
+    statuses -- so the word is the inline code's shorthand for "this came
+    from the report", carried across verbatim when the builder moved.
+
+    It is asserted here so the claim is visible: a card that states a status
+    it never read is a small lie, and it should be either checked or dropped
+    in a commit that says which.
+    """
+    card = _card(
+        accounting_factory.db,
+        seeded_company.company.id,
+        "show me the ledger for account 1110",
+        "account_ledger",
+        "1110",
+    )
+    assert {entry["status"] for entry in card["entries"]} == {"posted"}

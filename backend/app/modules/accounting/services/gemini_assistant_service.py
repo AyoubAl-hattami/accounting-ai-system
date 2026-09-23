@@ -88,6 +88,7 @@ from app.modules.accounting.services.ai_providers.gemini_provider import (
     request_budget,
 )
 from app.modules.accounting.services.report_grounding import (
+    account_ledger_grounding,
     balance_sheet_grounding,
     general_ledger_grounding,
     trial_balance_grounding,
@@ -3349,9 +3350,18 @@ def _structured_report_reply(
         candidates = _resolve_account_candidates(accounts, normalized)
         if len(candidates)!=1:
             return _account_resolution_clarification(candidates, language)
-        account=candidates[0]; report=get_account_ledger(db=db,company_id=company_id,account_id=account.id,start_date=start_date,end_date=end_date); lines=report.lines[:20]
-        entries=[{"journal_entry_id":x.journal_entry_id,"entry_number":x.entry_no,"entry_date":x.entry_date.isoformat(),"description":x.description or "","status":"posted","source":"accounting_report","debit":_report_amount(x.debit),"credit":_report_amount(x.credit),"running_balance":_report_amount(x.running_balance)} for x in lines]
-        grounding=AccountLedgerGrounding(status="grounded",kind="account_ledger",requested_metric=metric,period=_report_period(start_date,end_date,label or "All available data"),account={"account_id":account.id,"account_code":account.code,"account_name":account.name,"account_type":account.account_type},metrics={"opening_balance":_report_amount(report.opening_balance),"total_debit":_report_amount(sum((x.debit for x in report.lines),Decimal("0.00")),),"total_credit":_report_amount(sum((x.credit for x in report.lines),Decimal("0.00"))),"closing_balance":_report_amount(report.closing_balance)},entries=entries,summary=ReportSummary(total_entries=len(report.lines),returned_entries=len(entries),has_more=len(report.lines)>len(entries)),reference=ReportReference(type="report",report="account_ledger",filters={"account_id":account.id,"start_date":start_date.isoformat() if start_date else None,"end_date":end_date.isoformat() if end_date else None}))
+        account=candidates[0]; report=get_account_ledger(db=db,company_id=company_id,account_id=account.id,start_date=start_date,end_date=end_date)
+        # Built in report_grounding now; byte-identical output asserted in
+        # tests/test_structured_grounding_parity.py against a card captured
+        # before the move.
+        grounding = account_ledger_grounding(
+            report,
+            account,
+            start_date=start_date,
+            end_date=end_date,
+            requested_metric=metric,
+            label=label,
+        )
         return GeminiAssistantReply(reply=(f"Account ledger {account.code} {account.name}:\nOpening balance: {grounding.metrics['opening_balance']}\nTotal debit: {grounding.metrics['total_debit']}\nTotal credit: {grounding.metrics['total_credit']}\nClosing balance: {grounding.metrics['closing_balance']}" if language != "ar" else f"دفتر أستاذ الحساب {account.code} {account.name}:\nالرصيد الافتتاحي: {grounding.metrics['opening_balance']}\nإجمالي المدين: {grounding.metrics['total_debit']}\nإجمالي الدائن: {grounding.metrics['total_credit']}\nالرصيد الختامي: {grounding.metrics['closing_balance']}"),intent="answer_account_ledger_question",confidence="high",data_sources=["account_ledger_report"],grounding=grounding)
     except Exception:
         logger.warning("structured report grounding failed", exc_info=True)
