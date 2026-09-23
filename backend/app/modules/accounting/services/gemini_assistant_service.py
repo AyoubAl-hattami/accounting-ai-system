@@ -85,6 +85,7 @@ from app.modules.accounting.services.gemini_agent_contract import (
 from app.modules.accounting.services.ai_providers.gemini_provider import (
     REQUEST_TIMEOUT_SECONDS as GEMINI_REQUEST_TIMEOUT_SECONDS,
     model_calls_enabled,
+    request_budget,
 )
 from app.modules.accounting.services.account_mapper import map_to_accounts
 from app.modules.accounting.services.assistant_handler_registry import (
@@ -3794,7 +3795,214 @@ def _handle_structured_report_question(
     )
 
 
+def _capability_menu_reply(language: str) -> GeminiAssistantReply:
+    """What the assistant says when it has nothing better to say."""
+    if language == "ar":
+        reply = (
+            "🤔 لم أفهم سؤالك. يمكنني مساعدتك في:\n"
+            "• **التقارير**: 'كم الربح هذا الشهر؟'\n"
+            "• **شرح الأرقام**: 'كيف صارت الإيرادات 2000؟'\n"
+            "• **تتبع مبلغ**: 'من أدخل 1000؟'\n"
+            "• **القيود**: 'آخر قيد محاسبي'\n"
+            "• **التدقيق**: 'من رحّل القيد؟'\n"
+            "• **إنشاء قيد**: 'تم دفع 500 إيجار'\n"
+            "• **المستخدمون**: 'من المستخدمون النشطون؟'"
+        )
+    else:
+        reply = (
+            "🤔 I didn't understand your question. I can help with:\n"
+            "• **Reports**: 'What are expenses this month?'\n"
+            "• **Explain Figures**: 'How did revenue become 2000?'\n"
+            "• **Trace Amounts**: 'Who entered 1000?'\n"
+            "• **Journal Entries**: 'Show me the last journal entry'\n"
+            "• **Audit**: 'Who posted the last entry?'\n"
+            "• **Create Entry**: 'Paid 500 rent'\n"
+            "• **Users**: 'Who are the active users?'"
+        )
+    return GeminiAssistantReply(
+        reply=reply, intent="clarification", confidence="low", data_sources=[]
+    )
+
+
+def _unknown_handler_entry():
+    """The registered ('unknown',) entry, so its gate has one reader."""
+    for entry in ASSISTANT_HANDLERS:
+        if "unknown" in entry.intents:
+            return entry
+    raise AssertionError(
+        "No ('unknown',) entry in ASSISTANT_HANDLERS. Every message that no "
+        "handler claims is dispatched through it; without it they fall to the "
+        "capability menu with no gate and no tool stage."
+    )
+
+
+def _dispatch_unknown(
+    request: AssistantRequest,
+    fallback_reply: GeminiAssistantReply | None = None,
+    run_pre_stages: bool = True,
+) -> GeminiAssistantReply:
+    """Dispatch an unclassified message the way the registry loop would."""
+    entry = _unknown_handler_entry()
+    if request.user_role not in entry.permission:
+        return GeminiAssistantReply(
+            reply=entry.denial.reply_for(request.language),
+            intent="access_denied",
+            confidence="high",
+            data_sources=[],
+        )
+    return _handle_unknown_question(
+        request, fallback_reply=fallback_reply, run_pre_stages=run_pre_stages
+    )
+
+
+def _handle_unknown_question(
+    request: AssistantRequest,
+    fallback_reply: GeminiAssistantReply | None = None,
+    run_pre_stages: bool = True,
+) -> GeminiAssistantReply:
+    """What answers a message no deterministic handler claimed.
+
+    ``fallback_reply`` is what to say when the model declines. The registry
+    passes none and gets the capability menu; the orchestrator's
+    safe_clarification branch passes the reply it used to return outright, so
+    a declined model leaves that path exactly as it was.
+
+    ``run_pre_stages`` is False for that same branch, and the reason is
+    measured rather than tidy. Stages 1 and 2 below were only ever reachable
+    after classification, for intent ``unknown``. The safe_clarification branch
+    returns BEFORE classification, so messages arriving that way have never
+    been through them -- and they are not inert: "How are our receivables
+    ageing?" comes out of stage 1 as "Which transaction do you mean? Include
+    the transaction and amount", which is not what that path answered
+    yesterday. Running them here would have been a silent rewrite of an answer
+    under cover of a refactor.
+
+    The stages that used to sit at the end of the dispatcher, in the order
+    they sat in, plus the tool-calling model between the last of them and the
+    capability menu:
+
+      1. the conversation-aware retry -- a follow-up like "it was 300 from
+         the bank" classifies as unknown alone and is a transaction when
+         merged with the turn before it;
+      2. the standalone clarification answer;
+      3. the model with the accounting tools, which returns None whenever it
+         cannot answer;
+      4. the capability menu.
+
+    Only step 3 is new. Steps 1, 2 and 4 are moved verbatim, so a message
+    gets what it got before -- unless the model answers where the menu used
+    to, which is the whole point of the move.
+    """
+    # ── 1. Conversation-aware retry ──────────────────────────────────────────
+    if run_pre_stages:
+        # A follow-up like "it was 300 from the bank" classifies as unknown on its
+        # own.  Merged with the preceding turn it becomes a real transaction, so it
+        # is worth one action-handler attempt before falling back to a clarification
+        # question — asking "which transaction?" when the user just said so is the
+        # exact behaviour that makes the assistant feel forgetful.
+        if _is_memory_actionable_followup(request.message, request.history):
+            followup_result = _handle_action_request(
+                request.db,
+                request.company_id,
+                request.message,
+                request.language,
+                request.runtime_context,
+                history=request.history,
+            )
+            if followup_result.suggested_action or followup_result.pending_transaction:
+                return GeminiAssistantReply(
+                    reply=followup_result.reply,
+                    intent=(
+                        "create_journal_draft"
+                        if followup_result.suggested_action
+                        else "clarification"
+                    ),
+                    confidence="high" if followup_result.suggested_action else "medium",
+                    data_sources=["accounts", "semantic_parser"],
+                    suggested_action=followup_result.suggested_action,
+                    pending_transaction=followup_result.pending_transaction,
+                    clarification_options=followup_result.clarification_options,
+                    pending_context_token=followup_result.pending_context_token,
+                )
+
+        # ── 2. Standalone clarification answer ───────────────────────────────────
+        standalone_reply = _standalone_clarification_answer_reply(
+            request.message, request.language
+        )
+        if standalone_reply:
+            return GeminiAssistantReply(
+                reply=standalone_reply,
+                intent="clarification",
+                confidence="low",
+                data_sources=[],
+            )
+
+    # ── 3. The model, with the tools this role may call ──────────────────────
+    # Imported inside the function: the agent module imports this one for
+    # detect_message_language, so a module-scope import here is a cycle.
+    from app.modules.accounting.services.unified_gemini_agent import (
+        answer_with_tools,
+    )
+
+    tool_reply = answer_with_tools(
+        db=request.db,
+        company_id=request.company_id,
+        user_role=request.user_role,
+        message=request.message,
+        page_context=request.page_context,
+        language=request.language,
+        history=request.history,
+    )
+    if tool_reply is not None:
+        return tool_reply
+
+    # ── 4. What the caller would have said on its own ────────────────────────
+    return fallback_reply or _capability_menu_reply(request.language)
+
+
 def dispatch_gemini_assistant(
+    db: Session,
+    company_id: int,
+    user_role: str,
+    message: str,
+    page_context: PageContext,
+    language: str,
+    pending_transaction: PendingTransaction | None = None,
+    pending_context_token: str | None = None,
+    history: list[ConversationTurn] | None = None,
+    prior_grounding: dict | None = None,
+    semantic_intent_classifier: SemanticIntentClassifier | None = None,
+) -> GeminiAssistantReply:
+    """One request, one deadline, then the dispatcher below.
+
+    The stages inside can each make a bounded provider call -- the semantic
+    classifier, the transaction parser, the answer phrasing, and now the tool
+    stage at the end. Each was bounded on its own by [D2]; none of them knew
+    what the others had already spent, and 20s each adds up past the 60s
+    proxy_read_timeout.
+
+    The budget is started here because this is where a request begins. Stages
+    ask remaining_budget_seconds() for what is left; the one that finds nothing
+    left answers deterministically rather than calling.
+    """
+    with request_budget():
+        return _dispatch_within_request_budget(
+            db=db,
+            company_id=company_id,
+            user_role=user_role,
+            message=message,
+            page_context=page_context,
+            language=language,
+            pending_transaction=pending_transaction,
+            pending_context_token=pending_context_token,
+            history=history,
+            prior_grounding=prior_grounding,
+            semantic_intent_classifier=semantic_intent_classifier,
+        )
+
+
+def _dispatch_within_request_budget(
+    *,
     db: Session,
     company_id: int,
     user_role: str,
@@ -3987,7 +4195,35 @@ def dispatch_gemini_assistant(
         or legacy_structured_kind
         or _is_memory_actionable_followup(message, history)
     ):
-        return _intent_clarification_reply(intent_decision)
+        # This is where an unclassified message actually ended, and it ended
+        # before `intent` was ever computed -- so registering ("unknown",) in
+        # the handler registry reached nothing until this branch fed it.
+        # Measured: eight questions about invoices, partners and credit notes,
+        # none of which any handler claims, all returned "Which accounting
+        # question would you like help with?" from here.
+        #
+        # That text is now the fallback rather than the answer: the tool stage
+        # gets the question first, and when it declines this returns exactly
+        # what it returned before.
+        return _dispatch_unknown(
+            AssistantRequest(
+                db=db,
+                company_id=company_id,
+                user_role=user_role,
+                message=message,
+                language=language,
+                intent="unknown",
+                page_context=page_context,
+                history=history,
+                runtime_context=runtime_context,
+                prior_grounding=prior_grounding,
+                structured_kind=None,
+                contribution_metric=None,
+                orchestrated_account_target=None,
+            ),
+            fallback_reply=_intent_clarification_reply(intent_decision),
+            run_pre_stages=False,
+        )
 
     intent = "trace_question" if _is_exact_amount_trace_request(message) else _classify_intent(message)
     contribution_metric = _contribution_metric(message, prior_grounding)
@@ -4123,67 +4359,9 @@ def dispatch_gemini_assistant(
                 )
             return entry.handler(assistant_request)
 
-    # ── Conversation-aware retry ─────────────────────────────────────────────
-    # A follow-up like "it was 300 from the bank" classifies as unknown on its
-    # own.  Merged with the preceding turn it becomes a real transaction, so it
-    # is worth one action-handler attempt before falling back to a clarification
-    # question — asking "which transaction?" when the user just said so is the
-    # exact behaviour that makes the assistant feel forgetful.
-    if _is_memory_actionable_followup(message, history):
-        followup_result = _handle_action_request(
-            db,
-            company_id,
-            message,
-            language,
-            runtime_context,
-            history=history,
-        )
-        if followup_result.suggested_action or followup_result.pending_transaction:
-            return GeminiAssistantReply(
-                reply=followup_result.reply,
-                intent=(
-                    "create_journal_draft"
-                    if followup_result.suggested_action
-                    else "clarification"
-                ),
-                confidence="high" if followup_result.suggested_action else "medium",
-                data_sources=["accounts", "semantic_parser"],
-                suggested_action=followup_result.suggested_action,
-                pending_transaction=followup_result.pending_transaction,
-                clarification_options=followup_result.clarification_options,
-                pending_context_token=followup_result.pending_context_token,
-            )
-
-    standalone_reply = _standalone_clarification_answer_reply(message, language)
-    if standalone_reply:
-        return GeminiAssistantReply(
-            reply=standalone_reply,
-            intent="clarification",
-            confidence="low",
-            data_sources=[],
-        )
-
-    # ── Unknown / clarification ──────────────────────────────────────────────
-    if language == "ar":
-        reply = (
-            "🤔 لم أفهم سؤالك. يمكنني مساعدتك في:\n"
-            "• **التقارير**: 'كم الربح هذا الشهر؟'\n"
-            "• **شرح الأرقام**: 'كيف صارت الإيرادات 2000؟'\n"
-            "• **تتبع مبلغ**: 'من أدخل 1000؟'\n"
-            "• **القيود**: 'آخر قيد محاسبي'\n"
-            "• **التدقيق**: 'من رحّل القيد؟'\n"
-            "• **إنشاء قيد**: 'تم دفع 500 إيجار'\n"
-            "• **المستخدمون**: 'من المستخدمون النشطون؟'"
-        )
-    else:
-        reply = (
-            "🤔 I didn't understand your question. I can help with:\n"
-            "• **Reports**: 'What are expenses this month?'\n"
-            "• **Explain Figures**: 'How did revenue become 2000?'\n"
-            "• **Trace Amounts**: 'Who entered 1000?'\n"
-            "• **Journal Entries**: 'Show me the last journal entry'\n"
-            "• **Audit**: 'Who posted the last entry?'\n"
-            "• **Create Entry**: 'Paid 500 rent'\n"
-            "• **Users**: 'Who are the active users?'"
-        )
-    return GeminiAssistantReply(reply=reply, intent="clarification", confidence="low", data_sources=[])
+    # Nothing reaches here: `unknown` is a registered intent, and the loop
+    # above returns for it. The capability menu it used to end with now lives
+    # in _capability_menu_reply, called from _handle_unknown_question -- one
+    # definition, and this call is the net under a future intent that is
+    # somehow neither registered nor inline.
+    return _capability_menu_reply(language)

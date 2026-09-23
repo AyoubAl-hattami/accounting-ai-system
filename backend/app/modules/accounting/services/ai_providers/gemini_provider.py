@@ -10,6 +10,7 @@ No API keys are logged or exposed to the frontend.
 
 import json
 import logging
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -83,6 +84,56 @@ def model_calls_suppressed() -> Iterator[None]:
         yield
     finally:
         _MODEL_CALLS_ENABLED.reset(token)
+
+
+# One request, one budget.
+#
+# [RAG-3] gave the tool-calling agent a 45s deadline of its own, which was
+# right while it was a separate entry point. It is now the last stage of the
+# deterministic dispatcher, behind stages that may each have made a bounded
+# provider call, so a deadline that starts when the stage starts bounds the
+# stage and not the request -- 40s of dispatcher plus 45s of agent is 85s
+# against a 60s proxy_read_timeout.
+#
+# The deadline is therefore set once, when the request begins, and every stage
+# asks what is left. A stage with nothing left does not call: it answers
+# deterministically, which every stage here can do.
+REQUEST_BUDGET_SECONDS = 45.0
+
+_REQUEST_DEADLINE: ContextVar[float | None] = ContextVar(
+    "accounting_request_deadline", default=None
+)
+
+
+@contextmanager
+def request_budget(seconds: float = REQUEST_BUDGET_SECONDS) -> Iterator[None]:
+    """Start the clock for one assistant request.
+
+    Nested use keeps the outer deadline: an inner stage cannot award itself
+    more time than the request has.
+    """
+    existing = _REQUEST_DEADLINE.get()
+    deadline = time.monotonic() + seconds
+    if existing is not None:
+        deadline = min(existing, deadline)
+    token = _REQUEST_DEADLINE.set(deadline)
+    try:
+        yield
+    finally:
+        _REQUEST_DEADLINE.reset(token)
+
+
+def remaining_budget_seconds() -> float | None:
+    """Seconds left in this request, or None when no budget was started.
+
+    None means "not inside a budgeted request" -- a test calling a stage
+    directly, or a caller that has not adopted the budget yet. Callers treat
+    None as "use your own limit", never as "no time left".
+    """
+    deadline = _REQUEST_DEADLINE.get()
+    if deadline is None:
+        return None
+    return deadline - time.monotonic()
 
 
 def _build_prompt(

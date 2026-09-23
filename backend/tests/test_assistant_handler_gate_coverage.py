@@ -77,12 +77,13 @@ INLINE_GATED_HANDLERS: set[str] = set()
 
 # Produced by the resolution chain but deliberately not dispatched by any
 # handler.  Each needs a reason.
-NOT_DISPATCHED = {
-    # Falls past the whole chain to the clarification reply at the end of the
-    # dispatcher.  It is what the classifier returns when nothing matched, so
-    # there is nothing to authorise.
-    "unknown",
-}
+#
+# Empty. "unknown" was the last entry and is now registered like every other
+# intent: it is what the classifier returns when nothing matched, and what
+# answers it is the tool-calling model with the capability menu behind it.
+# Being registered is what puts it behind a permission set and inside the
+# invariants below.
+NOT_DISPATCHED: set[str] = set()
 
 
 def _module() -> ast.Module:

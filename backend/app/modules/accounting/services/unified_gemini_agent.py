@@ -37,7 +37,8 @@ from app.modules.accounting.services.gemini_agent_contract import (
 )
 from app.modules.accounting.services.ai_providers.gemini_provider import (
     REQUEST_TIMEOUT_SECONDS as GEMINI_REQUEST_TIMEOUT_SECONDS,
-    model_calls_suppressed,
+    model_calls_enabled,
+    remaining_budget_seconds,
 )
 from app.modules.accounting.services.gemini_assistant_service import (
     detect_message_language,
@@ -59,6 +60,11 @@ MAX_AGENT_TURNS = 5
 # 45s leaves 15s inside the proxy budget for the deterministic fallback to
 # answer, which it does from the database with no network call at all.
 AGENT_BUDGET_SECONDS = 45.0
+
+# Below this, a call is not worth opening: the model would be cut off
+# mid-answer and the caller would answer deterministically anyway, a few
+# seconds later than if the stage had simply declined.
+MINIMUM_USEFUL_BUDGET_SECONDS = 3.0
 
 
 class _BudgetExhausted(Exception):
@@ -105,7 +111,7 @@ def _generate_content_within_budget(
     )
 
 
-def dispatch_unified_agent(
+def answer_with_tools(
     db: Session,
     company_id: int,
     user_role: str,
@@ -113,35 +119,48 @@ def dispatch_unified_agent(
     page_context: PageContext,
     language: str = "en",
     history: list[ConversationTurn] | None = None,
-) -> GeminiAssistantReply:
-    """
-    Primary dispatcher for the Unified Gemini Agent.
-    - Uses GEMINI_MODEL dynamically from settings (default gemini-3.6-flash).
-    - If Gemini API is not configured, delegates to deterministic fallback.
-    - LLM autonomously decides which accounting tools to call, if any.
+) -> GeminiAssistantReply | None:
+    """Let the model answer with the accounting tools, or decline.
+
+    Returns None -- never a reply of its own making -- when there is no key,
+    no budget left, no tool this role may call, or the provider fails. The
+    caller owns what happens then, which is the deterministic answer it would
+    have given anyway.
+
+    It used to return `dispatch_gemini_assistant(...)` in those cases. That was
+    workable while this was a separate entry point and is not now: this runs
+    INSIDE that dispatcher, as the handler for `unknown`, so delegating back
+    would be unbounded recursion.
+
+    This stage never answers a question a deterministic handler claims. The
+    dispatcher resolves the intent first, and `unknown` is what is left when no
+    handler claimed it -- so a figure still comes from the report services, and
+    the model is reached only where the alternative was "I didn't understand".
     """
     api_key = getattr(settings, "GEMINI_API_KEY", "").strip()
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-3.6-flash")
 
+    if not api_key:
+        logger.info("Gemini API key not configured; the tool stage declines.")
+        return None
+
+    if not model_calls_enabled():
+        logger.info("Model calls are suppressed for this request; the tool stage declines.")
+        return None
+
     lang = detect_message_language(message, language)
 
-    # If Gemini is not configured, delegate cleanly to deterministic legacy assistant
-    if not api_key:
-        logger.info("Gemini API key not configured; delegating to deterministic fallback.")
-        from app.modules.accounting.services.gemini_assistant_service import (
-            dispatch_gemini_assistant,
+    # Whichever is smaller: this stage's own cap, or what the request has left
+    # after the stages before it. A stage with no time left does not call.
+    remaining = remaining_budget_seconds()
+    budget = AGENT_BUDGET_SECONDS if remaining is None else min(AGENT_BUDGET_SECONDS, remaining)
+    if budget < MINIMUM_USEFUL_BUDGET_SECONDS:
+        logger.info(
+            "Only %.1fs of the request budget is left; the tool stage declines.", budget
         )
-        return dispatch_gemini_assistant(
-            db=db,
-            company_id=company_id,
-            user_role=user_role,
-            message=message,
-            page_context=page_context,
-            language=lang,
-            history=history,
-        )
+        return None
 
-    deadline = time.monotonic() + AGENT_BUDGET_SECONDS
+    deadline = time.monotonic() + budget
 
     try:
         # The client-level timeout bounds anything that does not go through
@@ -244,9 +263,11 @@ def dispatch_unified_agent(
             break
 
         if not final_reply_text:
-            final_reply_text = (
-                "تمت معالجة طلبك بنجاح." if lang == "ar" else "Your request was processed successfully."
-            )
+            # An empty answer is a declined answer. It used to be reported as
+            # "your request was processed successfully", which says nothing and
+            # sounds like something happened.
+            logger.info("The model returned no text; the tool stage declines.")
+            return None
 
         return GeminiAssistantReply(
             reply=final_reply_text,
@@ -258,27 +279,9 @@ def dispatch_unified_agent(
 
     except Exception as exc:
         logger.error(
-            "Unified Gemini Agent error after %.1fs: %s",
-            AGENT_BUDGET_SECONDS - (deadline - time.monotonic()),
+            "Tool stage failed after %.1fs: %s",
+            budget - (deadline - time.monotonic()),
             exc,
             exc_info=True,
         )
-        # Degrade to the deterministic assistant, and make it deterministic.
-        #
-        # Without the suppression this path could open two more 20s calls of
-        # its own, so a request that had already spent its budget would run
-        # past the proxy timeout and answer nobody. The budget arithmetic is:
-        # 45s here, then a fallback that only reads the database.
-        with model_calls_suppressed():
-            from app.modules.accounting.services.gemini_assistant_service import (
-                dispatch_gemini_assistant,
-            )
-            return dispatch_gemini_assistant(
-                db=db,
-                company_id=company_id,
-                user_role=user_role,
-                message=message,
-                page_context=page_context,
-                language=lang,
-                history=history,
-            )
+        return None

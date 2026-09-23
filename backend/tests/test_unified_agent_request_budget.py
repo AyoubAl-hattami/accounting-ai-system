@@ -31,6 +31,7 @@ from app.modules.accounting.services.ai_providers.gemini_provider import (
     REQUEST_TIMEOUT_SECONDS,
     model_calls_enabled,
     model_calls_suppressed,
+    request_budget,
 )
 
 AGENT_SOURCE = (
@@ -215,44 +216,99 @@ def test_nothing_sleeps_in_the_request_thread():
     )
 
 
-def test_a_failing_provider_answers_from_the_fallback_inside_the_budget(monkeypatch):
-    """End to end: the agent path fails on every call, and the request still
-    returns an answer well inside the proxy budget."""
+def test_a_failing_provider_leaves_the_request_inside_the_proxy_budget(monkeypatch):
+    """End to end through the dispatcher: every model call fails, and the
+    request still answers well inside the proxy budget.
+
+    This used to call the agent directly and assert it fell back to the
+    deterministic assistant. The agent no longer falls back -- it is dispatched
+    BY that assistant, as the handler for `unknown`, and declines by returning
+    None. So the end-to-end question moved up a level: what does a request cost
+    when the provider is down, measured where the user waits.
+    """
     monkeypatch.setattr(unified_gemini_agent.settings, "GEMINI_API_KEY", "probe-key")
     monkeypatch.setattr(unified_gemini_agent.genai, "Client", _AlwaysUnavailable)
 
-    seen: dict[str, object] = {}
-
-    def _fallback(**kwargs):
-        seen["model_calls_enabled"] = model_calls_enabled()
-        return "fallback reply"
-
-    monkeypatch.setattr(
-        "app.modules.accounting.services.gemini_assistant_service."
-        "dispatch_gemini_assistant",
-        _fallback,
+    from app.modules.accounting.services.gemini_assistant_service import (
+        dispatch_gemini_assistant,
     )
 
     started = time.monotonic()
-    reply = unified_gemini_agent.dispatch_unified_agent(
+    reply = dispatch_gemini_assistant(
         db=MagicMock(),
         company_id=1,
         user_role="admin",
-        message="What is our net profit?",
+        message="zzzq unclassifiable gibberish",
         page_context=PageContext(page="dashboard", route="/dashboard"),
         language="en",
     )
     elapsed = time.monotonic() - started
 
-    assert reply == "fallback reply"
     assert elapsed < PROXY_READ_TIMEOUT_SECONDS, (
         f"The request took {elapsed:.1f}s against a {PROXY_READ_TIMEOUT_SECONDS:.0f}s "
         "proxy timeout."
     )
-    assert seen["model_calls_enabled"] is False, (
-        "The fallback ran with model calls still enabled, so it could open two "
-        "fresh 20s calls after the budget was already spent."
+    assert reply.intent == "clarification", (
+        "With the provider down the request must land on a clarification, not "
+        f"on an error. Got intent={reply.intent!r}."
     )
+
+    # And it must be the SAME clarification the request gets when no model is
+    # configured at all. A provider outage is not a different product.
+    monkeypatch.setattr(unified_gemini_agent.settings, "GEMINI_API_KEY", "")
+    without_model = dispatch_gemini_assistant(
+        db=MagicMock(),
+        company_id=1,
+        user_role="admin",
+        message="zzzq unclassifiable gibberish",
+        page_context=PageContext(page="dashboard", route="/dashboard"),
+        language="en",
+    )
+    assert reply.reply == without_model.reply
+
+
+def test_the_tool_stage_gets_what_the_request_has_left(monkeypatch):
+    """The stage's own 45s cap is not a licence to spend 45s.
+
+    Stages before it can each have made a bounded call, so it asks the request
+    what remains and takes the smaller of the two.
+    """
+    monkeypatch.setattr(unified_gemini_agent.settings, "GEMINI_API_KEY", "probe-key")
+    client = _AlwaysUnavailable()
+    monkeypatch.setattr(unified_gemini_agent.genai, "Client", lambda **kwargs: client)
+
+    with request_budget(5.0):
+        assert unified_gemini_agent.answer_with_tools(
+            db=MagicMock(),
+            company_id=1,
+            user_role="admin",
+            message="anything",
+            page_context=PageContext(page="dashboard", route="/dashboard"),
+            language="en",
+        ) is None
+
+    assert len(client.calls) == 1
+    granted_ms = client.calls[0]["config"].http_options.timeout
+    assert granted_ms <= 5000, (
+        f"The stage was given {granted_ms}ms with 5s left in the request."
+    )
+
+
+def test_the_tool_stage_declines_rather_than_start_a_doomed_call(monkeypatch):
+    monkeypatch.setattr(unified_gemini_agent.settings, "GEMINI_API_KEY", "probe-key")
+    monkeypatch.setattr(
+        unified_gemini_agent.genai, "Client",
+        lambda **kwargs: pytest.fail("a call was opened with no budget left"),
+    )
+    with request_budget(unified_gemini_agent.MINIMUM_USEFUL_BUDGET_SECONDS - 1):
+        assert unified_gemini_agent.answer_with_tools(
+            db=MagicMock(),
+            company_id=1,
+            user_role="admin",
+            message="anything",
+            page_context=PageContext(page="dashboard", route="/dashboard"),
+            language="en",
+        ) is None
 
 
 def test_suppression_is_scoped_to_the_block():

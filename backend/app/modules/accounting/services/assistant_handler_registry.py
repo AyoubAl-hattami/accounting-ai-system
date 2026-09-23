@@ -299,4 +299,29 @@ ASSISTANT_HANDLERS: tuple[HandlerEntry, ...] = (
             "balance_sheet", "trial_balance", "account_ledger", "general_ledger",
         },
     ),
+    # Last, and last on purpose.
+    #
+    # `unknown` is what the resolution chain leaves when no handler claimed the
+    # message, so registering it here does not take a question away from a
+    # deterministic handler -- every entry above is consulted first, and a
+    # figure still comes from the report services. What it takes over is the
+    # capability menu: the answer that used to be "I didn't understand".
+    #
+    # The handler runs the two stages that used to follow this loop before it
+    # reaches the model, in the order they ran in, and falls back to the menu
+    # when the model declines.
+    #
+    # _CAN_READ_REPORTS, because this is the stage every member could already
+    # reach -- the menu was never gated. It is not the gate that matters for
+    # the tools: each tool carries its own permission and the registry hands a
+    # role only the declarations it may call.
+    HandlerEntry(
+        intents=("unknown",),
+        permission=_CAN_READ_REPORTS,
+        denial=Denial(
+            arabic='🔒 ليس لديك صلاحية الوصول إلى هذه البيانات.',
+            english="🔒 You don't have permission to access this data.",
+        ),
+        handler=ServiceHandler("_handle_unknown_question"),
+    ),
 )
