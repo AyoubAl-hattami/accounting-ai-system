@@ -22,15 +22,21 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from app.application.reports.dto import BalanceSheetRead, ProfitAndLossRead
+from app.application.reports.dto import (
+    BalanceSheetRead,
+    ProfitAndLossRead,
+    TrialBalanceRead,
+)
 from app.modules.accounting.schemas.gemini_assistant_schemas import (
     BalanceSheetGrounding,
+    ReportSummary,
     ProfitAndLossGrounding,
     ProfitAndLossMetrics,
     ProfitAndLossPeriod,
     ProfitAndLossReference,
     ReportPeriod,
     ReportReference,
+    TrialBalanceGrounding,
 )
 
 # What a period with no dates is called, matching the deterministic path.
@@ -163,5 +169,65 @@ def balance_sheet_grounding(
             type="report",
             report="balance_sheet",
             filters={"as_of_date": as_of.isoformat() if as_of else None},
+        ),
+    )
+
+
+TRIAL_BALANCE_ACCOUNTS_SHOWN = 50
+
+
+def trial_balance_grounding(
+    report: TrialBalanceRead,
+    *,
+    requested_metric: str | None = None,
+    label: str | None = None,
+) -> TrialBalanceGrounding:
+    """The card for a trial balance, from the report itself.
+
+    Moved verbatim out of _structured_report_reply, including the difference
+    it computes rather than reads -- TrialBalanceRead carries is_balanced but
+    not the difference, so the card has always subtracted the two totals
+    itself. ``label`` is the period wording the handler derived from the
+    question; without one the card falls back to the same "As of <date>" or
+    "All available data" the handler falls back to.
+    """
+    difference = report.total_debit - report.total_credit
+    lines = [
+        {
+            "account_id": line.account_id,
+            "account_code": line.account_code,
+            "account_name": line.account_name,
+            "account_type": line.account_type,
+            "debit_balance": report_amount(line.debit_balance),
+            "credit_balance": report_amount(line.credit_balance),
+            "net_balance": report_amount(line.debit_balance - line.credit_balance),
+        }
+        for line in report.lines[:TRIAL_BALANCE_ACCOUNTS_SHOWN]
+    ]
+    return TrialBalanceGrounding(
+        status="grounded",
+        kind="trial_balance",
+        requested_metric=requested_metric,
+        period=ReportPeriod(
+            as_of_date=report.as_of_date.isoformat() if report.as_of_date else None,
+            label=label
+            or (f"As of {report.as_of_date}" if report.as_of_date else ALL_AVAILABLE_DATA),
+        ),
+        metrics={
+            "total_debit": report_amount(report.total_debit),
+            "total_credit": report_amount(report.total_credit),
+            "difference": report_amount(difference),
+            "is_balanced": difference == Decimal("0"),
+        },
+        accounts=lines,
+        summary=ReportSummary(
+            total_accounts=len(report.lines),
+            returned_accounts=len(lines),
+            has_more=len(report.lines) > len(lines),
+        ),
+        reference=ReportReference(
+            type="report",
+            report="trial_balance",
+            filters={"end_date": report.as_of_date.isoformat() if report.as_of_date else None},
         ),
     )

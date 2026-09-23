@@ -185,6 +185,168 @@ def test_the_balance_sheet_card_is_unchanged(seeded_company, accounting_factory)
     assert card == BALANCE_SHEET_GOLDEN
 
 
+TRIAL_BALANCE_GOLDEN = {
+        "accounts": [
+            {
+                "account_code": "1000",
+                "account_id": "<id>",
+                "account_name": "Assets",
+                "account_type": "asset",
+                "credit_balance": "0.00",
+                "debit_balance": "0.00",
+                "net_balance": "0.00"
+            },
+            {
+                "account_code": "1110",
+                "account_id": "<id>",
+                "account_name": "Main Bank",
+                "account_type": "asset",
+                "credit_balance": "0.00",
+                "debit_balance": "2500.00",
+                "net_balance": "2500.00"
+            },
+            {
+                "account_code": "1200",
+                "account_id": "<id>",
+                "account_name": "Accounts Receivable",
+                "account_type": "asset",
+                "credit_balance": "0.00",
+                "debit_balance": "0.00",
+                "net_balance": "0.00"
+            },
+            {
+                "account_code": "2000",
+                "account_id": "<id>",
+                "account_name": "Liabilities",
+                "account_type": "liability",
+                "credit_balance": "0.00",
+                "debit_balance": "0.00",
+                "net_balance": "0.00"
+            },
+            {
+                "account_code": "2100",
+                "account_id": "<id>",
+                "account_name": "Accounts Payable",
+                "account_type": "liability",
+                "credit_balance": "0.00",
+                "debit_balance": "0.00",
+                "net_balance": "0.00"
+            },
+            {
+                "account_code": "3000",
+                "account_id": "<id>",
+                "account_name": "Equity",
+                "account_type": "equity",
+                "credit_balance": "0.00",
+                "debit_balance": "0.00",
+                "net_balance": "0.00"
+            },
+            {
+                "account_code": "3100",
+                "account_id": "<id>",
+                "account_name": "Owner Capital",
+                "account_type": "equity",
+                "credit_balance": "0.00",
+                "debit_balance": "0.00",
+                "net_balance": "0.00"
+            },
+            {
+                "account_code": "3200",
+                "account_id": "<id>",
+                "account_name": "Retained Earnings",
+                "account_type": "equity",
+                "credit_balance": "0.00",
+                "debit_balance": "0.00",
+                "net_balance": "0.00"
+            },
+            {
+                "account_code": "4000",
+                "account_id": "<id>",
+                "account_name": "Income",
+                "account_type": "income",
+                "credit_balance": "0.00",
+                "debit_balance": "0.00",
+                "net_balance": "0.00"
+            },
+            {
+                "account_code": "4100",
+                "account_id": "<id>",
+                "account_name": "Sales Revenue",
+                "account_type": "income",
+                "credit_balance": "4000.00",
+                "debit_balance": "0.00",
+                "net_balance": "-4000.00"
+            },
+            {
+                "account_code": "5000",
+                "account_id": "<id>",
+                "account_name": "Expenses",
+                "account_type": "expense",
+                "credit_balance": "0.00",
+                "debit_balance": "0.00",
+                "net_balance": "0.00"
+            },
+            {
+                "account_code": "5100",
+                "account_id": "<id>",
+                "account_name": "Rent Expense",
+                "account_type": "expense",
+                "credit_balance": "0.00",
+                "debit_balance": "1500.00",
+                "net_balance": "1500.00"
+            },
+            {
+                "account_code": "5200",
+                "account_id": "<id>",
+                "account_name": "Software Expense",
+                "account_type": "expense",
+                "credit_balance": "0.00",
+                "debit_balance": "0.00",
+                "net_balance": "0.00"
+            }
+        ],
+        "kind": "trial_balance",
+        "metrics": {
+            "difference": "0.00",
+            "is_balanced": True,
+            "total_credit": "5500.00",
+            "total_debit": "5500.00"
+        },
+        "period": {
+            "as_of_date": None,
+            "end_date": None,
+            "label": "all available data",
+            "start_date": None
+        },
+        "reference": {
+            "filters": {
+                "end_date": None
+            },
+            "report": "trial_balance",
+            "type": "report"
+        },
+        "requested_metric": "total_debit",
+        "status": "grounded",
+        "summary": {
+            "has_more": False,
+            "returned_accounts": 13,
+            "returned_entries": 0,
+            "total_accounts": 13,
+            "total_entries": 0
+        }
+    }
+
+
+def test_the_trial_balance_card_is_unchanged(seeded_company, accounting_factory):
+    card = _card(
+        accounting_factory.db,
+        seeded_company.company.id,
+        "show me the trial balance",
+        "trial_balance",
+    )
+    assert card == TRIAL_BALANCE_GOLDEN
+
+
 # ── The tool builds the same card, and honours the date it was given ─────────
 
 def test_the_tool_and_the_handler_build_the_same_card(seeded_company, accounting_factory):
@@ -256,3 +418,81 @@ def test_the_balance_sheet_tool_honours_as_of_date(accounting_factory):
     assert before[2] == (entry_date - timedelta(days=1)).isoformat(), (
         "The payload must say which date it answered for."
     )
+
+
+def test_the_trial_balance_tool_can_be_called_at_all(accounting_factory):
+    """Every call raised TypeError: it passed start_date and end_date to a
+    facade whose only parameter is as_of_date, so the model got an error
+    string and no report, every time."""
+    from datetime import timedelta
+
+    from app.modules.accounting.services.accounting_tool_registry import (
+        AccountingToolRegistry,
+    )
+
+    bootstrap = accounting_factory.create_accounting_bootstrap(role="admin")
+    entry_date = bootstrap.fiscal_period.start_date + timedelta(days=10)
+    accounting_factory.create_journal(
+        bootstrap=bootstrap,
+        entry_date=entry_date,
+        description="sale",
+        lines=[
+            JournalLineSpec("1110", Decimal("4000.00"), Decimal("0"), "cash in"),
+            JournalLineSpec("4100", Decimal("0"), Decimal("4000.00"), "sales"),
+        ],
+    )
+
+    def trial_balance(**args):
+        result = AccountingToolRegistry.execute_tool(
+            tool_name="get_trial_balance",
+            args=args,
+            db=accounting_factory.db,
+            company_id=bootstrap.company.id,
+            user_role="admin",
+        )
+        assert result.error is None, result.error
+        return result
+
+    everything = trial_balance()
+    assert everything.data["total_debit"] == 4000.0
+    assert everything.data["is_balanced"] is True
+    assert everything.grounding.metrics["total_debit"] == "4000.00"
+
+    # end_date is what the balance is taken as of.
+    before = trial_balance(end_date=(entry_date - timedelta(days=1)).isoformat())
+    assert before.data["total_debit"] == 0.0
+    assert before.data["as_of_date"] == (entry_date - timedelta(days=1)).isoformat()
+
+    # start_date is accepted and ignored: a trial balance is cumulative, and
+    # silently reinterpreting it would answer a question nobody asked.
+    with_start = trial_balance(start_date="2026-01-01", end_date=entry_date.isoformat())
+    assert with_start.data["total_debit"] == 4000.0
+    assert with_start.data["as_of_date"] == entry_date.isoformat()
+
+
+def test_the_trial_balance_tool_and_handler_build_the_same_card(seeded_company, accounting_factory):
+    from app.modules.accounting.services.accounting_tool_registry import (
+        AccountingToolRegistry,
+    )
+
+    handler_card = _card(
+        accounting_factory.db,
+        seeded_company.company.id,
+        "show me the trial balance",
+        "trial_balance",
+    )
+    tool = AccountingToolRegistry.execute_tool(
+        tool_name="get_trial_balance",
+        args={},
+        db=accounting_factory.db,
+        company_id=seeded_company.company.id,
+        user_role="admin",
+    )
+    tool_card = _normalise(json.loads(tool.grounding.model_dump_json()))
+
+    # The handler knows the metric the question asked for and the period
+    # wording it derived; the tool has neither and says so with None.
+    for field in ("requested_metric", "period"):
+        handler_card.pop(field)
+        tool_card.pop(field)
+    assert tool_card == handler_card

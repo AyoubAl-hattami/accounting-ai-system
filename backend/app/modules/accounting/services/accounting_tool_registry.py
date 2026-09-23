@@ -80,6 +80,7 @@ from app.core.clock import get_today_date
 from app.modules.accounting.services.report_grounding import (
     balance_sheet_grounding,
     profit_and_loss_grounding,
+    trial_balance_grounding,
 )
 from app.application.reports.policies import REPORTABLE_ENTRY_STATUSES
 from app.application.reports.aging_dto import AgingQuery
@@ -201,25 +202,40 @@ def tool_get_balance_sheet(
 
 def tool_get_trial_balance(
     db: Session, company_id: int, start_date: str | None = None, end_date: str | None = None
-) -> dict[str, Any]:
-    sd = date.fromisoformat(start_date) if start_date else None
-    ed = date.fromisoformat(end_date) if end_date else None
-    tb = get_trial_balance(db=db, company_id=company_id, start_date=sd, end_date=ed)
-    return {
+) -> ToolExecutionResult:
+    """The trial balance as of a date, and the card for it.
+
+    Every call to this tool raised TypeError. It passed start_date and
+    end_date to a facade whose only parameter is as_of_date, so the model
+    received "Error executing get_trial_balance: got an unexpected keyword
+    argument 'start_date'" and nothing else, every time.
+
+    A trial balance is cumulative: it has an as-of date and no start. The
+    parameters stay because the declaration advertises them, end_date is what
+    the report is taken as of, and start_date is accepted and ignored rather
+    than silently changing what a caller asked for. The payload says which
+    date it answered for.
+    """
+    as_of = date.fromisoformat(end_date) if end_date else None
+    tb = get_trial_balance(db=db, company_id=company_id, as_of_date=as_of)
+    data = {
         "total_debit": float(tb.total_debit),
         "total_credit": float(tb.total_credit),
         "is_balanced": tb.is_balanced,
         "currency": tb.currency,
+        "as_of_date": tb.as_of_date.isoformat() if tb.as_of_date else None,
         "accounts": [
             {
-                "code": a.account_code,
-                "name": a.account_name,
-                "debit": float(a.debit),
-                "credit": float(a.credit),
+                "code": line.account_code,
+                "name": line.account_name,
+                "debit": float(line.debit_balance),
+                "credit": float(line.credit_balance),
             }
-            for a in tb.accounts if (float(a.debit) != 0 or float(a.credit) != 0)
+            for line in tb.lines
+            if line.debit_balance != 0 or line.credit_balance != 0
         ][:30],
     }
+    return ToolExecutionResult(data=data, grounding=trial_balance_grounding(tb))
 
 
 def tool_get_account_ledger(
@@ -903,12 +919,15 @@ TOOL_DECLARATIONS = [
     ),
     types.FunctionDeclaration(
         name="get_trial_balance",
-        description="Get Trial Balance with debit and credit totals and account balances.",
+        description=(
+            "Get Trial Balance with debit and credit totals and account balances. "
+            "The report is cumulative as of a date; there is no start date."
+        ),
         parameters=types.Schema(
             type="OBJECT",
             properties={
-                "start_date": types.Schema(type="STRING", description="Start date YYYY-MM-DD (optional)"),
-                "end_date": types.Schema(type="STRING", description="End date YYYY-MM-DD (optional)"),
+                "start_date": types.Schema(type="STRING", description="Ignored: a trial balance has no start date"),
+                "end_date": types.Schema(type="STRING", description="Date to take the balance as of, YYYY-MM-DD (optional)"),
             },
         ),
     ),

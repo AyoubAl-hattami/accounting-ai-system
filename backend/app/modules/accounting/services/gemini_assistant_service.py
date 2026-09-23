@@ -89,6 +89,7 @@ from app.modules.accounting.services.ai_providers.gemini_provider import (
 )
 from app.modules.accounting.services.report_grounding import (
     balance_sheet_grounding,
+    trial_balance_grounding,
 )
 from app.modules.accounting.services.account_mapper import map_to_accounts
 from app.modules.accounting.services.assistant_handler_registry import (
@@ -3309,8 +3310,12 @@ def _structured_report_reply(
             report = get_trial_balance(db=db, company_id=company_id, as_of_date=end_date)
             difference = report.total_debit - report.total_credit
             is_balanced = difference == Decimal("0")
-            lines = [{"account_id": l.account_id, "account_code": l.account_code, "account_name": l.account_name, "account_type": l.account_type, "debit_balance": _report_amount(l.debit_balance), "credit_balance": _report_amount(l.credit_balance), "net_balance": _report_amount(l.debit_balance-l.credit_balance)} for l in report.lines[:50]]
-            grounding=TrialBalanceGrounding(status="grounded", kind="trial_balance", requested_metric=metric, period=ReportPeriod(as_of_date=report.as_of_date.isoformat() if report.as_of_date else None, label=label or (f"As of {report.as_of_date}" if report.as_of_date else "All available data")), metrics={"total_debit":_report_amount(report.total_debit),"total_credit":_report_amount(report.total_credit),"difference":_report_amount(difference),"is_balanced":is_balanced}, accounts=lines, summary=ReportSummary(total_accounts=len(report.lines),returned_accounts=len(lines),has_more=len(report.lines)>len(lines)), reference=ReportReference(type="report",report="trial_balance",filters={"end_date":report.as_of_date.isoformat() if report.as_of_date else None}))
+            # Built in report_grounding now; byte-identical output asserted in
+            # tests/test_structured_grounding_parity.py against a card
+            # captured before the move.
+            grounding = trial_balance_grounding(
+                report, requested_metric=metric, label=label
+            )
             english_totals = f"Total debit: {_report_amount(report.total_debit)}\nTotal credit: {_report_amount(report.total_credit)}\nDifference: {_report_amount(difference)}"
             arabic_totals = f"إجمالي المدين: {_report_amount(report.total_debit)}\nإجمالي الدائن: {_report_amount(report.total_credit)}\nالفرق: {_report_amount(difference)}"
             if metric == "balanced":
