@@ -86,6 +86,18 @@ _CAN_READ_REPORTS = frozenset(
 _CAN_READ_AUDIT_LOGS = frozenset({"admin", "auditor"})
 _CAN_READ_USERS = frozenset({"admin", "auditor"})
 _CAN_CREATE_DRAFT = frozenset({"admin", "accountant"})
+# Subledger reads. Both are narrower than _CAN_READ_REPORTS because their REST
+# routes are, and there are two of them because the routes disagree with each
+# other: the invoice, payment and partner reads admit {admin, accountant,
+# auditor}, while the credit note and refund reads admit that plus viewer.
+#
+# Mirroring each route rather than taking the intersection is deliberate. The
+# intersection would silently take credit notes away from a viewer who can open
+# them in the UI today, which is a product change wearing a security fix's
+# clothes. Whether the two route shapes SHOULD differ is a real question, but
+# it is a question about the routes, and it gets answered there.
+_CAN_READ_SUBLEDGER = frozenset({"admin", "accountant", "auditor"})
+_CAN_READ_CREDIT_NOTES = frozenset({"admin", "accountant", "viewer", "auditor"})
 
 @dataclass(frozen=True, slots=True)
 class AssistantRequest:

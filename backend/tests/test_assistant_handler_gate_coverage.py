@@ -31,8 +31,24 @@ Pure AST plus one import of the registry module, which is dataclasses only --
 it pulls in neither the service, nor sqlalchemy, nor settings (measured: 0.06s,
 no side effects). No HTTP, no database. It runs in the static CI job.
 
-It still does NOT check that a handler's gate is the CORRECT one. Choosing the
-right permission set remains a review judgement.
+THE SECOND DISPATCH PATH
+------------------------
+``dispatch_unified_agent`` answers the same endpoint by letting Gemini call
+tools from ``AccountingToolRegistry`` instead of resolving an intent, so none of
+the invariants above can see it. It arrived with its own copy of the ``_CAN_*``
+sets, already two roles wider than the originals, and a viewer could read every
+member's email through it while REST answered the same viewer with 403. The
+last three tests in this file close that: the tool registry must IMPORT the
+permission vocabulary rather than restate it, every tool must carry one of those
+sets, and no tool may be reachable by a role its REST equivalent refuses.
+
+The tool registry is read as source, not imported: it pulls in google.genai,
+sqlalchemy and settings, which would make this file need the stack and drop it
+out of the static job.
+
+It still does NOT check that an INTENT handler's gate is the correct one.
+Choosing the right permission set there remains a review judgement; for tools,
+the REST comparison below decides it.
 """
 
 import ast
@@ -341,3 +357,228 @@ def test_inline_gate_allowlist_entries_still_exist_and_still_gate_themselves():
         "The inline gate exemption assumes a permission-set check exists in "
         f"{SERVICE.name}; none was found."
     )
+
+
+# ── the tool-calling path: AccountingToolRegistry ────────────────────────────
+
+TOOL_REGISTRY = (
+    pathlib.Path(__file__).resolve().parents[1]
+    / "app" / "modules" / "accounting" / "services" / "accounting_tool_registry.py"
+)
+ROUTES = (
+    pathlib.Path(__file__).resolve().parents[1]
+    / "app" / "modules" / "accounting" / "routes"
+)
+COMPANY_USER_MODEL = (
+    pathlib.Path(__file__).resolve().parents[1]
+    / "app" / "modules" / "accounting" / "models" / "company_user.py"
+)
+PERMISSION_SOURCE = "assistant_handler_registry"
+
+# What each tool's data is behind over REST, as (route module, endpoint).
+#
+# Every tool needs an entry: an unlisted tool fails the first test below, which
+# is the point -- adding a tool is choosing who may call it, and that choice is
+# best made against the route that already answers the same question.
+#
+# A tool whose REST endpoint takes no allowed_roles is readable by every member
+# there, so the comparison passes for any set. It is still listed, so the claim
+# is checked rather than assumed.
+TOOL_REST_EQUIVALENT = {
+    "get_profit_loss": ("report_routes.py", "profit_and_loss_endpoint"),
+    "get_balance_sheet": ("report_routes.py", "balance_sheet_endpoint"),
+    "get_trial_balance": ("report_routes.py", "trial_balance_endpoint"),
+    "get_account_ledger": ("report_routes.py", "account_ledger_endpoint"),
+    "get_general_ledger": ("report_routes.py", "general_ledger_endpoint"),
+    "get_accounts": ("account_routes.py", "list_accounts_endpoint"),
+    "get_journal_entries": ("journal_routes.py", "list_journal_entries_endpoint"),
+    "trace_amount": ("journal_routes.py", "list_journal_entries_endpoint"),
+    "get_audit_logs": ("audit_routes.py", "list_audit_logs_endpoint"),
+    "get_company_users": ("company_user_routes.py", "list_company_users_endpoint"),
+    "get_invoices": ("invoice_routes.py", "list_invoices_endpoint"),
+    "get_invoice_details": ("invoice_routes.py", "get_invoice_endpoint"),
+    "get_payments": ("payment_routes.py", "list_payments_endpoint"),
+    "get_ar_aging": ("report_routes.py", "ar_aging_endpoint"),
+    "get_ap_aging": ("report_routes.py", "ap_aging_endpoint"),
+    "get_customer_statement": ("partner_routes.py", "partner_statement_endpoint"),
+    "get_vendor_statement": ("partner_routes.py", "partner_statement_endpoint"),
+    "get_credit_notes": ("credit_note_routes.py", "list_credit_notes_endpoint"),
+    "get_credit_note_details": ("credit_note_routes.py", "get_credit_note_endpoint"),
+    "get_refunds": ("refund_routes.py", "list_refunds_endpoint"),
+    # The proposal tools mutate nothing: they return a draft the user has to
+    # confirm, and /confirm-action re-validates it. Compared against the create
+    # route anyway, because proposing an entry only an accountant may create is
+    # an invitation to a 403 one step later.
+    "propose_journal_entry": ("journal_routes.py", "create_journal_entry_endpoint"),
+    "propose_credit_note": ("credit_note_routes.py", "create_credit_note_endpoint"),
+}
+
+
+def _tool_registry_module() -> ast.Module:
+    return ast.parse(TOOL_REGISTRY.read_text(encoding="utf-8"))
+
+
+def _tool_permission_names() -> dict[str, str]:
+    """tool name -> the name of the permission set its _HANDLERS entry carries."""
+    found: dict[str, str] = {}
+    for node in ast.walk(_tool_registry_module()):
+        if not isinstance(node, ast.AnnAssign):
+            continue
+        if not (isinstance(node.target, ast.Name) and node.target.id == "_HANDLERS"):
+            continue
+        if not isinstance(node.value, ast.Dict):
+            continue
+        for key, value in zip(node.value.keys, node.value.values):
+            if not (isinstance(key, ast.Constant) and isinstance(key.value, str)):
+                continue
+            if not (isinstance(value, ast.Tuple) and len(value.elts) >= 2):
+                continue
+            permission = value.elts[1]
+            found[key.value] = (
+                permission.id
+                if isinstance(permission, ast.Name)
+                else ast.dump(permission)
+            )
+    return found
+
+
+def _role_vocabulary() -> frozenset[str]:
+    """Every role a company_users row may hold, from the model's check constraint."""
+    for node in ast.walk(ast.parse(COMPANY_USER_MODEL.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if node.value.startswith("role IN ("):
+                inner = node.value[len("role IN ("):].rstrip(")")
+                return frozenset(part.strip().strip("'\"") for part in inner.split(","))
+    raise AssertionError(f"No role check constraint found in {COMPANY_USER_MODEL.name}")
+
+
+def _rest_roles(module_name: str, function_name: str) -> frozenset[str] | None:
+    """Roles the endpoint admits, or None when it admits every member.
+
+    Roles outside the vocabulary are dropped: the invoice, payment and partner
+    reads list a role named "user", which no row can hold, so it admits nobody.
+    """
+    path = ROUTES / module_name
+    assert path.exists(), f"{module_name} not found in {ROUTES}"
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if not (isinstance(node, ast.FunctionDef) and node.name == function_name):
+            continue
+        for keyword in ast.walk(node):
+            if not isinstance(keyword, ast.keyword) or keyword.arg != "allowed_roles":
+                continue
+            if isinstance(keyword.value, (ast.Set, ast.List, ast.Tuple)):
+                named = frozenset(
+                    element.value
+                    for element in keyword.value.elts
+                    if isinstance(element, ast.Constant)
+                    and isinstance(element.value, str)
+                )
+                return named & _role_vocabulary()
+        return None
+    raise AssertionError(f"{function_name} not found in {module_name}")
+
+
+def test_tool_registry_is_still_detectable():
+    """Same guard-the-guard reasoning as above: a renamed _HANDLERS or a
+    restructured entry must fail loudly, not pass vacuously."""
+    assert _tool_permission_names(), (
+        f"No tool entries were found in {TOOL_REGISTRY.name}. _HANDLERS was "
+        "renamed or changed shape and the parser above needs updating -- do "
+        "not delete this test to make it pass."
+    )
+    assert _role_vocabulary(), "No role vocabulary was parsed from the model."
+
+
+def test_tool_registry_imports_the_permission_vocabulary_and_defines_none():
+    """The bypass this catches is a LOCAL _CAN_* set.
+
+    A local set does not fail the membership test below by itself: someone
+    reintroducing ``_CAN_READ_USERS = frozenset({"admin", "viewer"})`` at the
+    top of the tool registry would shadow the import, and every other assertion
+    here would still pass -- the name still resolves and the tools still carry
+    "a" set. The only thing that separates the two is where the name is bound,
+    so that is what this asserts.
+    """
+    module = _tool_registry_module()
+
+    local = {
+        target.id
+        for node in ast.walk(module)
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name) and target.id.startswith("_CAN_")
+    } | {
+        node.target.id
+        for node in ast.walk(module)
+        if isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+        and node.target.id.startswith("_CAN_")
+    }
+    assert not local, (
+        f"{TOOL_REGISTRY.name} defines its own permission set(s): {sorted(local)}.\n"
+        "It had four once, all wider than the originals, and a viewer read "
+        "every member's email through the assistant while REST refused the "
+        f"same viewer. Import them from {PERMISSION_SOURCE} instead."
+    )
+
+    imported = {
+        alias.name
+        for node in ast.walk(module)
+        if isinstance(node, ast.ImportFrom)
+        and node.module
+        and node.module.endswith(PERMISSION_SOURCE)
+        for alias in node.names
+        if alias.name.startswith("_CAN_")
+    }
+    missing = set(_tool_permission_names().values()) - imported
+    assert not missing, (
+        "These permission names gate tools but are not imported from "
+        f"{PERMISSION_SOURCE}: {sorted(missing)}. Wherever they come from, it "
+        "is not the one definition."
+    )
+
+
+def test_every_tool_carries_a_known_permission_set():
+    known = _permission_sets()
+    for tool, permission_name in sorted(_tool_permission_names().items()):
+        assert permission_name in known, (
+            f"Tool {tool!r} is gated by {permission_name!r}, which is not one "
+            f"of the _CAN_* sets in {PERMISSION_SOURCE}: {sorted(known)}."
+        )
+        assert known[permission_name], (
+            f"Tool {tool!r} is gated by {permission_name!r}, which is empty: "
+            "it would authorise nobody and gate nothing."
+        )
+
+
+def test_no_tool_is_reachable_by_a_role_rest_would_refuse():
+    """The assistant is a second door onto the same data, not a wider one."""
+    permission_sets = _permission_sets()
+    tools = _tool_permission_names()
+
+    unlisted = set(tools) - set(TOOL_REST_EQUIVALENT)
+    assert not unlisted, (
+        f"These tools have no REST equivalent recorded: {sorted(unlisted)}.\n"
+        "Add each to TOOL_REST_EQUIVALENT naming the route that answers the "
+        "same question, so its role set is checked against that route's."
+    )
+
+    stale = set(TOOL_REST_EQUIVALENT) - set(tools)
+    assert not stale, (
+        f"TOOL_REST_EQUIVALENT names tools that no longer exist: {sorted(stale)}."
+    )
+
+    for tool, permission_name in sorted(tools.items()):
+        module_name, function_name = TOOL_REST_EQUIVALENT[tool]
+        rest = _rest_roles(module_name, function_name)
+        if rest is None:
+            continue
+        allowed = permission_sets[permission_name]
+        wider = allowed - rest
+        assert not wider, (
+            f"Tool {tool!r} is callable by {sorted(wider)}, whom "
+            f"{module_name}:{function_name} answers with 403.\n"
+            f"Tool gate {permission_name} = {sorted(allowed)}; REST allows "
+            f"{sorted(rest)}. Either narrow the tool's set or change the "
+            "route -- but the assistant must not be the wider door."
+        )

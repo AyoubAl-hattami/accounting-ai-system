@@ -46,6 +46,21 @@ from app.modules.accounting.services.ai_accounting_application_facade import (
     list_accounts,
     list_journal_entries,
 )
+# The permission vocabulary is imported, never restated.
+#
+# This module used to define its own four _CAN_* sets, and they had drifted
+# wider than the ones every other path uses: a viewer could read every member's
+# email and an accountant could read the audit log through the assistant, both
+# of which REST answers with 403. A second copy of a role set is not a
+# duplicate that eventually diverges -- it is a duplicate that already had.
+from app.modules.accounting.services.assistant_handler_registry import (
+    _CAN_CREATE_DRAFT,
+    _CAN_READ_AUDIT_LOGS,
+    _CAN_READ_CREDIT_NOTES,
+    _CAN_READ_REPORTS,
+    _CAN_READ_SUBLEDGER,
+    _CAN_READ_USERS,
+)
 from app.modules.accounting.services.company_user_service import list_company_users
 from app.modules.accounting.services.reports_application_facade import (
     get_account_ledger,
@@ -60,11 +75,6 @@ from app.application.reports.use_cases import GetAgingReport, GetPartnerStatemen
 from app.infrastructure.database.sqlalchemy.repositories.report_repository import SqlAlchemyReportRepository
 
 logger = logging.getLogger(__name__)
-
-_CAN_READ_REPORTS = frozenset({"admin", "accountant", "viewer", "auditor"})
-_CAN_READ_AUDIT_LOGS = frozenset({"admin", "accountant", "auditor"})
-_CAN_READ_USERS = frozenset({"admin", "accountant", "viewer", "auditor"})
-_CAN_CREATE_DRAFT = frozenset({"admin", "accountant"})
 
 
 @dataclass
@@ -1064,16 +1074,18 @@ class AccountingToolRegistry:
         "trace_amount": (tool_trace_amount, _CAN_READ_REPORTS, False),
         "get_audit_logs": (tool_get_audit_logs, _CAN_READ_AUDIT_LOGS, False),
         "get_company_users": (tool_get_company_users, _CAN_READ_USERS, False),
-        "get_invoices": (tool_get_invoices, _CAN_READ_REPORTS, False),
-        "get_invoice_details": (tool_get_invoice_details, _CAN_READ_REPORTS, False),
-        "get_payments": (tool_get_payments, _CAN_READ_REPORTS, False),
+        "get_invoices": (tool_get_invoices, _CAN_READ_SUBLEDGER, False),
+        "get_invoice_details": (tool_get_invoice_details, _CAN_READ_SUBLEDGER, False),
+        "get_payments": (tool_get_payments, _CAN_READ_SUBLEDGER, False),
+        # Aging and partner statements keep the reports set: their REST routes
+        # take no allowed_roles, so every member can already read them there.
         "get_ar_aging": (tool_get_ar_aging, _CAN_READ_REPORTS, False),
         "get_ap_aging": (tool_get_ap_aging, _CAN_READ_REPORTS, False),
         "get_customer_statement": (tool_get_customer_statement, _CAN_READ_REPORTS, False),
         "get_vendor_statement": (tool_get_vendor_statement, _CAN_READ_REPORTS, False),
-        "get_credit_notes": (tool_get_credit_notes, _CAN_READ_REPORTS, False),
-        "get_credit_note_details": (tool_get_credit_note_details, _CAN_READ_REPORTS, False),
-        "get_refunds": (tool_get_refunds, _CAN_READ_REPORTS, False),
+        "get_credit_notes": (tool_get_credit_notes, _CAN_READ_CREDIT_NOTES, False),
+        "get_credit_note_details": (tool_get_credit_note_details, _CAN_READ_CREDIT_NOTES, False),
+        "get_refunds": (tool_get_refunds, _CAN_READ_CREDIT_NOTES, False),
         "propose_journal_entry": (tool_propose_journal_entry, _CAN_CREATE_DRAFT, True),
         "propose_credit_note": (tool_propose_credit_note, _CAN_CREATE_DRAFT, True),
     }
