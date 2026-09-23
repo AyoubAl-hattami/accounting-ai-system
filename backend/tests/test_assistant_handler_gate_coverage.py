@@ -583,6 +583,33 @@ def test_every_tool_carries_a_known_permission_set():
         )
 
 
+def test_no_tool_is_withheld_from_a_role_rest_admits():
+    """The other direction, and the one [RAG-9] was.
+
+    The tool registry's own _CAN_READ_REPORTS omitted reviewer and approver,
+    so those two roles were offered ZERO tools while REST answered their
+    report requests with 200. A gate that is too narrow is not a safe
+    mistake -- it is a role that cannot use the product, and it hid behind
+    "the assistant is optional" for as long as nobody measured it.
+
+    Only endpoints that take no allowed_roles are checked: those admit every
+    member, so the tool behind them must too.
+    """
+    permission_sets = _permission_sets()
+    vocabulary = _role_vocabulary()
+
+    for tool, permission_name in sorted(_tool_permission_names().items()):
+        module_name, function_name = TOOL_REST_EQUIVALENT[tool]
+        if _rest_roles(module_name, function_name) is not None:
+            continue
+        missing = vocabulary - permission_sets[permission_name]
+        assert not missing, (
+            f"Tool {tool!r} is withheld from {sorted(missing)}, whom "
+            f"{module_name}:{function_name} admits -- it takes no "
+            "allowed_roles, so every member of the company may read it there."
+        )
+
+
 def test_no_tool_is_reachable_by_a_role_rest_would_refuse():
     """The assistant is a second door onto the same data, not a wider one."""
     permission_sets = _permission_sets()
