@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from app.modules.accounting.services.accounting_tool_registry import (
     AccountingToolRegistry,
     tool_propose_journal_entry,
@@ -201,3 +203,157 @@ def test_get_invoice_details_regression():
         assert len(data["allocations"]) == 1
         assert data["allocations"][0]["allocated_amount"] == 500.0
 
+
+
+# ── get_account_ledger ───────────────────────────────────────────────────────
+#
+# The tool read ledger.total_debit and ledger.total_credit, which
+# AccountLedgerRead does not have, so EVERY call raised AttributeError and
+# came back to the model as "Error executing get_account_ledger:
+# 'AccountLedgerRead' object has no attribute 'total_debit'". It shipped that
+# way and nothing noticed, because nothing called it.
+
+from datetime import date
+from decimal import Decimal
+
+from app.application.reports.dto import AccountLedgerLine, AccountLedgerRead
+from app.modules.accounting.services import accounting_tool_registry as registry
+
+
+def _account(account_id=7, code="1110", name="Main Bank", currency="USD"):
+    account = MagicMock()
+    account.id, account.code, account.name, account.currency = account_id, code, name, currency
+    return account
+
+
+def _ledger(lines, total_lines=None, currency="USD"):
+    return AccountLedgerRead(
+        company_id=1,
+        account_id=7,
+        account_code="1110",
+        account_name="Main Bank",
+        account_type="asset",
+        start_date=None,
+        end_date=None,
+        opening_balance=Decimal("100.00"),
+        closing_balance=Decimal("400.00"),
+        lines=lines,
+        total_lines=total_lines if total_lines is not None else len(lines),
+        currency=currency,
+    )
+
+
+def _line(entry_no, debit, credit, running):
+    return AccountLedgerLine(
+        journal_entry_id=1,
+        entry_no=entry_no,
+        entry_date=date(2026, 1, 5),
+        line_no=1,
+        description="rent",
+        debit=Decimal(debit),
+        credit=Decimal(credit),
+        running_balance=Decimal(running),
+    )
+
+
+def _db_returning(account, matches=None):
+    db = MagicMock()
+    scalars = MagicMock()
+    scalars.first.return_value = account
+    scalars.all.return_value = matches or []
+    db.scalars.return_value = scalars
+    return db
+
+
+def test_get_account_ledger_returns_a_ledger(monkeypatch):
+    lines = [_line("JE-1", "300", "0", "400"), _line("JE-2", "0", "50", "350")]
+    monkeypatch.setattr(registry, "get_account_ledger", lambda **kwargs: _ledger(lines))
+
+    result = registry.tool_get_account_ledger(
+        db=_db_returning(_account()), company_id=1, account_identifier="1110"
+    )
+
+    assert "error" not in result, result
+    assert result["account_code"] == "1110"
+    assert result["opening_balance"] == 100.0
+    assert result["closing_balance"] == 400.0
+    assert result["debit_of_shown_lines"] == 300.0
+    assert result["credit_of_shown_lines"] == 50.0
+    assert result["truncated"] is False
+    assert [entry["entry_no"] for entry in result["entries"]] == ["JE-1", "JE-2"]
+
+
+def test_get_account_ledger_says_when_it_is_showing_a_page(monkeypatch):
+    """[D3] paginates this report, so the lines can be part of a longer window.
+    Summing a page and calling it a total is how a model states a wrong figure
+    with confidence."""
+    lines = [_line(f"JE-{i}", "10", "0", "10") for i in range(registry._LEDGER_LINES_SHOWN + 5)]
+    monkeypatch.setattr(registry, "get_account_ledger", lambda **kwargs: _ledger(lines, total_lines=500))
+
+    result = registry.tool_get_account_ledger(
+        db=_db_returning(_account()), company_id=1, account_identifier="1110"
+    )
+
+    assert result["lines_shown"] == registry._LEDGER_LINES_SHOWN
+    assert result["lines_total"] == 500
+    assert result["truncated"] is True
+    assert "total_debit" not in result and "total_credit" not in result, (
+        "A figure named like a window total must not be a page sum."
+    )
+
+
+def test_get_account_ledger_reports_an_unavailable_report(monkeypatch):
+    monkeypatch.setattr(registry, "get_account_ledger", lambda **kwargs: None)
+
+    result = registry.tool_get_account_ledger(
+        db=_db_returning(_account()), company_id=1, account_identifier="1110"
+    )
+
+    assert "could not be produced" in result["error"]
+
+
+def test_get_account_ledger_refuses_to_guess_between_accounts(monkeypatch):
+    """'expense' matched five accounts and answered about one of them."""
+    monkeypatch.setattr(
+        registry, "get_account_ledger",
+        lambda **kwargs: pytest.fail("a ledger was fetched for a guessed account"),
+    )
+    candidates = [
+        _account(1, "5000", "Expenses"),
+        _account(2, "5100", "Rent Expense"),
+        _account(3, "5200", "Software Expense"),
+    ]
+
+    result = registry.tool_get_account_ledger(
+        db=_db_returning(None, matches=candidates), company_id=1, account_identifier="expense"
+    )
+
+    assert "matches 3 accounts" in result["error"]
+    assert [candidate["code"] for candidate in result["candidates"]] == ["5000", "5100", "5200"]
+
+
+def test_get_account_ledger_takes_an_exact_code_over_a_name_match(monkeypatch):
+    lines = [_line("JE-1", "300", "0", "400")]
+    monkeypatch.setattr(registry, "get_account_ledger", lambda **kwargs: _ledger(lines))
+    db = _db_returning(_account(7, "1110", "Main Bank"))
+
+    result = registry.tool_get_account_ledger(db=db, company_id=1, account_identifier="1110")
+
+    assert result["account_code"] == "1110"
+    # One query: the code matched, so the name search never ran.
+    assert db.scalars.call_count == 1
+
+
+def test_get_account_ledger_reports_the_currency_the_report_is_in(monkeypatch):
+    """[CUR-2] resolves a report to one currency; that is the unit of these
+    figures, and it is not necessarily the account's own."""
+    monkeypatch.setattr(
+        registry, "get_account_ledger",
+        lambda **kwargs: _ledger([_line("JE-1", "300", "0", "400")], currency="YER"),
+    )
+
+    result = registry.tool_get_account_ledger(
+        db=_db_returning(_account(currency="USD")), company_id=1, account_identifier="1110"
+    )
+
+    assert result["currency"] == "YER"

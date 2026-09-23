@@ -75,6 +75,11 @@ from app.infrastructure.database.sqlalchemy.repositories.report_repository impor
 
 logger = logging.getLogger(__name__)
 
+# How many ledger lines a tool result carries. The model reads these; a longer
+# list costs tokens without adding evidence, and the count of what was left
+# out travels with it.
+_LEDGER_LINES_SHOWN = 20
+
 
 @dataclass
 class ToolExecutionResult:
@@ -158,41 +163,88 @@ def tool_get_trial_balance(
 def tool_get_account_ledger(
     db: Session, company_id: int, account_identifier: str, start_date: str | None = None, end_date: str | None = None
 ) -> dict[str, Any]:
-    # Resolve account by code or name
+    # Resolve the account, and refuse to guess between several.
+    #
+    # This matched code OR name-contains and took .first(), so "expense"
+    # against a chart with five expense accounts answered about whichever the
+    # database returned -- a real ledger for the wrong account, which reads
+    # exactly like a real ledger for the right one. An exact code wins
+    # outright; otherwise the caller is told what the candidates are, the way
+    # the deterministic handler already asks.
+    identifier = account_identifier.strip()
     acc = db.scalars(
         select(AccountModel).where(
-            AccountModel.company_id == company_id,
-            or_(
-                AccountModel.code == account_identifier.strip(),
-                AccountModel.name.ilike(f"%{account_identifier.strip()}%"),
-            ),
+            AccountModel.company_id == company_id, AccountModel.code == identifier
         )
     ).first()
+    if acc is None:
+        matches = list(
+            db.scalars(
+                select(AccountModel)
+                .where(
+                    AccountModel.company_id == company_id,
+                    AccountModel.name.ilike(f"%{identifier}%"),
+                )
+                .order_by(AccountModel.code.asc())
+            ).all()
+        )
+        if len(matches) > 1:
+            return {
+                "error": (
+                    f"'{identifier}' matches {len(matches)} accounts. Ask which "
+                    "one is meant, by code."
+                ),
+                "candidates": [
+                    {"code": match.code, "name": match.name} for match in matches[:10]
+                ],
+            }
+        acc = matches[0] if matches else None
     if not acc:
         return {"error": f"Account '{account_identifier}' not found in company chart of accounts."}
 
     sd = date.fromisoformat(start_date) if start_date else None
     ed = date.fromisoformat(end_date) if end_date else None
     ledger = get_account_ledger(db=db, company_id=company_id, account_id=acc.id, start_date=sd, end_date=ed)
+    if ledger is None:
+        return {
+            "error": (
+                f"The ledger for account '{acc.code} - {acc.name}' could not be "
+                "produced for that period."
+            )
+        }
+
+    # Debits and credits are summed from the lines returned, and said so.
+    #
+    # AccountLedgerRead has no total_debit or total_credit -- reading them is
+    # what made every call to this tool raise AttributeError -- and inventing
+    # window totals from a page would be worse than not having them: [D3]
+    # paginates this report, so `lines` can be a page of a longer window.
+    shown = ledger.lines[:_LEDGER_LINES_SHOWN]
     return {
         "account_id": acc.id,
         "account_code": acc.code,
         "account_name": acc.name,
-        "currency": acc.currency,
+        # The report's unit, not the account's: [CUR-2] resolves a report to
+        # one currency, and that is the unit these figures are in.
+        "currency": ledger.currency or acc.currency,
         "opening_balance": float(ledger.opening_balance),
         "closing_balance": float(ledger.closing_balance),
-        "total_debit": float(ledger.total_debit),
-        "total_credit": float(ledger.total_credit),
+        "period": {"start_date": str(sd) if sd else None, "end_date": str(ed) if ed else None},
+        "lines_total": ledger.total_lines,
+        "lines_shown": len(shown),
+        "debit_of_shown_lines": float(sum(line.debit for line in shown)),
+        "credit_of_shown_lines": float(sum(line.credit for line in shown)),
+        "truncated": ledger.total_lines > len(shown),
         "entries": [
             {
-                "entry_no": e.entry_no,
-                "date": str(e.entry_date),
-                "description": e.description,
-                "debit": float(e.debit),
-                "credit": float(e.credit),
-                "running_balance": float(e.running_balance),
+                "entry_no": line.entry_no,
+                "date": str(line.entry_date),
+                "description": line.description,
+                "debit": float(line.debit),
+                "credit": float(line.credit),
+                "running_balance": float(line.running_balance),
             }
-            for e in ledger.lines[:20]
+            for line in shown
         ],
     }
 
