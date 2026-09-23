@@ -34,6 +34,7 @@ from app.modules.accounting.services.accounting_tool_registry import (
 )
 from app.modules.accounting.services.gemini_agent_contract import (
     CORE_SYSTEM_INSTRUCTIONS,
+    format_trusted_tool_result,
 )
 from app.modules.accounting.services.ai_providers.gemini_provider import (
     REQUEST_TIMEOUT_SECONDS as GEMINI_REQUEST_TIMEOUT_SECONDS,
@@ -242,10 +243,18 @@ def answer_with_tools(
                     if exec_result.data_source and exec_result.data_source not in data_sources:
                         data_sources.append(exec_result.data_source)
 
+                    # Delimited and labelled, like every other payload this
+                    # contract hands a model. The data is trusted in
+                    # provenance and carries text that is not: see
+                    # format_trusted_tool_result.
                     tool_response_parts.append(
                         types.Part.from_function_response(
                             name=fc.name,
-                            response={"result": exec_result.data},
+                            response={
+                                "result": format_trusted_tool_result(
+                                    fc.name, exec_result.data
+                                )
+                            },
                         )
                     )
 
