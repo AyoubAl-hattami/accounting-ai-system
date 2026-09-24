@@ -27,6 +27,16 @@ One hole the old version did not cover is closed here: an intent that the
 resolution chain can produce but that nothing dispatches. That used to fall
 through silently.
 
+A second invariant arrived with the last handler to move. There is one
+registry loop, and it sits below two branches that do not test `intent`, so
+a registered handler answers only if neither fired first. Nine handlers
+always sat there; `pl_contribution_question` was moved down past both on a
+proof that they cannot fire for the messages it answers. That proof is an
+exhaustion over two closed phrase sets, and the section "the loop's position"
+below re-runs it against the source on every CI run -- because a phrase added
+to either list is all it would take to make it false again, and nothing else
+would fail.
+
 Pure AST plus one import of the registry module, which is dataclasses only --
 it pulls in neither the service, nor sqlalchemy, nor settings (measured: 0.06s,
 no side effects). No HTTP, no database. It runs in the static CI job.
@@ -357,6 +367,202 @@ def test_inline_gate_allowlist_entries_still_exist_and_still_gate_themselves():
     assert "_CAN_READ_REPORTS" in source, (
         "The inline gate exemption assumes a permission-set check exists in "
         f"{SERVICE.name}; none was found."
+    )
+
+
+# ── the loop's position, and the one handler that had to move past a branch ──
+#
+# There is ONE registry loop, and it sits BELOW two branches that do not test
+# `intent` and so could never become entries: `if structured_followup:` and
+# `if generic_without_context:`. Every registered handler therefore answers
+# only if neither of those fired first.
+#
+# For nine of the ten handlers that is how it always was -- their branches sat
+# below both, so relocating them changed nothing. `pl_contribution_question`
+# is the exception: its branch sat ABOVE both, and registering it moved it
+# DOWN past them. That is a behaviour change unless neither branch can fire
+# for the messages it answers.
+#
+# `generic_without_context` cannot, by construction: it is
+# `_is_generic_entries_request(message) and contribution_metric is None`, and
+# the intent is set exactly when `contribution_metric` is truthy.
+#
+# `structured_followup` needed the proof below. Both predicates are closed
+# over literal phrase sets, so "they cannot both fire" is settled by
+# exhaustion rather than by sampling -- and an exhaustion is worth something
+# only while the sets stay closed, which is why the readers below refuse to
+# guess at a test whose shape they do not recognise.
+
+
+def _structured_followup_phrases() -> set[str]:
+    """Every message `_is_generic_structured_followup` accepts.
+
+    Its shape is `text = message.casefold().strip()` followed by one
+    `if text in {...}: return ...` per action. Anything else fails here: a
+    test this reader does not understand is an open set, and an exhaustion
+    over an open set proves nothing.
+    """
+    function = _function("_is_generic_structured_followup")
+    accepted: set[str] = set()
+    for statement in function.body[1:]:
+        if isinstance(statement, ast.Return):
+            continue
+        assert isinstance(statement, ast.If), (
+            "_is_generic_structured_followup grew a statement this reader does "
+            f"not understand: {ast.unparse(statement)[:80]}"
+        )
+        test = statement.test
+        assert (
+            isinstance(test, ast.Compare)
+            and isinstance(test.left, ast.Name)
+            and test.left.id == "text"
+            and len(test.ops) == 1
+            and isinstance(test.ops[0], ast.In)
+            and isinstance(test.comparators[0], ast.Set)
+        ), (
+            "_is_generic_structured_followup no longer accepts by literal "
+            f"membership: {ast.unparse(test)[:80]}. The exhaustion below is "
+            "valid only over a closed set -- re-derive it before changing this."
+        )
+        accepted |= {
+            element.value
+            for element in test.comparators[0].elts
+            if isinstance(element, ast.Constant) and isinstance(element.value, str)
+        }
+    return accepted
+
+
+def _contribution_triggers() -> tuple[set[str], set[str]]:
+    """What makes `_contribution_metric` return a metric: substrings, then phrases.
+
+    Its shape is `text = message.strip().lower()` followed by
+    `if any(x in text for x in (...))` twice and one `if text in {...}`. Same
+    refusal as above for anything else.
+    """
+    function = _function("_contribution_metric")
+    needles: set[str] = set()
+    phrases: set[str] = set()
+    for statement in function.body[1:]:
+        if isinstance(statement, ast.Return):
+            continue
+        assert isinstance(statement, ast.If), ast.unparse(statement)[:80]
+        test = statement.test
+        if isinstance(test, ast.Call) and getattr(test.func, "id", None) == "any":
+            generator = test.args[0]
+            assert isinstance(generator, ast.GeneratorExp), ast.unparse(test)[:80]
+            comparison = generator.elt
+            assert (
+                isinstance(comparison, ast.Compare)
+                and isinstance(comparison.ops[0], ast.In)
+                and isinstance(comparison.comparators[0], ast.Name)
+                and comparison.comparators[0].id == "text"
+            ), ast.unparse(comparison)[:80]
+            needles |= {
+                element.value
+                for element in ast.walk(generator.generators[0].iter)
+                if isinstance(element, ast.Constant)
+                and isinstance(element.value, str)
+            }
+        else:
+            assert (
+                isinstance(test, ast.Compare)
+                and isinstance(test.left, ast.Name)
+                and test.left.id == "text"
+                and isinstance(test.ops[0], ast.In)
+                and isinstance(test.comparators[0], ast.Set)
+            ), (
+                "_contribution_metric no longer fires by literal substring or "
+                f"literal membership: {ast.unparse(test)[:80]}."
+            )
+            phrases |= {
+                element.value
+                for element in test.comparators[0].elts
+                if isinstance(element, ast.Constant)
+                and isinstance(element.value, str)
+            }
+    return needles, phrases
+
+
+def test_the_two_phrase_sets_are_still_closed_and_non_empty():
+    """Guard the guard: an empty set exhausts trivially and proves nothing."""
+    followup = _structured_followup_phrases()
+    needles, phrases = _contribution_triggers()
+    assert followup, "_is_generic_structured_followup accepts nothing"
+    assert needles and phrases, "_contribution_metric fires on nothing"
+
+
+def test_no_structured_followup_phrase_can_set_a_contribution_metric():
+    """The proof that lets pl_contribution_question live below the two branches.
+
+    If this fails, the registry loop is answering a message that
+    `if structured_followup:` used to answer first, and the reply changed. The
+    fix is not to delete this test: it is to decide which of the two should
+    win, and either put the handler back where it wins or change the phrase
+    that collided.
+    """
+    needles, phrases = _contribution_triggers()
+
+    for accepted in sorted(_structured_followup_phrases()):
+        matched = sorted(needle for needle in needles if needle in accepted)
+        assert not matched, (
+            f"{accepted!r} reaches structured_followup AND contains {matched} "
+            "-- so it also sets contribution_metric, and the "
+            "pl_contribution_question handler now sits below a branch that "
+            "would have answered it first."
+        )
+        assert accepted not in phrases, (
+            f"{accepted!r} is accepted by structured_followup and is also an "
+            "exact contribution trigger."
+        )
+        # The two predicates normalise the same `message` differently, one
+        # with casefold().strip() and one with strip().lower(). Every accepted
+        # phrase is a fixed point of both, so the comparison above is between
+        # the string one predicate sees and the string the other sees.
+        assert accepted == accepted.casefold().strip() == accepted.strip().lower(), (
+            f"{accepted!r} is not a fixed point of both normalisations, so the "
+            "comparison above is between two different strings."
+        )
+
+
+def test_no_contribution_trigger_is_a_structured_followup_phrase():
+    """The converse, so a phrase added to EITHER list is caught."""
+    followup = _structured_followup_phrases()
+    needles, phrases = _contribution_triggers()
+
+    collisions = sorted(
+        trigger for trigger in (needles | phrases)
+        if trigger.casefold().strip() in followup
+    )
+    assert not collisions, (
+        "These contribution triggers are also structured-followup phrases: "
+        f"{collisions}."
+    )
+
+
+def test_casefold_and_lower_cannot_disagree_into_a_contribution_trigger():
+    """The one gap the phrase comparison above does not close by itself.
+
+    `_is_generic_structured_followup` normalises with `casefold()` and
+    `_contribution_metric` with `lower()`. A message could in principle
+    casefold into the accepted set while lowering into something else --
+    U+017F LATIN SMALL LETTER LONG S casefolds to "s" but lowers to itself.
+    That matters only if the character `lower()` leaves behind could help
+    build a contribution trigger. Over every code point in Unicode, none can.
+    """
+    needles, phrases = _contribution_triggers()
+    trigger_characters = set("".join(needles | phrases))
+
+    leaks = [
+        (hex(code_point), repr(chr(code_point)))
+        for code_point in range(0x110000)
+        if chr(code_point).casefold() != chr(code_point).lower()
+        and set(chr(code_point).lower()) & trigger_characters
+    ]
+    assert not leaks, (
+        "These code points case-map differently under casefold() and lower() "
+        f"AND supply a character a contribution trigger uses: {leaks[:10]}. "
+        "A message built from one could reach structured_followup and set "
+        "contribution_metric at the same time."
     )
 
 

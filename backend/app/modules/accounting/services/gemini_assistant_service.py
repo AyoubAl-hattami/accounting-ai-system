@@ -3824,6 +3824,64 @@ def _handle_structured_report_question(
     )
 
 
+def _handle_pl_contribution_question(
+    request: AssistantRequest,
+) -> GeminiAssistantReply:
+    """Answer "which entries make up revenue / expenses / this profit".
+
+    The last handler to leave the dispatcher's if-chain, and the only one that
+    had to move DOWN past a branch rather than only out of one. Its branch sat
+    above `if structured_followup:` and `if generic_without_context:`, neither
+    of which tests `intent`, so registering it meant proving that neither can
+    fire for the messages it answers:
+
+      * `generic_without_context` is `_is_generic_entries_request(message) and
+        contribution_metric is None`, and `intent == "pl_contribution_question"`
+        holds exactly when `contribution_metric` is set -- so it is False by
+        construction wherever this handler runs. That is the same kind of
+        guarantee the registry module already recorded for it.
+      * `structured_followup` is `_is_generic_structured_followup(message)`,
+        which accepts eleven literal phrases and nothing else;
+        `_contribution_metric` fires on six literal substrings plus two literal
+        phrases and nothing else. None of the eleven contains any of the six or
+        equals either of the two. That is exhaustive, because both sets are
+        closed -- see the registry module for the enumeration and for the one
+        way the two could have diverged without it.
+
+    The role check that used to be the branch directly above this one is now
+    this handler's registry `permission` and `denial`. What remains below is
+    the branch, dedented and unchanged.
+    """
+    db = request.db
+    company_id = request.company_id
+    language = request.language
+    prior_grounding = request.prior_grounding
+    contribution_metric = request.contribution_metric
+
+    grounded_period = (prior_grounding or {}).get("period") or {}
+    try:
+        start_date = date.fromisoformat(grounded_period["start_date"]) if grounded_period.get("start_date") else None
+        end_date = date.fromisoformat(grounded_period["end_date"]) if grounded_period.get("end_date") else None
+    except (TypeError, ValueError):
+        start_date, end_date = None, None
+    period_label = grounded_period.get("label") or "all available data"
+    metrics = ["revenue", "expenses"] if contribution_metric == "net_profit" else [contribution_metric]
+    all_matches = []
+    for metric in metrics:
+        matches = _tool_get_pl_contributors(db, company_id, start_date, end_date, metric, limit=10)
+        if matches is None:
+            return GeminiAssistantReply(reply=_unavailable_journal_reply(language), intent="answer_journal_question", confidence="low", data_sources=[], grounding=_unavailable_journal_grounding())
+        all_matches.extend(matches)
+    unique = {}
+    for match in all_matches:
+        unique.setdefault(match["id"], match)
+    matches = list(unique.values())[:20]
+    for match in matches:
+        match["total_matches"] = len(unique)
+    grounding = _build_contribution_evidence(matches, contribution_metric, start_date, end_date, period_label)
+    return GeminiAssistantReply(reply=_contribution_reply(matches, contribution_metric, period_label, language), intent="answer_journal_question", confidence="high", data_sources=["profit_loss_report", "journal_entries"], grounding=grounding)
+
+
 def _capability_menu_reply(language: str) -> GeminiAssistantReply:
     """What the assistant says when it has nothing better to say."""
     if language == "ar":
@@ -4296,44 +4354,6 @@ def _dispatch_within_request_budget(
     if intent == "unknown" and looks_like_accounting_message_with_amount(message):
         intent = "action_request"
 
-    # ── Access-denied checks ─────────────────────────────────────────────────
-    # pl_contribution_question belongs here because its handler answers with
-    # profit_loss_report + journal_entries -- the same data this gate protects.
-    # It was dispatched at line 3641 with no gate at all, so a role outside
-    # _CAN_READ_REPORTS received real journal entries: number, date, description
-    # and amount.
-    if intent == "pl_contribution_question" and user_role not in _CAN_READ_REPORTS:
-        return GeminiAssistantReply(
-            reply=(
-                "🔒 ليس لديك صلاحية الوصول إلى هذه البيانات."
-                if language == "ar"
-                else "🔒 You don't have permission to access this data."
-            ),
-            intent="access_denied", confidence="high", data_sources=[],
-        )
-    if intent == "pl_contribution_question":
-        grounded_period = (prior_grounding or {}).get("period") or {}
-        try:
-            start_date = date.fromisoformat(grounded_period["start_date"]) if grounded_period.get("start_date") else None
-            end_date = date.fromisoformat(grounded_period["end_date"]) if grounded_period.get("end_date") else None
-        except (TypeError, ValueError):
-            start_date, end_date = None, None
-        period_label = grounded_period.get("label") or "all available data"
-        metrics = ["revenue", "expenses"] if contribution_metric == "net_profit" else [contribution_metric]
-        all_matches = []
-        for metric in metrics:
-            matches = _tool_get_pl_contributors(db, company_id, start_date, end_date, metric, limit=10)
-            if matches is None:
-                return GeminiAssistantReply(reply=_unavailable_journal_reply(language), intent="answer_journal_question", confidence="low", data_sources=[], grounding=_unavailable_journal_grounding())
-            all_matches.extend(matches)
-        unique = {}
-        for match in all_matches:
-            unique.setdefault(match["id"], match)
-        matches = list(unique.values())[:20]
-        for match in matches:
-            match["total_matches"] = len(unique)
-        grounding = _build_contribution_evidence(matches, contribution_metric, start_date, end_date, period_label)
-        return GeminiAssistantReply(reply=_contribution_reply(matches, contribution_metric, period_label, language), intent="answer_journal_question", confidence="high", data_sources=["profit_loss_report", "journal_entries"], grounding=grounding)
     if structured_followup:
         structured_reply = _structured_followup_reply(prior_grounding, structured_followup, language)
         if structured_reply is not None:
@@ -4349,19 +4369,19 @@ def _dispatch_within_request_budget(
             data_sources=[],
         )
     # ── Registered handlers ─────────────────────────────────────
-    # Empty at this commit: ASSISTANT_HANDLERS is (), so this loop does nothing
-    # and the if-chain below still answers everything. Handlers move into it one
-    # at a time.
+    # Every dispatched intent is answered from here. The `if intent == ...`
+    # chain this replaced is gone, and with it the 300-line gap between a
+    # handler and the gate that authorises it: an entry cannot be added without
+    # naming a permission set, because the field has no default.
     #
-    # It sits HERE, and not above the chain, because two branches that do not
-    # test `intent` -- `if structured_followup:` and `if generic_without_context:`
-    # -- sit inside the chain and measurably preempt journal_question,
-    # report_question and structured_report_question today. Running a registered
-    # handler ahead of them would change which reply those messages get.
-    #
-    # `pl_contribution_question` is the one dispatched intent whose branch is
-    # above those two, so it cannot be registered here without moving past them.
-    # See assistant_handler_registry for the measurement.
+    # The loop still sits HERE rather than above, and that is load-bearing.
+    # `if structured_followup:` and `if generic_without_context:` do not test
+    # `intent`, and they measurably preempt journal_question, report_question
+    # and structured_report_question today -- running a registered handler
+    # ahead of them would change which reply those messages get.
+    # pl_contribution_question, whose branch used to sit ABOVE both, moved down
+    # past them on a proof that neither can fire for the messages it answers;
+    # see _handle_pl_contribution_question and assistant_handler_registry.
     if ASSISTANT_HANDLERS:
         assistant_request = AssistantRequest(
             db=db,
