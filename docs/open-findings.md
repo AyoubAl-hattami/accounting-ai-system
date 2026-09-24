@@ -120,3 +120,29 @@ gap was not noticed, because nothing fails when a card is dropped -- the
 reply still renders, one `return null` earlier.
 
 **Where** `frontend/src/features/ai/GroundingCards.tsx`, `valid()`.
+
+---
+
+## RAG-16 · The "Open report" button ignores the period the card shows
+
+**Severity** Low · **Measured** 2026-09-24, same branch
+
+Every grounding card carries a button that navigates to the report page,
+with the card's filters in the query string -- `?as_of_date=2026-01-31`,
+`?start_date=...&end_date=...`. None of the report pages read them:
+`BalanceSheetPage`, `TrialBalancePage`, `GeneralLedgerPage` and
+`AccountLedgerPage` contain no `useSearchParams` and no `URLSearchParams`.
+
+So a card that says "As of 2026-01-31" opens a page showing today. The
+figures in the card are right and the page is right; they are answers to
+different questions, one click apart.
+
+This predates the four new cards -- the profit-and-loss card has built those
+parameters since 2026-07-14 and the page has never read them. The new cards
+follow the same idiom deliberately rather than inventing a second one; the
+fix belongs in the pages, or in a decision that the button is "open the
+report" and the period is not carried.
+
+**Where** `frontend/src/features/ai/GroundingCards.tsx` (builds them),
+`frontend/src/features/reports/*` (ignore them).
+
