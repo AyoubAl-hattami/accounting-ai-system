@@ -875,23 +875,44 @@ def test_the_account_ledger_tool_and_handler_build_the_same_card(seeded_company,
     assert tool_card == handler_card
 
 
-def test_the_account_ledger_card_says_posted_without_checking(seeded_company, accounting_factory):
-    """Recorded, not fixed.
+def test_the_account_ledger_card_reports_the_real_status(accounting_factory):
+    """It used to say "posted" about every entry, without reading one.
 
-    Every entry in this card carries status "posted". AccountLedgerLine has
-    no status field, and the query behind it filters to the reportable
-    statuses -- so the word is the inline code's shorthand for "this came
-    from the report", carried across verbatim when the builder moved.
+    The ledger query admits the reportable statuses -- posted AND reversed --
+    so a reversed entry sat in a card that says "Verified from accounting
+    data" with the word "posted" beside it. Measured before the fix:
 
-    It is asserted here so the claim is visible: a card that states a status
-    it never read is a small lie, and it should be either checked or dropped
-    in a commit that says which.
+      JE-afa3d4319a70  card says posted   actually posted
+      JE-f5db979c035f  card says posted   actually reversed   <-- wrong
     """
-    card = _card(
-        accounting_factory.db,
-        seeded_company.company.id,
-        "show me the ledger for account 1110",
-        "account_ledger",
-        "1110",
+    from datetime import timedelta
+
+    bootstrap = accounting_factory.create_accounting_bootstrap(role="admin")
+    day = bootstrap.fiscal_period.start_date + timedelta(days=3)
+    posted = accounting_factory.create_journal(
+        bootstrap=bootstrap, entry_date=day, description="posted sale", status="posted",
+        lines=[
+            JournalLineSpec("1110", Decimal("4000.00"), Decimal("0"), "cash in"),
+            JournalLineSpec("4100", Decimal("0"), Decimal("4000.00"), "sales"),
+        ],
     )
-    assert {entry["status"] for entry in card["entries"]} == {"posted"}
+    reversed_entry = accounting_factory.create_journal(
+        bootstrap=bootstrap, entry_date=day, description="reversed sale", status="reversed",
+        lines=[
+            JournalLineSpec("1110", Decimal("900.00"), Decimal("0"), "cash in"),
+            JournalLineSpec("4100", Decimal("0"), Decimal("900.00"), "sales"),
+        ],
+    )
+
+    reply = service._structured_report_reply(
+        db=accounting_factory.db, company_id=bootstrap.company.id,
+        message="show me the ledger for account 1110", language="en",
+        page_context=PAGE, kind="account_ledger", account_target="1110",
+    )
+    by_entry = {entry["entry_number"]: entry["status"] for entry in reply.grounding.entries}
+
+    assert by_entry[posted.entry_no] == "posted"
+    assert by_entry[reversed_entry.entry_no] == "reversed", (
+        "A reversed entry must not be labelled posted in a card that claims "
+        "to be verified."
+    )

@@ -148,6 +148,12 @@ class AccountLedgerLine:
     debit: Decimal
     credit: Decimal
     running_balance: Decimal
+    # The entry's lifecycle status, carried rather than assumed.
+    #
+    # The ledger query admits the reportable statuses, which is posted AND
+    # reversed -- so "every line here is posted" was never true, and the
+    # assistant's ledger card said it about every line for two months.
+    status: str = "posted"
 
 
 @dataclass(frozen=True, slots=True)

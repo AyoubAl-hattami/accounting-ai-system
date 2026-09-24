@@ -562,6 +562,7 @@ def get_account_ledger(
             JournalEntry.id.label("journal_entry_id"),
             JournalEntry.entry_no.label("entry_no"),
             JournalEntry.entry_date.label("entry_date"),
+            JournalEntry.status.label("status"),
             JournalLine.line_no.label("line_no"),
             JournalLine.description.label("description"),
             JournalLine.debit.label("debit"),
@@ -652,6 +653,10 @@ def _ledger_from_rows(
                 debit=debit,
                 credit=credit,
                 running_balance=running_balance,
+                # Both ledger queries admit the reportable statuses, which is
+                # posted AND reversed, so the row's own status is the only
+                # honest answer here.
+                status=row.status,
             )
         )
 
@@ -777,6 +782,7 @@ def get_general_ledger(
             JournalEntry.id.label("journal_entry_id"),
             JournalEntry.entry_no.label("entry_no"),
             JournalEntry.entry_date.label("entry_date"),
+            JournalEntry.status.label("status"),
             JournalLine.line_no.label("line_no"),
             JournalLine.description.label("description"),
             JournalLine.debit.label("debit"),

@@ -331,14 +331,11 @@ def account_ledger_grounding(
 ) -> AccountLedgerGrounding:
     """The card for one account's ledger, from the report itself.
 
-    Moved verbatim out of _structured_report_reply, including the hardcoded
-    "posted" status on every entry. That is not a claim the report makes --
-    AccountLedgerLine carries no status, and the underlying query is the
-    reportable-statuses one, so "posted" is the inline code's shorthand for
-    "this came from the report". It is carried across unchanged because this
-    commit moves the card; whether the card should say something it has not
-    checked is a question for its own commit, and it is written down here so
-    that question has somewhere to start.
+    Every entry carried a hardcoded "posted" when this moved out of
+    _structured_report_reply, because AccountLedgerLine had no status to
+    read. It has one now: the ledger query admits the reportable statuses,
+    which is posted AND reversed, so a reversed entry was being labelled
+    posted in a card that says "Verified from accounting data" next to it.
 
     ``account`` is the resolved account row -- the report knows its id, code
     and name, but not its type, which the card shows.
@@ -368,7 +365,7 @@ def account_ledger_grounding(
                 "entry_number": line.entry_no,
                 "entry_date": line.entry_date.isoformat(),
                 "description": line.description or "",
-                "status": "posted",
+                "status": line.status,
                 "source": "accounting_report",
                 "debit": report_amount(line.debit),
                 "credit": report_amount(line.credit),
