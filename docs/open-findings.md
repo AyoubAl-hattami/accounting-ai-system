@@ -146,3 +146,48 @@ report" and the period is not carried.
 **Where** `frontend/src/features/ai/GroundingCards.tsx` (builds them),
 `frontend/src/features/reports/*` (ignore them).
 
+
+---
+
+## RAG-17 · The aging and partner-statement tests have never run
+
+**Severity** Medium · **Measured** 2026-09-24, branch
+`phase-61-subledger-and-agent` at `fca5246`
+
+`tests/test_aging_and_statements.py` contains 25 tests. All 25 fail, and
+have failed at every commit on this branch since the file arrived in
+`c6ba572`. None of them reaches an assertion.
+
+```
+$ python -m pytest tests/test_aging_and_statements.py -q
+25 failed in 9.91s
+$ ... --tb=line | grep -oE "no such table: [a-z_]+" | sort | uniq -c
+     57 no such table: credit_note_allocations
+     18 no such table: credit_notes
+```
+
+The file builds its own in-memory SQLite and creates twelve tables by hand
+(`Company` through `PaymentAllocation`). `SqlAlchemyReportRepository`'s aging
+query LEFT JOINs two more -- `credit_notes` and `credit_note_allocations` --
+to subtract credited amounts from the outstanding balance. That join and the
+test file landed in the same commit; the fixture was never told.
+
+**What is unverified because of it.** Every aging bucket (current, 1-30,
+31-60, 61-90, 91-120, 120+), partial payment, void and draft exclusion,
+as-of-date payment cutoffs, AR/AP direction filtering, multi-partner and
+multi-currency isolation, company isolation, and the whole partner statement
+-- opening balance, running balance, receipts, vendor payments, date-range
+filtering, void payments, and multiple allocations against one invoice.
+Nothing in the suite covers any of it, here or elsewhere.
+
+It is invisible in the ordinary way: the full suite reports "25 failed, 1181
+passed" and has for the whole of this branch, so the number is read as the
+known-bad tail rather than as one file that has never worked.
+
+**The fix is three lines** -- add `CreditNote.__table__` and
+`CreditNoteAllocation.__table__` to the fixture's create list, and import
+them. It is filed rather than done because the tests have never passed, so
+what they assert is unverified too: turning them on is a review of 25
+assertions, not a fixture edit.
+
+**Where** `backend/tests/test_aging_and_statements.py`, `_session()`.
