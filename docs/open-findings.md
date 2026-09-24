@@ -4,8 +4,15 @@ Findings that have been measured and not yet fixed.
 
 Fixed findings are not listed here: their record is the commit that closed
 them, which carries the ID in its subject (`[RAG-1]`, `[D2]`, `[A9]`, and so
-on). This file exists for the other kind -- the ones found while looking for
-something else, which otherwise survive only in a conversation.
+on). `closed-findings.md` indexes those by ID, and is also where a finding
+that was withdrawn or downgraded lives -- those have no closing commit to
+carry them. This file exists for the other kind -- the ones found while
+looking for something else, which otherwise survive only in a conversation.
+
+Note that the **F-001 to F-025** index in
+`audit-report/Accounting_AI_System_Technical_Audit.md` is a separate
+numbering from the IDs used here, and no cross-walk between the two exists.
+See the caveat at the top of `closed-findings.md` before matching an ID.
 
 An entry earns its place by being **measured**. Each one states what was run
 and what came back, so the next person can reproduce it before deciding
@@ -108,6 +115,14 @@ report" and the period is not carried.
 
 **Severity** Medium · **Measured** 2026-09-24, branch
 `phase-61-subledger-and-agent` at `fca5246`
+
+**Read this as a coverage finding, not a test-health one.** The aging and
+partner-statement feature has never been exercised by a passing test --
+not once, at any commit. This is not a flaky file, not a file that broke
+last week, and not 25 tests that need re-running. It is a feature that
+ships with the appearance of a test suite and the coverage of none, and the
+appearance is the dangerous part: the file is 25 well-named tests that a
+reviewer scanning the tree would count as the aging feature being covered.
 
 `tests/test_aging_and_statements.py` contains 25 tests. All 25 fail, and
 have failed at every commit on this branch since the file arrived in
