@@ -78,51 +78,6 @@ permissions question rather than a phrasing one.
 
 ---
 
-## RAG-15 · Four of the six grounding cards are built, stored, and thrown away
-
-**Severity** Medium · **Measured** 2026-09-24, branch
-`phase-61-subledger-and-agent` at `a558d37`
-
-`GroundingCards.valid()` accepts `profit_and_loss` and `journal_evidence`
-and returns `null` for everything else. The backend has been emitting four
-other kinds the whole time.
-
-Rendered against the real component, one card per kind, all `status:
-"grounded"` with real figures:
-
-| kind | rendered |
-|---|---|
-| `profit_and_loss` | 2,229 characters |
-| `journal_evidence` | 1,456 characters |
-| `balance_sheet` | **nothing** |
-| `trial_balance` | **nothing** |
-| `general_ledger` | **nothing** |
-| `account_ledger` | **nothing** |
-
-**What a user lost.** Ask "what is our profit this month?" and the answer
-carries a card: the three figures, the period, a "Verified from accounting
-data" badge, and a button that opens the report. Ask "show me the balance
-sheet", "show me the trial balance", "show me the general ledger" or "show
-me the ledger for account 1110" and the same assistant, having run the same
-kind of report through the same services, shows a paragraph of text and
-nothing else. No badge, no figures table, no link. The answer is as verified
-as the one that displays a badge; it just cannot say so.
-
-It is worse now than it was. As of the card commits on this branch, those
-four kinds are also produced by the tool path and pass the grounding gate --
-so the backend has more verified cards than ever and the panel still drops
-four of them on the floor.
-
-**How long.** `GroundingCards` shipped on 2026-07-14 handling two kinds. The
-four structured groundings arrived two days later, on 2026-07-16, with the
-structured report handlers. The component has been edited once since and the
-gap was not noticed, because nothing fails when a card is dropped -- the
-reply still renders, one `return null` earlier.
-
-**Where** `frontend/src/features/ai/GroundingCards.tsx`, `valid()`.
-
----
-
 ## RAG-16 · The "Open report" button ignores the period the card shows
 
 **Severity** Low · **Measured** 2026-09-24, same branch
