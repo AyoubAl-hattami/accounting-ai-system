@@ -123,7 +123,14 @@ describe('grounding cards', () => {
   });
 
   it('renders nothing for a card missing the figures it needs', () => {
-    const { metrics, ...withoutMetrics } = CARDS.trial_balance;
+    // The key has to be ABSENT, not undefined: valid() reads metrics[k], and a
+    // card that carries the key with nothing in it is a different bug from one
+    // that never carried it. Deleted from a copy rather than destructured
+    // around, because `const { metrics, ...rest }` binds a name this config
+    // will not let go unused -- it sets no ignore pattern, so neither
+    // `_metrics` nor `metrics: _unused` satisfies it either. Measured.
+    const withoutMetrics = { ...CARDS.trial_balance };
+    delete (withoutMetrics as Record<string, unknown>).metrics;
     const { container } = renderCard(withoutMetrics);
     expect(container.innerHTML).toBe('');
   });
