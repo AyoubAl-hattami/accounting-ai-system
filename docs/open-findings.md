@@ -161,3 +161,83 @@ what they assert is unverified too: turning them on is a review of 25
 assertions, not a fixture edit.
 
 **Where** `backend/tests/test_aging_and_statements.py`, `_session()`.
+
+---
+
+## RAG-18 · 24 lint errors in the subledger UI, and a frontend job that has never reached its build step
+
+**Severity** Medium · **Measured** 2026-09-25, branch
+`phase-61-subledger-and-agent` at `a0be8e1`, in CI · **Owner** whoever owns
+phase-61
+
+The first CI run this branch has ever had failed ESLint, and ESLint runs
+fourth of seven steps in the frontend job. Everything after it is skipped, so
+on this branch CI has never once evaluated the production build or either
+test runner.
+
+```
+> eslint .
+✖ 32 problems (24 errors, 8 warnings)
+##[error]Process completed with exit code 1.
+
+     ok        TypeScript type-check
+     FAILED -> ESLint
+     skipped   Vite production build
+     skipped   Node built-in unit tests
+     skipped   Vitest component/unit tests
+```
+
+`23 @typescript-eslint/no-explicit-any` and `1
+@typescript-eslint/no-unused-vars`, across ten files:
+
+| errors | file |
+|---|---|
+| 4 | `features/credit-notes/AllocateCreditNoteModal.tsx` |
+| 4 | `features/credit-notes/CreditNotesPage.tsx` |
+| 4 | `features/refunds/RefundsPage.tsx` |
+| 3 | `features/refunds/NewRefundModal.tsx` |
+| 2 | `features/credit-notes/NewCreditNoteModal.tsx` |
+| 2 | `features/invoices/InvoicesPage.tsx` |
+| 2 | `features/payments/PaymentsPage.tsx` |
+| 1 | `features/invoices/NewInvoiceModal.tsx` |
+| 1 | `features/partners/NewPartnerModal.tsx` |
+| 1 | `features/payments/NewPaymentModal.tsx` |
+
+All ten arrived with the WIP park (`e699ede`, `c6ba572` before the history
+rewrite). `batch-1-deploy-correctness` passes ESLint at `bac5cf6`, which is
+what dates them: they entered with that commit and nothing has run `eslint`
+on this branch since.
+
+**Why nobody noticed.** These workflows trigger on `pull_request` and pushes
+to `main`. Neither branch had ever been pushed, so no run existed to be red.
+Local verification on this branch ran `tsc -b`, Vitest and the backend suite
+and never `npm run lint` -- and `tsc -b` is clean, so the type-check step
+passes and the failure looks like it appears out of nowhere at step four.
+
+**What the skipped steps actually do**, run locally at `a0be8e1` so the
+unknown is at least written down:
+
+```
+npm run build       ✓ built in 35.10s      (see the caveat below)
+node --test         4 passed, 0 failed
+npm run test:run    29 files, 159 passed
+```
+
+So nothing behind the ESLint wall is broken today. That is a measurement of
+one moment, not a guarantee: until ESLint is green, CI cannot tell anyone
+when that stops being true.
+
+**The build caveat.** `npm run build` fails on a developer machine that has
+a `frontend/.env` pointing `VITE_API_BASE_URL` at localhost --
+`vite.config.ts` refuses that for a production build. That is the guard
+working. CI has no such file, and the build above was run with the local one
+moved aside, which is how CI sees it.
+
+**Not fixed here, deliberately.** A sweep replacing 23 `any`s across ten
+files nobody on this branch wrote is a guess at what each was standing in
+for. The one error that belonged to this branch's own work -- an unused
+`metrics` binding in `GroundingCardKinds.test.tsx` -- was fixed in `a0be8e1`,
+which is why the count is 24 and not 25.
+
+**Where** `frontend/src/features/{credit-notes,invoices,partners,payments,refunds}/`,
+and `.github/workflows/frontend-validation.yml` for the step ordering.
