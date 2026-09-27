@@ -241,3 +241,85 @@ which is why the count is 24 and not 25.
 
 **Where** `frontend/src/features/{credit-notes,invoices,partners,payments,refunds}/`,
 and `.github/workflows/frontend-validation.yml` for the step ordering.
+
+---
+
+## RAG-19 · A correction is applied as its own opposite, and nothing says so
+
+**Severity** Critical · **Measured** 2026-09-27, branch
+`phase-61-subledger-and-agent` at `ba2fa62`, over HTTP and in process
+
+A user correcting the assistant during a transaction clarification gets a
+draft against **the account they just negated**. No warning, no "I did not
+understand", no hedge -- a confirm button.
+
+`_resolve_bank_cash_answer` scans for bank terms before cash terms and has no
+notion of negation, so any reply containing both concepts returns the first:
+
+```
+  what the user typed              means                                   resolves to
+  لا، خليها من الصندوق بدل البنك   no, make it from the CASH BOX, not bank  bank
+  من الصندوق مش من البنك           from the cash box, not the bank          bank
+  ليس من البنك، من الصندوق         not from the bank, from the cash box     bank
+  مش البنك                         not the bank                             bank
+  لا بنك                           no bank                                  bank
+  from cash not bank               from cash not bank                       bank
+  not bank, cash                   not bank, cash                           bank
+```
+
+Both languages. Every one is wrong.
+
+**Why it is silent, and why that makes it Critical rather than High.** A
+value *was* resolved, so `_apply_clarification_answer` returns
+`changed=True`, and the `"لم أفهم إجابتك"` branch in
+`_handle_pending_transaction_answer` never fires. The visible failure mode --
+the loop the user complained about -- is the *safe* one. This is the unsafe
+one: it proceeds confidently.
+
+**Measured on the Yemen chart**, company 13116 `Acme Demo Trading`, which has
+`1100 الصندوق`, `1110 بنك الكريمي` and `1140 محفظة جيب`. Turn 1 is
+`دفعت 300 كهربا`; the assistant asks bank or cash; turn 2 varies:
+
+| turn 2 | means | draft credits |
+|---|---|---|
+| `البنك` | the bank | `1110 بنك الكريمي` ✅ |
+| `الصندوق` | the cash box | `1100 الصندوق` ✅ |
+| `لا، من الصندوق مش من البنك` | **NOT the bank, from the cash box** | **`1110 بنك الكريمي`** ❌ |
+| `من محفظة جيب` | from the Jeeb wallet (1140, real) | no draft -- clarification loop |
+
+The correct answer is in the chart and resolves perfectly when said plainly.
+Negating the wrong one returns it.
+
+Over HTTP as an admin on the English demo chart, same shape:
+
+```
+POST /ai/gemini-assistant  "لا، من الصندوق مش من البنك"
+  intent           : create_journal_draft
+  suggested_action : create_journal_entry_draft
+    5000 Expenses    debit=300.0  credit=0.00
+    1110 Main Bank   debit=0.00   credit=300.0
+```
+
+**What does not save it.** Every downstream check passes, because the entry
+is *valid* -- it is just wrong. `1110` is a real, active, company-scoped
+account; the entry balances; the role is admin; the period is open. Balance
+validation, account resolution and `/confirm-action`'s role re-check all
+protect against an *invalid* entry and none of them can see a *misattributed*
+one. That is the correct division of labour and not a defect in those
+guards; it is why understanding cannot be left to substring order.
+
+**Blast radius.** Any clarification turn where the user corrects rather than
+answers -- which is the single most likely moment for that phrasing. The
+result is a draft, not a posted entry, so a human sees it before it becomes
+a ledger row. That is the only thing holding this below "it silently posts".
+
+**Not fixed here, deliberately.** Reordering the two scans or adding a
+negation list would move the failure rather than remove it: the next
+phrasing that carries two concepts breaks the same way. The fix belongs
+inside the understanding/authority redesign, where a reply containing a
+negation marker or more than one candidate concept is by definition not
+unambiguous and is interpreted rather than matched.
+
+**Where** `gemini_assistant_service._resolve_bank_cash_answer`,
+`_resolve_transaction_type_answer` (same shape), and the `changed` flag in
+`_apply_clarification_answer` that suppresses the fallback.
