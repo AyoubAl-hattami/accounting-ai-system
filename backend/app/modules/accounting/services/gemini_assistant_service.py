@@ -71,6 +71,16 @@ from app.modules.accounting.services.assistant_intent_orchestrator import (
     SemanticIntentClassifier,
     orchestrate_assistant_intent,
 )
+from app.modules.accounting.services.clarification_ambiguity import (
+    BANK_TERMS,
+    CASH_TERMS,
+    CUSTOMER_TERMS,
+    EXPENSE_TERMS,
+    INCOME_TERMS,
+    SUPPLIER_TERMS,
+    clarification_ambiguity,
+    normalize as normalize_clarification_text,
+)
 from app.modules.accounting.services.gemini_transaction_parser import (
     build_followup_message,
     looks_like_accounting_message_with_amount,
@@ -1891,19 +1901,29 @@ def _build_pending_clarification_result(
 
 
 def _normalize_clarification_answer(message: str) -> str:
-    arabic_digits = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
-    return message.translate(arabic_digits).strip().lower()
+    return normalize_clarification_text(message)
 
 
+# The two resolvers below are UNCHANGED in behaviour. The only edit is that
+# their term lists now come from clarification_ambiguity instead of being
+# written out here, so the detector that decides whether a reply may reach
+# them is reading the same words they are. Two copies would drift, and the
+# drift would be invisible: the detector would start passing replies the
+# resolver reads differently, which is the exact failure RAG-19 describes.
+#
+# Their OPTION sets are deliberately still literal, because the two functions
+# genuinely disagree -- "واحد" and "اتنين" are accepted as ordinals by the
+# bank/cash resolver and not by the transaction-type one. That disagreement
+# predates this change and is preserved rather than quietly harmonised.
 def _resolve_bank_cash_answer(message: str) -> str | None:
     text = _normalize_clarification_answer(message)
     if text in {"1", "اول", "الأول", "الاول", "واحد", "bank"}:
         return "bank"
     if text in {"2", "ثاني", "الثاني", "اتنين", "اثنين", "cash"}:
         return "cash"
-    if any(term in text for term in ["البنك", "بنك", "مصرف", "bank"]):
+    if any(term in text for term in BANK_TERMS):
         return "bank"
-    if any(term in text for term in ["الصندوق", "صندوق", "كاش", "نقد", "نقدية", "cash"]):
+    if any(term in text for term in CASH_TERMS):
         return "cash"
     return None
 
@@ -1920,13 +1940,13 @@ def _resolve_transaction_type_answer(message: str, missing_field: str) -> str | 
             return "expense_payment"
         if missing_field == "customer_or_income":
             return "income_receipt"
-    if any(term in text for term in ["سداد مورد", "مورد", "supplier", "payable"]):
+    if any(term in text for term in SUPPLIER_TERMS):
         return "supplier_payment"
-    if any(term in text for term in ["مصروف جديد", "مصروف", "expense"]):
+    if any(term in text for term in EXPENSE_TERMS):
         return "expense_payment"
-    if any(term in text for term in ["تحصيل من عميل", "عميل", "زبون", "customer", "receivable"]):
+    if any(term in text for term in CUSTOMER_TERMS):
         return "customer_receipt"
-    if any(term in text for term in ["إيراد جديد", "ايراد جديد", "إيراد", "ايراد", "revenue", "income"]):
+    if any(term in text for term in INCOME_TERMS):
         return "income_receipt"
     return None
 
@@ -2126,7 +2146,36 @@ def _handle_pending_transaction_answer(
 
     active_accounts = [a for a in accounts_raw if a.get("is_active", True)]
     parsed = _parsed_from_pending(pending)
-    parsed, changed = _apply_clarification_answer(parsed, pending, message)
+
+    # ── Is this reply safe to read by pattern? ───────────────────────────────
+    # The resolvers below scan for terms in a fixed order and cannot see
+    # negation or the chart, so they answer "not the bank, from the cash box"
+    # with bank, and "محفظة ون كاش" with the cash account. Both silently --
+    # a value resolves, so the "لم أفهم" branch never runs and a draft is
+    # offered against an account the user ruled out. That is RAG-19.
+    #
+    # The detector runs FIRST and escalates anything it is unsure of. It reads
+    # this company's live accounts, not a word list, because "كاش" is only
+    # ambiguous once the chart contains an account named after it.
+    #
+    # At this commit escalation has nowhere to go: there is no interpretation
+    # step yet, so an escalated reply falls through to the same "I did not
+    # understand" the user already gets for an unrecognised answer. That is
+    # not the fix, but it is strictly better than the alternative -- a wrong
+    # entry becomes a visible re-ask. The interpretation step replaces this
+    # fall-through; the detector stays exactly as it is.
+    ambiguity = clarification_ambiguity(
+        message, active_accounts, pending.missing_fields
+    )
+    if ambiguity:
+        parsed, changed = _apply_clarification_answer(parsed, pending, message)
+    else:
+        changed = False
+        logger.info(
+            "intent=clarification_answer outcome=escalated reason=%s accounts=%s",
+            ambiguity.reason,
+            ",".join(ambiguity.matched_accounts) or "-",
+        )
 
     mapped = map_to_accounts(parsed, active_accounts, language)
     if mapped.needs_clarification:
