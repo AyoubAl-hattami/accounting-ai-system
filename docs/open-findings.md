@@ -320,6 +320,27 @@ inside the understanding/authority redesign, where a reply containing a
 negation marker or more than one candidate concept is by definition not
 unambiguous and is interpreted rather than matched.
 
+### A second case, same root cause: a real account name read as a generic concept
+
+Found while modelling the fix, and it is not a negation at all. The chart has
+`1130 محفظة ون كاش` (the OneCash e-wallet). The cash keyword list contains
+`كاش`. So naming the wallet matches the generic cash concept by substring,
+and the wallet loses to the cash box:
+
+| turn 2 | means | draft credits |
+|---|---|---|
+| `ون كاش` | the OneCash wallet (1130) | **`1100 الصندوق`** |
+| `محفظة ون كاش` | the OneCash wallet (1130) | **`1100 الصندوق`** |
+
+Silent again -- a value resolved, so `changed=True` and no warning. Measured
+on company 13116, same two-turn sequence.
+
+This matters for the fix as much as the negation case does. It shows the
+ambiguity test cannot be a fixed word list: `كاش` is unambiguous as a word
+and ambiguous as soon as the chart contains an account whose name contains
+it. Any detector that decides "unambiguous" without consulting this
+company's accounts will keep making this class of error.
+
 **Where** `gemini_assistant_service._resolve_bank_cash_answer`,
 `_resolve_transaction_type_answer` (same shape), and the `changed` flag in
 `_apply_clarification_answer` that suppresses the fallback.
