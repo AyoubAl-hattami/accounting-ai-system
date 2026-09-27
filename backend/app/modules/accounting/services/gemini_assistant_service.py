@@ -1032,8 +1032,10 @@ def _call_gemini_for_answer(
         user_message=question,
         trusted_backend_data={
             "financial_context": context_summary,
-            "bounded_recent_conversation": history_data,
         },
+        # [B7], same defect as the transaction parser: the conversation is
+        # the user's own text and was being presented as backend data.
+        untrusted_conversation=history_data or None,
     )
 
     try:

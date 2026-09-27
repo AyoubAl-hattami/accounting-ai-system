@@ -337,8 +337,12 @@ def _build_parser_prompt(
         user_message=message,
         trusted_backend_data={
             "current_company_chart_of_accounts": account_data,
-            "bounded_recent_conversation": history_data,
         },
+        # [B7]: these turns are the user's own words read back out of our
+        # storage. Storage is not provenance, and they were inside the
+        # TRUSTED block until now -- which told the model that text the user
+        # wrote had come from the backend.
+        untrusted_conversation=history_data or None,
     )
 
 # ── Parser function ───────────────────────────────────────────────────────────
