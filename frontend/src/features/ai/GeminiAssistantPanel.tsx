@@ -527,7 +527,7 @@ export default function GeminiAssistantPanel({
                     )}
                   </button>
                 )}
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary-solid bg-gradient-primary shadow-[0_6px_18px_-8px_var(--primary-glow)]">
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-[image:var(--gradient-ai)] shadow-[0_6px_18px_-8px_var(--ai-glow)]">
                   <Sparkles aria-hidden className="h-4 w-4 text-primary-foreground" />
                 </div>
                 <div className="min-w-0">
@@ -710,7 +710,7 @@ export default function GeminiAssistantPanel({
 
                   {isLoading && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2.5">
-                      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-violet-border bg-violet-soft"><Bot aria-hidden className="h-3.5 w-3.5 text-violet" /></div>
+                      <div className="ai-glow flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-[color:var(--ai-border)] bg-[color:var(--ai-soft)]"><Bot aria-hidden className="h-3.5 w-3.5 text-[color:var(--ai)]" /></div>
                       <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-muted px-3.5 py-2.5"><Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin text-violet" /><span className="text-xs text-muted-foreground">{tc.thinking}</span></div>
                     </motion.div>
                   )}

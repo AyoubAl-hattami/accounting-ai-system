@@ -14,14 +14,17 @@ import PageLayout from '../../../components/layout/PageLayout';
 import LoadingState from '../../../components/feedback/LoadingState';
 import ErrorState from '../../../components/feedback/ErrorState';
 import EmptyState from '../../../components/feedback/EmptyState';
+import PaginationControls from '../../../components/ui/PaginationControls';
 import { AccountTypeBadge } from '../../../entities/account';
 import ReportHeader from '../components/ReportHeader';
 import ReportSummaryTile from '../components/ReportSummaryTile';
 import ReportExportButtons from '../components/ReportExportButtons';
 import ReportDateField from '../components/ReportDateField';
+import ReportCurrencyField from '../components/ReportCurrencyField';
+import { useReportCurrency } from '../components/useReportCurrency';
 import ReportSearchField from '../components/ReportSearchField';
 import MoneyAmount from '../../../components/ui/MoneyAmount';
-import { useGeneralLedger } from './useGeneralLedger';
+import { useGeneralLedger, LEDGER_ACCOUNT_PAGE_SIZE } from './useGeneralLedger';
 import { useI18n } from '../../../i18n';
 import { formatCurrency } from '../../../lib/format';
 import type { AccountLedgerRead, AccountLedgerLine } from '../../../api/types';
@@ -72,12 +75,28 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
   const [exporting, setExporting] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
 
+  const [accountSkip, setAccountSkip] = useState(0);
+
+  // A page number means nothing once the window under it changes.
+  useEffect(() => {
+    setAccountSkip(0);
+  }, [startDate, endDate]);
+
+  // One report per currency: the picker chooses which, never a sum of both.
+  const reportCurrency = useReportCurrency(selectedCompanyId);
+
   const {
     data,
     isLoading: reportLoading,
     error,
     fetchReport,
-  } = useGeneralLedger({ companyId: selectedCompanyId, startDate, endDate });
+  } = useGeneralLedger({
+    companyId: selectedCompanyId,
+    currency: reportCurrency.currency,
+    startDate,
+    endDate,
+    accountSkip,
+  });
 
   useEffect(() => {
     fetchReport();
@@ -150,6 +169,7 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
       const { downloadFile } = await import('../../../lib/downloadFile');
       await downloadFile('/reports/general-ledger/export.csv', {
         company_id: selectedCompanyId,
+        currency: reportCurrency.currency,
         start_date: startDate,
         end_date: endDate,
       }, 'general-ledger.csv');
@@ -167,6 +187,7 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
       const { downloadFile } = await import('../../../lib/downloadFile');
       await downloadFile('/reports/general-ledger/export.pdf', {
         company_id: selectedCompanyId,
+        currency: reportCurrency.currency,
         start_date: startDate,
         end_date: endDate,
       }, 'general-ledger.pdf');
@@ -238,6 +259,13 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
         transition={{ duration: 0.3, delay: 0.05 }}
         className="filter-bar"
       >
+        {reportCurrency.hasChoice && (
+          <ReportCurrencyField
+            value={reportCurrency.selected}
+            options={reportCurrency.available}
+            onChange={reportCurrency.setCurrency}
+          />
+        )}
         <ReportDateField
           label={t.common.startDate}
           value={startDate}
@@ -333,6 +361,21 @@ function GeneralLedgerContent({ selectedCompanyId, companiesLoading }: GeneralLe
             />
           ))}
         </div>
+      )}
+
+      {/* Paged by account, never by line: every account shown is shown whole,
+          with its own opening and closing balance intact. */}
+      {data && data.total_accounts > data.accounts.length && (
+        <PaginationControls
+          skip={accountSkip}
+          limit={LEDGER_ACCOUNT_PAGE_SIZE}
+          total={data.total_accounts}
+          onPrev={() =>
+            setAccountSkip((previous) => Math.max(0, previous - LEDGER_ACCOUNT_PAGE_SIZE))
+          }
+          onNext={() => setAccountSkip((previous) => previous + LEDGER_ACCOUNT_PAGE_SIZE)}
+          entityName={t.reports.generalLedger.accounts.toLowerCase()}
+        />
       )}
     </div>
   );

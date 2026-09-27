@@ -33,7 +33,11 @@ function readStoredPreference(): ThemePreference {
   } catch {
     // localStorage unavailable (private mode, embedded webview)
   }
-  return 'system';
+  /* Dark, not the system preference. The assistant's glow and the depth these
+     surfaces are built on only read on a dark ground, and this is the face the
+     product should open with. A stored choice still wins, and the toggle still
+     offers light and system. */
+  return 'dark';
 }
 
 function systemTheme(): ResolvedTheme {

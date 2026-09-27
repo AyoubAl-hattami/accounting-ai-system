@@ -5,11 +5,23 @@ import { dataEvents } from '../../../lib/dataEvents';
 
 interface UseGeneralLedgerOptions {
   companyId: number | null;
+  /** Null means the company's own currency. */
+  currency?: string | null;
   startDate: string | null;
   endDate: string | null;
+  accountSkip?: number;
 }
 
-export function useGeneralLedger({ companyId, startDate, endDate }: UseGeneralLedgerOptions) {
+/** Matches the endpoint's own default, so the control and the server agree. */
+export const LEDGER_ACCOUNT_PAGE_SIZE = 50;
+
+export function useGeneralLedger({
+  companyId,
+  currency,
+  startDate,
+  endDate,
+  accountSkip = 0,
+}: UseGeneralLedgerOptions) {
   const [data, setData] = useState<GeneralLedgerRead | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,8 +34,12 @@ export function useGeneralLedger({ companyId, startDate, endDate }: UseGeneralLe
 
     try {
       let url = `/reports/general-ledger?company_id=${companyId}`;
+      if (currency) url += `&currency=${encodeURIComponent(currency)}`;
       if (startDate) url += `&start_date=${startDate}`;
       if (endDate) url += `&end_date=${endDate}`;
+      // Paged by account, never by line: a page that split an account would
+      // show a running balance with no beginning.
+      url += `&account_skip=${accountSkip}&account_limit=${LEDGER_ACCOUNT_PAGE_SIZE}`;
       const response = await apiClient.get<GeneralLedgerRead>(url);
       setData(response.data);
     } catch {
@@ -32,7 +48,7 @@ export function useGeneralLedger({ companyId, startDate, endDate }: UseGeneralLe
     } finally {
       setIsLoading(false);
     }
-  }, [companyId, startDate, endDate]);
+  }, [companyId, currency, startDate, endDate, accountSkip]);
 
   // Auto-refetch when posted journal data changes (post/review/void/reverse)
   useEffect(() => {

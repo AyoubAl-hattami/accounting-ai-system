@@ -41,6 +41,34 @@ def _create_invite(base_url, headers, company_id, email, role='viewer'):
     )
 
 
+def _grant_membership(base_url, headers, company_id, user_id, email, role='viewer'):
+    """Give an existing account membership of a company; return the membership id.
+
+    The direct ``POST /company-users`` route is gone, so the invitation endpoint
+    is the only supported path.  For an address that already has an account it
+    grants the membership immediately and answers ``status="added_existing"``.
+
+    That answer carries no account details by design, so the membership id comes
+    from a follow-up read.  This mirrors ``_add_company_user`` in
+    test_protected_company_users.py; both exist because keying the grant on an
+    email the caller already knows -- rather than on a guessable integer id --
+    is the whole point of removing the old route.
+    """
+    invite = _create_invite(base_url, headers, company_id, email, role)
+    assert invite.status_code == 200, invite.text
+    assert invite.json()['status'] == 'added_existing', invite.text
+
+    listing = requests.get(
+        f'{base_url}/company-users',
+        headers=headers,
+        params={'company_id': company_id, 'user_id': user_id},
+    )
+    assert listing.status_code == 200, listing.text
+    items = listing.json()['items']
+    assert len(items) == 1, listing.text
+    return items[0]['id']
+
+
 def _create_company(base_url, headers):
     response = requests.post(
         f'{base_url}/companies',
@@ -291,12 +319,9 @@ def test_inactive_existing_membership_requires_restore(
         json={'email': email, 'password': 'Password123', 'full_name': 'Inactive'},
     )
     user_id = registration.json()['id']
-    added = requests.post(
-        f'{base_url}/company-users',
-        headers=bs.auth_headers,
-        json={'company_id': bs.company_id, 'user_id': user_id, 'role': 'viewer'},
+    membership_id = _grant_membership(
+        base_url, bs.auth_headers, bs.company_id, user_id, email,
     )
-    membership_id = added.json()['id']
     removed = requests.patch(
         f'{base_url}/company-users/{membership_id}/remove-access',
         headers=bs.auth_headers,

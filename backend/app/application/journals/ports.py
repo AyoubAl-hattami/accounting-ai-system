@@ -72,3 +72,6 @@ class JournalRepository(Protocol):
 
     def count_by_fiscal_year(self, fiscal_year_id: int) -> int:
         ...
+
+    def count_by_fiscal_period(self, fiscal_period_id: int) -> int:
+        ...

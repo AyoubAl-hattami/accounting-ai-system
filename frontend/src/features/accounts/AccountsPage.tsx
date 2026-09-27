@@ -110,6 +110,16 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
     setSkip(0);
   }, [searchQuery, typeFilter]);
 
+  /** The filter and the badge must name a type the same way. */
+  const typeLabel = (type: string): string =>
+    ({
+      asset: t.accountsPage.typeAsset,
+      liability: t.accountsPage.typeLiability,
+      equity: t.accountsPage.typeEquity,
+      income: t.accountsPage.typeIncome,
+      expense: t.accountsPage.typeExpense,
+    })[type] ?? type;
+
   const subtypeLabel = (subtype: AccountSubtype): string =>
     ({
       bank: t.accountsPage.subtypeBank,
@@ -318,7 +328,7 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
             <option value="">{t.accountsPage.allTypes}</option>
             {ACCOUNT_TYPES.map((type) => (
               <option key={type} value={type}>
-                {type.charAt(0).toUpperCase() + type.slice(1)}
+                {typeLabel(type)}
               </option>
             ))}
           </select>
@@ -399,6 +409,7 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
                     <th scope="col">{t.accountsPage.code}</th>
                     <th scope="col">{t.accountsPage.name}</th>
                     <th scope="col">{t.accountsPage.type}</th>
+                    <th scope="col">{t.accountsPage.currency}</th>
                     <th scope="col">{t.accountsPage.parentCode}</th>
                     <th scope="col">{t.common.status}</th>
                     <th scope="col">{t.accountsPage.origin}</th>
@@ -424,6 +435,7 @@ function AccountsContent({ selectedCompanyId, companiesLoading, userRole }: Acco
                       <td>
                         <AccountTypeBadge type={acc.account_type} />
                       </td>
+                      <td className="numeric text-xs text-muted-foreground">{acc.currency}</td>
                       <td className="numeric text-xs text-muted-foreground">{parentCodeOf(acc)}</td>
                       <td>
                         <span className={`badge ${acc.is_active ? 'tone-success' : 'tone-neutral'}`}>

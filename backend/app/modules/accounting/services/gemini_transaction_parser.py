@@ -20,6 +20,9 @@ from app.modules.accounting.schemas.gemini_assistant_schemas import (
     ParsedTransaction,
 )
 from app.modules.accounting.services.account_mapper import ACCOUNT_ALIASES
+from app.modules.accounting.services.ai_providers.gemini_provider import (
+    REQUEST_TIMEOUT_SECONDS as GEMINI_REQUEST_TIMEOUT_SECONDS,
+)
 from app.modules.accounting.services.gemini_agent_contract import (
     AGENT_CONTRACT_VERSION,
     AgentPrompt,
@@ -373,7 +376,11 @@ def parse_transaction_message(
     try:
         from google import genai
 
-        client = genai.Client(api_key=api_key)
+        # Milliseconds; see ai_providers/gemini_provider.py for why 20s.
+        client = genai.Client(
+            api_key=api_key,
+            http_options={"timeout": int(GEMINI_REQUEST_TIMEOUT_SECONDS * 1000)},
+        )
         response = client.models.generate_content(
             model=model,
             contents=prompt.user_message,

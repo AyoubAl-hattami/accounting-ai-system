@@ -1,10 +1,11 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, true
 from sqlalchemy.orm import Session
 
 from app.modules.accounting.models.account import Account
+from app.modules.accounting.models.company import Company
 from app.modules.accounting.models.journal_entry import JournalEntry
 from app.modules.accounting.models.journal_line import JournalLine
 from app.modules.accounting.models.fiscal_year import FiscalYear
@@ -75,10 +76,21 @@ def _find_fiscal_year_for_report_date(
     return fiscal_year
 
 
+def _in_currency(currency: str | None):
+    """Restrict a report to accounts kept in one currency.
+
+    None means no restriction, and exists only so these functions stay callable
+    on their own; the repository adapter below always passes a resolved
+    currency, so no report reaching a user ever totals two units together.
+    """
+    return true() if currency is None else Account.currency == currency
+
+
 def get_trial_balance(
     db: Session,
     company_id: int,
     as_of_date: date | None = None,
+    currency: str | None = None,
 ) -> TrialBalanceRead:
     posted_filter = _official_entry_filter(end_date=as_of_date)
 
@@ -122,7 +134,7 @@ def get_trial_balance(
             JournalEntry.id == JournalLine.journal_entry_id,
             isouter=True,
         )
-        .where(Account.company_id == company_id)
+        .where(Account.company_id == company_id, _in_currency(currency))
         .group_by(
             Account.id,
             Account.code,
@@ -173,6 +185,7 @@ def get_trial_balance(
         )
 
     return TrialBalanceRead(
+        currency=currency,
         company_id=company_id,
         as_of_date=as_of_date,
         total_debit=total_debit,
@@ -189,6 +202,7 @@ def get_profit_and_loss(
     company_id: int,
     start_date: date | None = None,
     end_date: date | None = None,
+    currency: str | None = None,
 ) -> ProfitAndLossRead:
     posted_filter = _official_entry_filter(start_date=start_date, end_date=end_date)
 
@@ -234,6 +248,7 @@ def get_profit_and_loss(
         )
         .where(
             Account.company_id == company_id,
+            _in_currency(currency),
             Account.account_type.in_(["income", "expense"]),
         )
         .group_by(
@@ -288,6 +303,7 @@ def get_profit_and_loss(
     net_profit = total_income - total_expenses
 
     return ProfitAndLossRead(
+        currency=currency,
         company_id=company_id,
         start_date=start_date,
         end_date=end_date,
@@ -303,6 +319,7 @@ def get_balance_sheet(
     db: Session,
     company_id: int,
     as_of_date: date | None = None,
+    currency: str | None = None,
 ) -> BalanceSheetRead:
     effective_date = as_of_date or date.today()
     fiscal_year = _find_fiscal_year_for_report_date(
@@ -354,6 +371,7 @@ def get_balance_sheet(
         )
         .where(
             Account.company_id == company_id,
+            _in_currency(currency),
             Account.account_type.in_(["asset", "liability", "equity"]),
         )
         .group_by(
@@ -426,6 +444,7 @@ def get_balance_sheet(
         company_id=company_id,
         start_date=fiscal_year.start_date,
         end_date=effective_date,
+        currency=currency,
     )
     current_year_earnings = current_period_profit_and_loss.net_profit
 
@@ -437,6 +456,7 @@ def get_balance_sheet(
             company_id=company_id,
             start_date=None,
             end_date=prior_period_end,
+            currency=currency,
         )
         prior_year_earnings = prior_profit_and_loss.net_profit
 
@@ -445,6 +465,7 @@ def get_balance_sheet(
     total_liabilities_and_equity = total_liabilities + total_equity
 
     return BalanceSheetRead(
+        currency=currency,
         company_id=company_id,
         as_of_date=effective_date,
         total_assets=total_assets,
@@ -468,8 +489,12 @@ def get_account_ledger(
     account_id: int,
     start_date: date | None = None,
     end_date: date | None = None,
+    line_skip: int | None = None,
+    line_limit: int | None = None,
 ) -> AccountLedgerRead | None:
     account = db.scalar(
+        # No currency filter: a ledger is one account, so it is already in one
+        # unit. The result reports which, from the account itself.
         select(Account).where(
             Account.id == account_id,
             Account.company_id == company_id,
@@ -545,6 +570,43 @@ def get_account_ledger(
 
     rows = db.execute(statement).all()
 
+    return _ledger_from_rows(
+        company_id=company_id,
+        account=account,
+        opening_balance=opening_balance,
+        rows=rows,
+        start_date=start_date,
+        end_date=end_date,
+        line_skip=line_skip,
+        line_limit=line_limit,
+    )
+
+
+def _ledger_from_rows(
+    *,
+    company_id: int,
+    account: Account,
+    opening_balance: Decimal,
+    rows,
+    start_date: date | None,
+    end_date: date | None,
+    line_skip: int | None = None,
+    line_limit: int | None = None,
+) -> AccountLedgerRead:
+    """Turn ordered line rows into a ledger.
+
+    The only place a running balance is computed, so the single-account path
+    and the whole-company path cannot drift apart.
+
+    LIMITATION, deliberate: ``line_skip``/``line_limit`` bound the RESPONSE,
+    not the query. Every line in the window is still read and its running
+    balance computed, because each balance depends on every line before it --
+    page two's first figure is only correct if page one was added up. Bounding
+    the query instead would mean computing the running balance with a SQL
+    window function, which changes how the figures are produced and puts the
+    byte-for-byte ledger contract at risk. The measured harm was 2,000 lines
+    serialised and rendered, and that is what this removes.
+    """
     running_balance = opening_balance
     lines: list[AccountLedgerLine] = []
 
@@ -552,13 +614,11 @@ def get_account_ledger(
         debit = Decimal(str(row.debit or 0))
         credit = Decimal(str(row.credit or 0))
 
-        movement = _account_signed_amount(
+        running_balance += _account_signed_amount(
             account_type=account.account_type,
             debit=debit,
             credit=credit,
         )
-
-        running_balance += movement
 
         lines.append(
             AccountLedgerLine(
@@ -573,7 +633,15 @@ def get_account_ledger(
             )
         )
 
+    total_lines = len(lines)
+    if line_skip is not None or line_limit is not None:
+        offset = line_skip or 0
+        page = lines[offset:] if line_limit is None else lines[offset:offset + line_limit]
+    else:
+        page = lines
+
     return AccountLedgerRead(
+        currency=account.currency,
         company_id=company_id,
         account_id=account.id,
         account_code=account.code,
@@ -581,9 +649,16 @@ def get_account_ledger(
         account_type=account.account_type,
         start_date=start_date,
         end_date=end_date,
+        # Both balances describe the WINDOW, not the page: the opening figure
+        # a page-two running balance descends from, and the closing figure of
+        # the last page. Recomputing either per page would make them disagree
+        # with the ledger the exporters produce.
         opening_balance=opening_balance,
         closing_balance=running_balance,
-        lines=lines,
+        lines=page,
+        total_lines=total_lines,
+        line_skip=line_skip,
+        line_limit=line_limit,
     )
 
 
@@ -592,42 +667,192 @@ def get_general_ledger(
     company_id: int,
     start_date: date | None = None,
     end_date: date | None = None,
+    account_skip: int | None = None,
+    account_limit: int | None = None,
+    currency: str | None = None,
 ) -> GeneralLedgerRead:
-    accounts = db.scalars(
+    """Every account's ledger, in a fixed number of queries.
+
+    This used to call get_account_ledger in a loop: 2 queries per account
+    without a date filter, 3 with one -- measured at 601 and 901 queries for
+    300 accounts. Opening balances and lines are now fetched for every account
+    at once and grouped in memory.
+
+    Paginated by ACCOUNT and never by line. A page that split an account would
+    show a running balance with no beginning and a closing figure belonging to
+    neither page. Callers that pass neither bound -- the CSV and PDF exporters
+    among them -- receive every account.
+    """
+    account_statement = (
         select(Account)
-        .where(Account.company_id == company_id)
+        .where(Account.company_id == company_id, _in_currency(currency))
         .order_by(Account.code.asc())
-    ).all()
+    )
 
-    account_ledgers: list[AccountLedgerRead] = []
+    total_accounts = db.scalar(
+        select(func.count())
+        .select_from(Account)
+        .where(Account.company_id == company_id, _in_currency(currency))
+    ) or 0
 
-    for account in accounts:
-        ledger = get_account_ledger(
-            db=db,
+    if account_skip is not None:
+        account_statement = account_statement.offset(account_skip)
+    if account_limit is not None:
+        account_statement = account_statement.limit(account_limit)
+
+    accounts = db.scalars(account_statement).all()
+
+    if not accounts:
+        return GeneralLedgerRead(
+            currency=currency,
             company_id=company_id,
-            account_id=account.id,
             start_date=start_date,
             end_date=end_date,
+            accounts=[],
+            total_accounts=total_accounts,
+            account_skip=account_skip,
+            account_limit=account_limit,
         )
 
-        if ledger is not None:
-            account_ledgers.append(ledger)
+    account_ids = [account.id for account in accounts]
+
+    # One grouped query for every opening balance instead of one per account.
+    # An account with nothing before start_date is simply absent from the
+    # result and falls back to Decimal(str(0)) -- the same value the
+    # per-account coalesce produced, which renders as "0" and not "0.00".
+    # That inconsistency is pre-existing and is reproduced on purpose: the
+    # captured ledger contract contains it.
+    opening_by_account: dict[int, tuple[Decimal, Decimal]] = {}
+    if start_date is not None:
+        opening_rows = db.execute(
+            select(
+                JournalLine.account_id.label("account_id"),
+                func.coalesce(func.sum(JournalLine.debit), 0).label("debit_total"),
+                func.coalesce(func.sum(JournalLine.credit), 0).label("credit_total"),
+            )
+            .select_from(JournalLine)
+            .join(JournalEntry, JournalEntry.id == JournalLine.journal_entry_id)
+            .where(
+                JournalLine.company_id == company_id,
+                JournalLine.account_id.in_(account_ids),
+                _official_entry_filter(end_date=start_date - timedelta(days=1)),
+            )
+            .group_by(JournalLine.account_id)
+        ).all()
+        opening_by_account = {
+            row.account_id: (
+                Decimal(str(row.debit_total or 0)),
+                Decimal(str(row.credit_total or 0)),
+            )
+            for row in opening_rows
+        }
+
+    # One query for every line, ordered so each account's slice already arrives
+    # in the order the per-account query produced.
+    line_statement = (
+        select(
+            JournalLine.account_id.label("account_id"),
+            JournalEntry.id.label("journal_entry_id"),
+            JournalEntry.entry_no.label("entry_no"),
+            JournalEntry.entry_date.label("entry_date"),
+            JournalLine.line_no.label("line_no"),
+            JournalLine.description.label("description"),
+            JournalLine.debit.label("debit"),
+            JournalLine.credit.label("credit"),
+        )
+        .select_from(JournalLine)
+        .join(JournalEntry, JournalEntry.id == JournalLine.journal_entry_id)
+        .where(
+            JournalLine.company_id == company_id,
+            JournalLine.account_id.in_(account_ids),
+            _official_entry_filter(),
+        )
+        .order_by(
+            JournalLine.account_id.asc(),
+            JournalEntry.entry_date.asc(),
+            JournalEntry.id.asc(),
+            JournalLine.line_no.asc(),
+        )
+    )
+
+    if start_date is not None:
+        line_statement = line_statement.where(JournalEntry.entry_date >= start_date)
+    if end_date is not None:
+        line_statement = line_statement.where(JournalEntry.entry_date <= end_date)
+
+    rows_by_account: dict[int, list] = {account_id: [] for account_id in account_ids}
+    for row in db.execute(line_statement).all():
+        rows_by_account[row.account_id].append(row)
+
+    zero = Decimal(str(0))
+    account_ledgers: list[AccountLedgerRead] = []
+    for account in accounts:
+        if start_date is None:
+            opening_balance = Decimal("0.00")
+        else:
+            debit_total, credit_total = opening_by_account.get(account.id, (zero, zero))
+            opening_balance = _account_signed_amount(
+                account_type=account.account_type,
+                debit=debit_total,
+                credit=credit_total,
+            )
+
+        account_ledgers.append(
+            _ledger_from_rows(
+                company_id=company_id,
+                account=account,
+                opening_balance=opening_balance,
+                rows=rows_by_account[account.id],
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
 
     return GeneralLedgerRead(
+        currency=currency,
         company_id=company_id,
         start_date=start_date,
         end_date=end_date,
         accounts=account_ledgers,
+        total_accounts=total_accounts,
+        account_skip=account_skip,
+        account_limit=account_limit,
     )
 
 class SqlAlchemyReportRepository(ReportRepository):
     def __init__(self, db: Session) -> None:
         self._db = db
 
+    def currencies_in_use(self, company_id: int) -> tuple[str, list[str]]:
+        """The company's base currency, and every currency its accounts are kept in.
+
+        The base always comes first and is always present, even before any
+        account exists, so a picker built from this is never empty.
+        """
+        base = self._currency(company_id, None)
+        used = set(
+            self._db.scalars(
+                select(Account.currency)
+                .where(Account.company_id == company_id)
+                .distinct()
+            ).all()
+        )
+        return base, [base] + sorted(used - {base})
+
+    def _currency(self, company_id: int, requested: str | None) -> str:
+        """The requested currency, or the company's own when none was named."""
+        if requested:
+            return requested.strip().upper()
+        base = self._db.scalar(
+            select(Company.base_currency).where(Company.id == company_id)
+        )
+        return (base or "USD").upper()
+
     def get_trial_balance(self, query: TrialBalanceQuery) -> TrialBalanceRead:
         return get_trial_balance(
             db=self._db,
             company_id=query.company_id,
+            currency=self._currency(query.company_id, query.currency),
             as_of_date=query.as_of_date,
         )
 
@@ -635,6 +860,7 @@ class SqlAlchemyReportRepository(ReportRepository):
         return get_profit_and_loss(
             db=self._db,
             company_id=query.company_id,
+            currency=self._currency(query.company_id, query.currency),
             start_date=query.start_date,
             end_date=query.end_date,
         )
@@ -643,6 +869,7 @@ class SqlAlchemyReportRepository(ReportRepository):
         return get_balance_sheet(
             db=self._db,
             company_id=query.company_id,
+            currency=self._currency(query.company_id, query.currency),
             as_of_date=query.as_of_date,
         )
 
@@ -655,12 +882,17 @@ class SqlAlchemyReportRepository(ReportRepository):
             account_id=query.account_id,
             start_date=query.start_date,
             end_date=query.end_date,
+            line_skip=query.line_skip,
+            line_limit=query.line_limit,
         )
 
     def get_general_ledger(self, query: GeneralLedgerQuery) -> GeneralLedgerRead:
         return get_general_ledger(
             db=self._db,
             company_id=query.company_id,
+            currency=self._currency(query.company_id, query.currency),
             start_date=query.start_date,
             end_date=query.end_date,
+            account_skip=query.account_skip,
+            account_limit=query.account_limit,
         )

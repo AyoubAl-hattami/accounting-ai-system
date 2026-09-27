@@ -12,6 +12,9 @@ interface UseCompanyUsersOptions {
 
 export function useCompanyUsers({ companyId, skip }: UseCompanyUsersOptions) {
   const [users, setUsers] = useState<CompanyUser[]>([]);
+  // Company-wide, never a page. Kept apart from `users` so the paginator's
+  // `total`, which counts members only, describes exactly what `users` holds.
+  const [invitations, setInvitations] = useState<CompanyUser[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,37 +35,38 @@ export function useCompanyUsers({ companyId, skip }: UseCompanyUsersOptions) {
         `/company-users?company_id=${companyId}&skip=${skip}&limit=${USERS_PAGE_SIZE}`
       );
       
-      let items = [...usersResponse.data.items];
-      
-      // Also fetch pending invitations if we are on the first page
-      if (skip === 0) {
-        try {
-          const invResponse = await apiClient.get<CompanyUserInvitationRead[]>(
-            `/company-users/invitations?company_id=${companyId}`
-          );
-          
-          const pendingUsers: CompanyUser[] = invResponse.data.map(inv => ({
-            id: -inv.id, // Negative ID to distinguish from real users
-            company_id: inv.company_id,
-            user_id: 0,
-            role: inv.role,
-            is_active: false,
-            user_email: inv.email,
-            user_full_name: '(Pending Invitation)',
-            is_invitation: true,
-            expires_at: inv.expires_at,
-            created_at: inv.created_at,
-            updated_at: inv.created_at,
-          }));
-          
-          items = [...pendingUsers, ...items];
-        } catch (invErr) {
-          // If invitations fail (e.g., non-admin user), just ignore and show regular users
-          console.error("Failed to fetch pending invitations", invErr);
-        }
+      // Invitations are company-wide, not part of the member page. They used
+      // to be fetched only when skip === 0 and prepended to the member list,
+      // which meant the Pending tab was empty on every page but the first --
+      // rendering the same "no results" copy an admin would read as "there are
+      // none". They are fetched on every page now and kept separate, so the
+      // paginated member list and the company-wide invitation list stop being
+      // one array that is neither.
+      let pendingInvitations: CompanyUser[] = [];
+      try {
+        const invResponse = await apiClient.get<CompanyUserInvitationRead[]>(
+          `/company-users/invitations?company_id=${companyId}`
+        );
+
+        pendingInvitations = invResponse.data.map(inv => ({
+          id: -inv.id, // Negative ID to distinguish from real users
+          company_id: inv.company_id,
+          user_id: 0,
+          role: inv.role,
+          is_active: false,
+          user_email: inv.email,
+          user_full_name: '(Pending Invitation)',
+          is_invitation: true,
+          expires_at: inv.expires_at,
+          created_at: inv.created_at,
+          updated_at: inv.created_at,
+        }));
+      } catch {
+        // If invitations fail (e.g., non-admin user), just ignore and show regular users
       }
 
-      setUsers(items);
+      setUsers(usersResponse.data.items);
+      setInvitations(pendingInvitations);
       setTotal(usersResponse.data.total);
     } catch (err) {
       let status: number | undefined;
@@ -76,45 +80,12 @@ export function useCompanyUsers({ companyId, skip }: UseCompanyUsersOptions) {
         setError('Failed to load company users. Please try again.');
       }
       setUsers([]);
+      setInvitations([]);
       setTotal(0);
     } finally {
       setIsLoading(false);
     }
   }, [companyId, skip]);
-
-  const addCompanyUser = useCallback(async (payload: {
-    company_id: number;
-    user_id: number;
-    role: CompanyUserRole;
-    is_active: boolean;
-  }): Promise<CompanyUser | null> => {
-    setIsSubmitting(true);
-    setSubmitError(null);
-
-    try {
-      const response = await apiClient.post<CompanyUser>('/company-users', payload);
-      return response.data;
-    } catch (err) {
-      if (axios.isAxiosError(err)) {
-        const detail = err.response?.data?.detail;
-        if (typeof detail === 'string') {
-          setSubmitError(detail);
-        } else if (Array.isArray(detail)) {
-          const msg = detail
-            .map((d: { loc: (string | number)[]; msg: string }) => `${d.loc.join('.')}: ${d.msg}`)
-            .join(', ');
-          setSubmitError(msg);
-        } else {
-          setSubmitError('Failed to add company user. Please check your inputs.');
-        }
-      } else {
-        setSubmitError('Failed to add company user. An unexpected error occurred.');
-      }
-      return null;
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, []);
 
   const inviteCompanyUser = useCallback(async (payload: {
     company_id: number;
@@ -308,13 +279,13 @@ export function useCompanyUsers({ companyId, skip }: UseCompanyUsersOptions) {
 
   return {
     users,
+    invitations,
     total,
     isLoading,
     error,
     statusCode,
     fetchUsers,
     pageSize: USERS_PAGE_SIZE,
-    addCompanyUser,
     inviteCompanyUser,
     updateCompanyUser,
     removeCompanyAccess,

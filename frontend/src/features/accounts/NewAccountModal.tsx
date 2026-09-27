@@ -17,11 +17,17 @@ const SUBTYPES: AccountSubtype[] = [
   'other',
 ];
 
+// The currencies a business here actually holds. Left empty, the account is
+// kept in the company's own currency, which is what a single-currency book
+// wants and why that is the default.
+const CURRENCIES = ['YER', 'USD', 'SAR', 'AED', 'EUR'] as const;
+
 interface FormState {
   code: string;
   name: string;
   accountType: string;
   subtype: AccountSubtype | '';
+  currency: string;
   parentId: string;
   description: string;
 }
@@ -31,6 +37,7 @@ const EMPTY_FORM: FormState = {
   name: '',
   accountType: 'asset',
   subtype: '',
+  currency: '',
   parentId: '',
   description: '',
 };
@@ -55,6 +62,7 @@ export default function NewAccountModal({
   const nameId = useId();
   const typeId = useId();
   const subtypeId = useId();
+  const currencyId = useId();
   const parentId = useId();
   const descriptionId = useId();
 
@@ -107,6 +115,7 @@ export default function NewAccountModal({
         name: form.name.trim(),
         account_type: form.accountType,
         account_subtype: form.subtype || null,
+        currency: form.currency || null,
         parent_id: form.parentId ? Number(form.parentId) : null,
         description: form.description.trim() || null,
       });
@@ -245,6 +254,26 @@ export default function NewAccountModal({
               ))}
             </select>
             <p className="mt-1.5 text-xs text-subtle-foreground">{t.accountsPage.subtypeHelp}</p>
+          </div>
+
+          <div>
+            <label htmlFor={currencyId} className="field-label">
+              {t.accountsPage.currency}
+            </label>
+            <select
+              id={currencyId}
+              value={form.currency}
+              onChange={(e) => setForm({ ...form, currency: e.target.value })}
+              className="select"
+            >
+              <option value="">{t.accountsPage.currencyCompanyDefault}</option>
+              {CURRENCIES.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-xs text-subtle-foreground">{t.accountsPage.currencyHelp}</p>
           </div>
         </div>
 

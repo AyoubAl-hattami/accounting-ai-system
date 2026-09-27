@@ -17,6 +17,7 @@ from app.infrastructure.database.sqlalchemy.repositories.report_repository impor
     SqlAlchemyReportRepository,
 )
 from app.modules.accounting.models.account import Account
+from app.modules.accounting.models.company import Company
 from app.modules.accounting.models.fiscal_year import FiscalYear
 from app.modules.accounting.models.journal_entry import JournalEntry
 from app.modules.accounting.models.journal_line import JournalLine
@@ -57,6 +58,9 @@ def _entry(company_id, number, entry_date, status, fiscal_year_id, lines):
 def test_sqlalchemy_report_repository_calculates_every_report_and_never_commits():
     engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
     for table in (
+        # The repository resolves a report's default currency from the company's
+        # base_currency, so the minimal schema needs the companies table too.
+        Company.__table__,
         FiscalYear.__table__,
         Account.__table__,
         JournalEntry.__table__,
@@ -65,6 +69,11 @@ def test_sqlalchemy_report_repository_calculates_every_report_and_never_commits(
         table.create(engine)
     try:
         with CountingSession(engine) as db:
+            db.add_all([
+                Company(id=1, name="Home", base_currency="USD", is_active=True),
+                Company(id=2, name="Other tenant", base_currency="USD", is_active=True),
+            ])
+            db.flush()
             year = FiscalYear(
                 company_id=1,
                 name="FY 2026",

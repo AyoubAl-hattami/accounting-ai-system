@@ -28,6 +28,8 @@ import ReportHeader from '../components/ReportHeader';
 import ReportSummaryTile from '../components/ReportSummaryTile';
 import ReportExportButtons from '../components/ReportExportButtons';
 import ReportDateField from '../components/ReportDateField';
+import ReportCurrencyField from '../components/ReportCurrencyField';
+import { useReportCurrency } from '../components/useReportCurrency';
 import ReportSearchField from '../components/ReportSearchField';
 import MoneyAmount from '../../../components/ui/MoneyAmount';
 import { useTrialBalance } from './useTrialBalance';
@@ -76,12 +78,15 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
   const [exporting, setExporting] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
 
+  // One report per currency: the picker chooses which, never a sum of both.
+  const reportCurrency = useReportCurrency(selectedCompanyId);
+
   const {
     data,
     isLoading: reportLoading,
     error,
     fetchReport,
-  } = useTrialBalance({ companyId: selectedCompanyId, asOfDate });
+  } = useTrialBalance({ companyId: selectedCompanyId, currency: reportCurrency.currency, asOfDate });
 
   // Fetch on mount and when company/date changes
   useEffect(() => {
@@ -115,6 +120,7 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
       const { downloadFile } = await import('../../../lib/downloadFile');
       await downloadFile('/reports/trial-balance/export.csv', {
         company_id: selectedCompanyId,
+        currency: reportCurrency.currency,
         as_of_date: asOfDate,
       }, 'trial-balance.csv');
     } catch {
@@ -131,6 +137,7 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
       const { downloadFile } = await import('../../../lib/downloadFile');
       await downloadFile('/reports/trial-balance/export.pdf', {
         company_id: selectedCompanyId,
+        currency: reportCurrency.currency,
         as_of_date: asOfDate,
       }, 'trial-balance.pdf');
     } catch {
@@ -219,6 +226,13 @@ function TrialBalanceContent({ selectedCompanyId, companiesLoading }: TrialBalan
         transition={{ duration: 0.3, delay: 0.05 }}
         className="filter-bar"
       >
+        {reportCurrency.hasChoice && (
+          <ReportCurrencyField
+            value={reportCurrency.selected}
+            options={reportCurrency.available}
+            onChange={reportCurrency.setCurrency}
+          />
+        )}
         <ReportDateField
           label={t.common.asOfDate}
           value={asOfDate}

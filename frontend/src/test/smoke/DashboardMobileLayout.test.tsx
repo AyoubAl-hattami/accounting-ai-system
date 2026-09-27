@@ -24,6 +24,7 @@ vi.mock('../../features/dashboard/useDashboardData', () => ({
     },
     isLoading: false,
     error: null,
+    failedSources: [],
     refetch: vi.fn(),
   }),
 }));

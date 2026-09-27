@@ -16,7 +16,7 @@ import MoneyAmount from '../../components/ui/MoneyAmount';
 import ChartCard from '../../components/charts/ChartCard';
 import LoadingState from '../../components/feedback/LoadingState';
 import ErrorState from '../../components/feedback/ErrorState';
-import { useDashboardData } from './useDashboardData';
+import { useDashboardData, type DashboardSource } from './useDashboardData';
 import { useI18n } from '../../i18n';
 import { formatCompactCurrency as formatCurrency } from '../../lib/format';
 import {
@@ -30,6 +30,7 @@ import {
   BookOpen,
   Receipt,
   BarChart3,
+  AlertTriangle,
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -62,8 +63,19 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
     data,
     isLoading: dataLoading,
     error,
+    failedSources,
     refetch,
   } = useDashboardData(selectedCompanyId);
+
+  /* Names the sections a reader recognises, so the banner says "Balance Sheet"
+     rather than a key. Every label already exists in both languages. */
+  const sourceLabels: Record<DashboardSource, string> = {
+    trialBalance: t.nav.trialBalance,
+    profitLoss: t.nav.profitAndLoss,
+    balanceSheet: t.nav.balanceSheet,
+    journalEntries: t.nav.journalEntries,
+    accounts: t.nav.accounts,
+  };
 
   const isLoading = companiesLoading || dataLoading;
 
@@ -92,6 +104,26 @@ function DashboardContent({ selectedCompanyId, selectedCompany, companiesLoading
       {/* Dashboard content */}
       {!isLoading && !error && (
         <div className="space-y-5 sm:space-y-8">
+          {/* Some sources loaded and some did not. Before this, a failed call
+              became a null and the card rendered as zeros with nothing to say
+              it was not the real figure -- /reports/balance-sheet answers 400
+              for a company with no fiscal year covering today, which is an
+              ordinary state for a newly onboarded tenant. The cards that did
+              load still render below. */}
+          {failedSources.length > 0 && (
+            <div className="callout tone-warning" role="status">
+              <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <div className="min-w-0 flex-1 text-sm">
+                <p>{t.common.somethingWentWrong}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {failedSources.map((source) => sourceLabels[source]).join(' · ')}
+                </p>
+              </div>
+              <button type="button" onClick={refetch} className="btn btn-secondary btn-sm">
+                {t.common.tryAgain}
+              </button>
+            </div>
+          )}
           <section>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>

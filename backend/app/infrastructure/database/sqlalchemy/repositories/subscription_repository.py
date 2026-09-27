@@ -20,6 +20,7 @@ from app.modules.accounting.models.company import Company
 from app.modules.accounting.models.company_subscription import CompanySubscription
 from app.modules.accounting.models.company_user import CompanyUser
 from app.modules.accounting.models.user import User
+from app.core.sql_search import LIKE_ESCAPE, escaped_search_pattern
 
 
 class SqlAlchemySubscriptionRepository:
@@ -146,7 +147,9 @@ class SqlAlchemySubscriptionRepository:
     def _apply_search(statement, search: str | None):
         if not search:
             return statement
-        pattern = f"%{search.strip()}%"
+        # Escaped: this is the platform operator's search box, and an
+        # unescaped "%" here returned every company in the database.
+        pattern = escaped_search_pattern(search.strip())
         admin_email_match = exists(
             select(1)
             .select_from(CompanyUser)
@@ -154,10 +157,12 @@ class SqlAlchemySubscriptionRepository:
             .where(
                 CompanyUser.company_id == Company.id,
                 CompanyUser.role == "admin",
-                User.email.ilike(pattern),
+                User.email.ilike(pattern, escape=LIKE_ESCAPE),
             )
         )
-        return statement.where(or_(Company.name.ilike(pattern), admin_email_match))
+        return statement.where(or_(
+            Company.name.ilike(pattern, escape=LIKE_ESCAPE), admin_email_match
+        ))
 
     def list_companies(
         self,

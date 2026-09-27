@@ -41,3 +41,13 @@ htmlcov/
 node_modules/
 dist/
 build/
+# Retrieval-index residue and internal audit notes.
+#
+# .project_index_manifest.json named a live Gemini File Search store and its
+# 550 document ids. It was committed once, removed by hand in [RAG-5], and
+# nothing stopped it coming back -- this does. The audit reports are working
+# notes about this system's own weaknesses; they belong on the machine that
+# wrote them, not in a public repository.
+backend/.project_index_manifest.json
+agent_rag_audit_report*.md
+phase_ai1_walkthrough.md

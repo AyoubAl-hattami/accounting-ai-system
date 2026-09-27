@@ -7,6 +7,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import flush_or_rollback
+from app.core.sql_search import (
+    LIKE_ESCAPE,
+    escaped_search_pattern as _escaped_search_pattern,
+)
 from app.modules.accounting.models.assistant_conversation import (
     AssistantConversation,
     AssistantMessage,
@@ -22,6 +26,13 @@ from app.modules.accounting.schemas.gemini_assistant_schemas import (
     AccountLedgerGrounding,
     GeneralLedgerGrounding,
 )
+from app.modules.accounting.services.assistant_exchange import (
+    MAX_CONTEXT_CONTENT,
+    MAX_CONTEXT_MESSAGES,
+    find_idempotent_exchange as _find_idempotent_exchange,
+    message_type_for_reply as _message_type_for_reply,
+    safe_reply_metadata as _safe_reply_metadata,
+)
 from app.modules.accounting.services.gemini_assistant_service import (
     detect_message_language,
     dispatch_gemini_assistant,
@@ -29,8 +40,6 @@ from app.modules.accounting.services.gemini_assistant_service import (
 )
 
 logger = logging.getLogger(__name__)
-MAX_CONTEXT_MESSAGES = 20
-MAX_CONTEXT_CONTENT = 500
 
 
 def default_conversation_title(language: str) -> str:
@@ -140,11 +149,6 @@ def get_owned_conversation(
     )
 
 
-def _escaped_search_pattern(search: str) -> str:
-    escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return f"%{escaped}%"
-
-
 def list_owned_conversations(
     db: Session,
     *,
@@ -174,8 +178,8 @@ def list_owned_conversations(
         pattern = _escaped_search_pattern(normalized_search)
         filters.append(
             or_(
-                AssistantConversation.title.ilike(pattern, escape="\\"),
-                last_preview.ilike(pattern, escape="\\"),
+                AssistantConversation.title.ilike(pattern, escape=LIKE_ESCAPE),
+                last_preview.ilike(pattern, escape=LIKE_ESCAPE),
             )
         )
 
@@ -280,25 +284,6 @@ def message_to_read(message: AssistantMessage) -> AssistantMessageRead:
     )
 
 
-def _safe_reply_metadata(reply: GeminiAssistantReply) -> dict:
-    return reply.model_dump(
-        mode="json",
-        exclude={"reply", "pending_context_token"},
-    )
-
-
-def _message_type_for_reply(reply: GeminiAssistantReply) -> str:
-    if reply.intent == "error":
-        return "error"
-    if reply.suggested_action:
-        return "journal_preview"
-    if reply.pending_transaction or reply.intent == "clarification":
-        return "clarification"
-    if "report" in reply.intent or reply.evidence:
-        return "report_result"
-    return "text"
-
-
 def _reply_from_message(message: AssistantMessage) -> GeminiAssistantReply:
     metadata = dict(message.message_metadata or {})
     pending = metadata.get("pending_transaction")
@@ -308,29 +293,6 @@ def _reply_from_message(message: AssistantMessage) -> GeminiAssistantReply:
             pending_transaction
         )
     return GeminiAssistantReply(reply=message.content, **metadata)
-
-
-def _find_idempotent_exchange(
-    db: Session,
-    *,
-    conversation_id: int,
-    client_message_id: str,
-) -> tuple[AssistantMessage | None, AssistantMessage | None]:
-    user_message = db.scalar(
-        select(AssistantMessage).where(
-            AssistantMessage.conversation_id == conversation_id,
-            AssistantMessage.client_message_id == client_message_id,
-            AssistantMessage.role == "user",
-        )
-    )
-    if not user_message:
-        return None, None
-    assistant_message = db.scalar(
-        select(AssistantMessage).where(
-            AssistantMessage.in_reply_to_id == user_message.id
-        )
-    )
-    return user_message, assistant_message
 
 
 def _recent_history(

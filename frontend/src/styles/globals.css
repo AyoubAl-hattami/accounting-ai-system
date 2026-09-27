@@ -25,112 +25,129 @@
   color-scheme: light;
 
   /* ── Elevation ─────────────────────────────────────────────────────────── */
-  --background:       #f3f6fc;
-  --surface:          #ffffff;
-  --surface-muted:    #f4f7fd;
-  --surface-raised:   #ffffff;
-  --surface-overlay:  #e8eff9;
-  --surface-sunken:   #eaf0f9;
-  --backdrop:         rgba(9, 15, 32, 0.38);
+  --background:          #f6f2e9;
+  --surface:             #fffdf8;
+  --surface-muted:       #f1ece1;
+  --surface-raised:      #ffffff;
+  --surface-overlay:     #eae4d7;
+  --surface-sunken:      #ede7da;
+  --backdrop:            rgba(26, 23, 19, 0.38);
 
   /* ── Text ──────────────────────────────────────────────────────────────── */
-  --foreground:        #0a1020;
-  --muted-foreground:  #4b5a75;
-  --subtle-foreground: #6a7a94;
-  --inverse:           #ffffff;
+  --foreground:          #1a1713;
+  --muted-foreground:    #5a5246;
+  --subtle-foreground:   #7a7162;
+  --inverse:             #fffdf8;
 
   /* ── Hairlines & focus ─────────────────────────────────────────────────── */
-  --border:        #dfe7f4;
-  --border-subtle: #edf1f9;
-  --border-strong: #c2cfe4;
-  --ring:          #2a5fe8;
-  --ring-soft:     rgba(42, 95, 232, 0.20);
-  --ring-danger:   rgba(225, 29, 72, 0.20);
+  --border:              #e2dccd;
+  --border-subtle:       #efeae0;
+  --border-strong:       #cbc2ae;
+  --ring:                #5c6e10;
+  --ring-soft:           rgba(92, 110, 16, 0.20);
+  --ring-danger:         rgba(185, 28, 28, 0.20);
 
   /* ── Primary (electric blue — brand, navigation, primary actions) ──────── */
-  --primary:            #1f4fd8;
-  --primary-solid:      #2a5fe8;
-  --primary-solid-hover:#1f4fd8;
-  --primary-foreground: #ffffff;
-  --primary-soft:       #eaf0ff;
-  --primary-soft-hover: #dbe5ff;
-  --primary-border:     #c3d4ff;
-  --primary-glow:       rgba(42, 95, 232, 0.28);
-  --danger-glow:        rgba(225, 29, 72, 0.28);
+  --primary:             #2b2620;
+  --primary-solid:       #2b2620;
+  --primary-solid-hover: #1a1713;
+  --primary-foreground:  #fbf8f1;
+  --primary-soft:        #f1ece1;
+  --primary-soft-hover:  #e7e0d2;
+  --primary-border:      #d8d0bf;
+  --primary-glow:        rgba(43, 38, 32, 0.22);
+  --danger-glow:         rgba(185, 28, 28, 0.26);
 
   /* ── Secondary (neutral action surface) ────────────────────────────────── */
-  --secondary:            #eef3fb;
-  --secondary-hover:      #e3eaf6;
-  --secondary-foreground: #2c3b54;
+  --secondary:           #f1ece1;
+  --secondary-hover:     #e7e0d2;
+  --secondary-foreground: #3b342b;
 
   /* ── Status tones ──────────────────────────────────────────────────────── */
-  --success:        #047857;
-  --success-solid:  #059669;
-  --success-soft:   #e7fbf3;
-  --success-border: #a6ecd3;
+  --success:             #15803d;
+  --success-solid:       #16a34a;
+  --success-soft:        #e9f7ee;
+  --success-border:      #b3e0c3;
 
-  --warning:        #a15c07;
-  --warning-solid:  #d97706;
-  --warning-soft:   #fff7e8;
-  --warning-border: #fbd88f;
+  --warning:             #c2410c;
+  --warning-solid:       #ea580c;
+  --warning-soft:        #fdf0e7;
+  --warning-border:      #f6cdb0;
 
-  --danger:            #c01c3f;
-  --danger-solid:      #e11d48;
-  --danger-solid-hover:#be123c;
-  --danger-soft:       #fff0f3;
-  --danger-border:     #fbc9d5;
+  --danger:              #b91c1c;
+  --danger-solid:        #dc2626;
+  --danger-solid-hover:  #b91c1c;
+  --danger-soft:         #fdeeee;
+  --danger-border:       #f3c5c5;
 
-  --info:        #0369a1;
-  --info-solid:  #0284c7;
-  --info-soft:   #e6f6fe;
-  --info-border: #a5e0f7;
+  --info:                #6b6254;
+  --info-solid:          #877d6c;
+  --info-soft:           #f3efe6;
+  --info-border:         #ded6c6;
 
-  --violet:        #6d28d9;
-  --violet-soft:   #f2edff;
-  --violet-border: #d9c9ff;
+  --violet:              #9a5b2c;
+  --violet-soft:         #fbf1e8;
+  --violet-border:       #ebd3bc;
 
-  --rose:        #be123c;
-  --rose-soft:   #fff0f3;
-  --rose-border: #fbc9d5;
+  --rose:                #b91c1c;
+  --rose-soft:           #fdeeee;
+  --rose-border:         #f3c5c5;
 
-  --teal:        #0d7368;
-  --teal-soft:   #e6faf6;
-  --teal-border: #9de8d9;
+  --teal:                #3f7a47;
+  --teal-soft:           #edf6ee;
+  --teal-border:         #c2dfc6;
 
-  --neutral:        #4f5f79;
-  --neutral-soft:   #eef2f8;
-  --neutral-border: #dde5f0;
+  --neutral:             #5a5246;
+  --neutral-soft:        #f1ece1;
+  --neutral-border:      #ded6c6;
 
   /* ── Accounting semantics ──────────────────────────────────────────────── */
   /* Debit and credit are a matched cool pair, deliberately NOT the success /
      danger colours: a credit is not "good" and a debit is not "bad". Only
      positive/negative carry that judgement. */
-  --debit:    #1f4fd8;
-  --credit:   #0d7368;
-  --positive: #047857;
-  --negative: #be123c;
+  --debit:               #1a1713;
+  --credit:              #726858;
+  --positive:            #15803d;
+  --negative:            #b91c1c;
+
+  /* ── The assistant ─────────────────────────────────────────────────────── */
+  /* One accent, reserved. No data token uses fuchsia or this cyan, so anything
+     wearing it is unambiguously the assistant and not a figure. It is spent
+     only on surfaces the model produced or drives -- the panel, its launcher,
+     grounding cards, suggestions. Nothing else in the app glows. */
+  --ai:                  #5c6e10;
+  --ai-2:                #b8a21a;
+  --ai-soft:             #f6f7e4;
+  --ai-border:           rgba(92, 110, 16, 0.26);
+  --ai-glow:             rgba(92, 110, 16, 0.20);
+
+  /* The numerals outrank the chrome. In an accounting screen the figures are
+     the reason the page exists, so they sit a step above body text rather than
+     level with it. */
+  --numeral:             #0f0d0a;
 
   /* ── Report / chart series — a controlled cool ramp, not a rainbow ─────── */
-  --chart-1: #2a5fe8;
-  --chart-2: #7a4dff;
-  --chart-3: #0891b2;
-  --chart-4: #0d9488;
-  --chart-5: #f59e0b;
-  --chart-grid: #e4ebf6;
+  --chart-1:             #2b2620;
+  --chart-2:             #b8a21a;
+  --chart-3:             #c2410c;
+  --chart-4:             #9a5b2c;
+  --chart-5:             #3f7a47;
+  --chart-grid:          #e7e0d2;
 
   /* ── Depth: gradients, glass, sheen ────────────────────────────────────── */
-  --gradient-app:
-    radial-gradient(1200px 620px at 12% -12%, rgba(42, 95, 232, 0.10), transparent 62%),
-    radial-gradient(1000px 540px at 96% -8%, rgba(122, 77, 255, 0.09), transparent 58%);
-  --gradient-primary:   linear-gradient(135deg, #2a5fe8 0%, #6d43f5 100%);
-  --gradient-brand:     linear-gradient(135deg, #2a5fe8 0%, #6d43f5 55%, #06b6d4 100%);
-  --gradient-card:      linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0));
-  --gradient-nav-active:linear-gradient(90deg, rgba(42, 95, 232, 0.14), rgba(109, 67, 245, 0.05));
+  --gradient-app:        
+    radial-gradient(1200px 620px at 12% -12%, rgba(184, 162, 26, 0.10), transparent 62%),
+    radial-gradient(1000px 540px at 96% -8%, rgba(154, 91, 44, 0.07), transparent 58%);
+  --gradient-primary:    linear-gradient(135deg, #2b2620 0%, #4a4136 100%);
+  --gradient-brand:      linear-gradient(135deg, #2b2620 0%, #9a5b2c 55%, #b8a21a 100%);
+  --gradient-card:       linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0));
+  --gradient-nav-active: linear-gradient(90deg, rgba(43, 38, 32, 0.10), rgba(43, 38, 32, 0.02));
+  --gradient-ai:         linear-gradient(135deg, var(--ai) 0%, var(--ai-2) 100%);
 
-  --glass:        rgba(255, 255, 255, 0.74);
-  --glass-border: rgba(255, 255, 255, 0.65);
-  --shimmer:      rgba(255, 255, 255, 0.85);
-  --row-hover:    rgba(42, 95, 232, 0.045);
+  --glass:               rgba(255, 253, 248, 0.76);
+  --glass-border:        rgba(255, 255, 255, 0.68);
+  --shimmer:             rgba(255, 255, 255, 0.85);
+  --row-hover:           rgba(43, 38, 32, 0.035);
 
   /* ── Shape ─────────────────────────────────────────────────────────────── */
   --radius-sm: 0.5rem;
@@ -139,14 +156,14 @@
   --radius-xl: 1rem;
 
   /* ── Shadow scale ──────────────────────────────────────────────────────── */
-  --shadow-xs: 0 1px 2px rgba(10, 16, 32, 0.05);
-  --shadow-sm: 0 1px 3px rgba(10, 16, 32, 0.07), 0 1px 2px rgba(10, 16, 32, 0.04);
-  --shadow-md: 0 4px 14px -4px rgba(10, 16, 32, 0.10), 0 2px 6px -3px rgba(10, 16, 32, 0.05);
-  --shadow-lg: 0 14px 34px -10px rgba(10, 16, 32, 0.14), 0 4px 12px -6px rgba(10, 16, 32, 0.07);
-  --shadow-xl: 0 28px 64px -16px rgba(10, 16, 32, 0.22);
+  --shadow-xs: 0 1px 2px rgba(26, 23, 19, 0.05);
+  --shadow-sm: 0 1px 3px rgba(26, 23, 19, 0.07), 0 1px 2px rgba(26, 23, 19, 0.04);
+  --shadow-md: 0 4px 14px -4px rgba(26, 23, 19, 0.10), 0 2px 6px -3px rgba(26, 23, 19, 0.05);
+  --shadow-lg: 0 14px 34px -10px rgba(26, 23, 19, 0.14), 0 4px 12px -6px rgba(26, 23, 19, 0.07);
+  --shadow-xl: 0 28px 64px -16px rgba(26, 23, 19, 0.22);
 
-  --shadow-card:     0 1px 2px rgba(10, 16, 32, 0.04), 0 10px 26px -14px rgba(10, 16, 32, 0.16);
-  --shadow-floating: 0 24px 54px -18px rgba(10, 16, 32, 0.24), 0 6px 16px -8px rgba(10, 16, 32, 0.10);
+  --shadow-card:     0 1px 2px rgba(26, 23, 19, 0.04), 0 10px 26px -14px rgba(26, 23, 19, 0.16);
+  --shadow-floating: 0 24px 54px -18px rgba(26, 23, 19, 0.24), 0 6px 16px -8px rgba(26, 23, 19, 0.10);
   --shadow-glow:     0 0 0 1px var(--primary-border), 0 12px 32px -12px var(--primary-glow);
 
   /* ── Motion scale ──────────────────────────────────────────────────────── */
@@ -189,93 +206,93 @@ html.dark {
   color-scheme: dark;
 
   /* ── Elevation ─────────────────────────────────────────────────────────── */
-  --background:       #0b1020;
-  --surface:          #111a2c;
-  --surface-muted:    #151e33;
-  --surface-raised:   #1a2440;
-  --surface-overlay:  #1f2b4a;
-  --surface-sunken:   #080d1a;
-  --backdrop:         rgba(3, 6, 15, 0.70);
+  --background:          #12110f;
+  --surface:             #1a1815;
+  --surface-muted:       #201d19;
+  --surface-raised:      #26221d;
+  --surface-overlay:     #2e2924;
+  --surface-sunken:      #0c0b09;
+  --backdrop:            rgba(8, 7, 6, 0.72);
 
   /* ── Text ──────────────────────────────────────────────────────────────── */
   /* Soft white, not #fff: pure white on a dark ground haloes and reads harsh.
      Muted and subtle are both a step brighter than before — the old subtle
      (#7286a3) sat at 4.5:1, exactly on the AA line and visibly faint in table
      headers and hint text. */
-  --foreground:        #e6edf7;
-  --muted-foreground:  #9aabc8;
-  --subtle-foreground: #7f92b2;
-  --inverse:           #0b1020;
+  --foreground:          #f0eae0;
+  --muted-foreground:    #b8ad9b;
+  --subtle-foreground:   #968b7a;
+  --inverse:             #12110f;
 
   /* ── Hairlines & focus ─────────────────────────────────────────────────── */
   /* Translucent rather than fixed hex, so a hairline strengthens naturally as
      the surface beneath it rises. A card border reads slightly brighter than
      the same token on the page, which is what edges do in real light. */
-  --border:        rgba(148, 163, 184, 0.16);
-  --border-subtle: rgba(148, 163, 184, 0.08);
-  --border-strong: rgba(148, 163, 184, 0.30);
-  --ring:          #60a5fa;
-  --ring-soft:     rgba(96, 165, 250, 0.28);
-  --ring-danger:   rgba(251, 113, 133, 0.28);
+  --border:              rgba(240, 234, 224, 0.14);
+  --border-subtle:       rgba(240, 234, 224, 0.07);
+  --border-strong:       rgba(240, 234, 224, 0.26);
+  --ring:                #ddf56a;
+  --ring-soft:           rgba(221, 245, 106, 0.26);
+  --ring-danger:         rgba(248, 113, 113, 0.28);
 
   /* ── Primary (refined blue — brand, navigation, primary actions) ───────── */
   /* `--primary` is the accent *text* colour and `--primary-solid` the button
      fill, so they are tuned against different backgrounds: the first for
      legibility on a card, the second to carry white text at AA. */
-  --primary:            #60a5fa;
-  --primary-solid:      #2f5fe0;
-  --primary-solid-hover:#3d70f0;
-  --primary-foreground: #ffffff;
-  --primary-soft:       rgba(96, 165, 250, 0.13);
-  --primary-soft-hover: rgba(96, 165, 250, 0.20);
-  --primary-border:     rgba(96, 165, 250, 0.30);
-  --primary-glow:       rgba(47, 95, 224, 0.40);
-  --danger-glow:        rgba(251, 113, 133, 0.38);
+  --primary:             #e8dfd0;
+  --primary-solid:       #e8dfd0;
+  --primary-solid-hover: #f3ece0;
+  --primary-foreground:  #17150f;
+  --primary-soft:        rgba(232, 223, 208, 0.10);
+  --primary-soft-hover:  rgba(232, 223, 208, 0.16);
+  --primary-border:      rgba(232, 223, 208, 0.24);
+  --primary-glow:        rgba(232, 223, 208, 0.22);
+  --danger-glow:         rgba(248, 113, 113, 0.38);
 
   /* ── Secondary (neutral action surface) ────────────────────────────────── */
-  --secondary:            #18223a;
-  --secondary-hover:      #202c49;
-  --secondary-foreground: #d3dff2;
+  --secondary:           #26221d;
+  --secondary-hover:     #2e2924;
+  --secondary-foreground: #e0d7c8;
 
   /* ── Status tones ──────────────────────────────────────────────────────── */
-  --success:        #34d399;
-  --success-solid:  #10b981;
-  --success-soft:   rgba(52, 211, 153, 0.13);
-  --success-border: rgba(52, 211, 153, 0.28);
+  --success:             #3fc978;
+  --success-solid:       #2fae64;
+  --success-soft:        rgba(63, 201, 120, 0.13);
+  --success-border:      rgba(63, 201, 120, 0.28);
 
-  --warning:        #fbbf24;
-  --warning-solid:  #f59e0b;
-  --warning-soft:   rgba(251, 191, 36, 0.13);
-  --warning-border: rgba(251, 191, 36, 0.28);
+  --warning:             #f0913c;
+  --warning-solid:       #db7a24;
+  --warning-soft:        rgba(240, 145, 60, 0.13);
+  --warning-border:      rgba(240, 145, 60, 0.28);
 
-  --danger:            #fb7185;
-  --danger-solid:      #e11d48;
-  --danger-solid-hover:#f43f5e;
-  --danger-soft:       rgba(251, 113, 133, 0.13);
-  --danger-border:     rgba(251, 113, 133, 0.28);
+  --danger:              #f87171;
+  --danger-solid:        #dc4c4c;
+  --danger-solid-hover:  #e85f5f;
+  --danger-soft:         rgba(248, 113, 113, 0.13);
+  --danger-border:       rgba(248, 113, 113, 0.28);
 
-  --info:        #38bdf8;
-  --info-solid:  #0ea5e9;
-  --info-soft:   rgba(56, 189, 248, 0.13);
-  --info-border: rgba(56, 189, 248, 0.28);
+  --info:                #cdc2b2;
+  --info-solid:          #a99b87;
+  --info-soft:           rgba(205, 194, 178, 0.11);
+  --info-border:         rgba(205, 194, 178, 0.24);
 
   /* Indigo, not lavender. The old #b9a5ff was the second-loudest colour on
      screen and made the theme read purple. */
-  --violet:        #a5b4fc;
-  --violet-soft:   rgba(165, 180, 252, 0.13);
-  --violet-border: rgba(165, 180, 252, 0.28);
+  --violet:              #c08552;
+  --violet-soft:         rgba(192, 133, 82, 0.13);
+  --violet-border:       rgba(192, 133, 82, 0.28);
 
-  --rose:        #fb7185;
-  --rose-soft:   rgba(251, 113, 133, 0.13);
-  --rose-border: rgba(251, 113, 133, 0.28);
+  --rose:                #f87171;
+  --rose-soft:           rgba(248, 113, 113, 0.13);
+  --rose-border:         rgba(248, 113, 113, 0.28);
 
-  --teal:        #2dd4bf;
-  --teal-soft:   rgba(45, 212, 191, 0.13);
-  --teal-border: rgba(45, 212, 191, 0.28);
+  --teal:                #86b37c;
+  --teal-soft:           rgba(134, 179, 124, 0.13);
+  --teal-border:         rgba(134, 179, 124, 0.28);
 
-  --neutral:        #94a3b8;
-  --neutral-soft:   rgba(148, 163, 184, 0.12);
-  --neutral-border: rgba(148, 163, 184, 0.24);
+  --neutral:             #b8ad9b;
+  --neutral-soft:        rgba(184, 173, 155, 0.12);
+  --neutral-border:      rgba(184, 173, 155, 0.24);
 
   /* ── Accounting semantics ──────────────────────────────────────────────── */
   /* Positive matches success and negative matches rose, exactly as they do in
@@ -286,47 +303,60 @@ html.dark {
      they are sky and indigo: a teal credit would land within a few degrees of
      the positive emerald, and a trial balance shows a credit column and a
      signed balance side by side, where that ambiguity is expensive. */
-  --debit:    #7dd3fc;
-  --credit:   #c4b5fd;
-  --positive: #34d399;
-  --negative: #fb7185;
+  --debit:               #f0eae0;
+  --credit:              #a99b87;
+  --positive:            #3fc978;
+  --negative:            #f87171;
+
+  /* ── The assistant ─────────────────────────────────────────────────────── */
+  /* Brighter and hotter than anything in the data ramp, and far enough from the
+     indigo credit token that a grounding card cannot be mistaken for a figure.
+     The glow is heavier here because on a dark ground light, not hue, is what
+     reads as presence. */
+  --ai:                  #ddf56a;
+  --ai-2:                #f5c542;
+  --ai-soft:             rgba(221, 245, 106, 0.10);
+  --ai-border:           rgba(221, 245, 106, 0.28);
+  --ai-glow:             rgba(221, 245, 106, 0.30);
+
+  --numeral:             #fffbf3;
 
   /* ── Report / chart series — calm cool ramp, one warm accent ───────────── */
-  --chart-1: #60a5fa;
-  --chart-2: #a5b4fc;
-  --chart-3: #38bdf8;
-  --chart-4: #2dd4bf;
-  --chart-5: #fbbf24;
-  --chart-grid: #1c2740;
+  --chart-1:             #e8dfd0;
+  --chart-2:             #f5c542;
+  --chart-3:             #f0913c;
+  --chart-4:             #c08552;
+  --chart-5:             #86b37c;
+  --chart-grid:          #2a251f;
 
   /* ── Depth: gradients, glass, sheen ────────────────────────────────────── */
-  --gradient-app:
-    radial-gradient(1100px 580px at 10% -14%, rgba(47, 95, 224, 0.16), transparent 62%),
-    radial-gradient(900px 520px at 94% -6%, rgba(99, 102, 241, 0.10), transparent 58%),
-    radial-gradient(800px 460px at 60% 110%, rgba(45, 212, 191, 0.05), transparent 60%);
-  --gradient-primary:   linear-gradient(135deg, #2f5fe0 0%, #4338ca 100%);
-  --gradient-brand:     linear-gradient(135deg, #60a5fa 0%, #a5b4fc 55%, #38bdf8 100%);
-  --gradient-card:      linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0));
-  --gradient-nav-active:linear-gradient(90deg, rgba(96, 165, 250, 0.18), rgba(96, 165, 250, 0.04));
+  --gradient-app:        
+    radial-gradient(1200px 620px at 12% -12%, rgba(221, 245, 106, 0.05), transparent 62%),
+    radial-gradient(1000px 540px at 96% -8%, rgba(245, 197, 66, 0.045), transparent 58%);
+  --gradient-primary:    linear-gradient(135deg, #e8dfd0 0%, #cfc3ae 100%);
+  --gradient-brand:      linear-gradient(135deg, #f0eae0 0%, #f5c542 55%, #ddf56a 100%);
+  --gradient-card:       linear-gradient(180deg, rgba(255, 251, 243, 0.045), rgba(255, 251, 243, 0));
+  --gradient-nav-active: linear-gradient(90deg, rgba(232, 223, 208, 0.14), rgba(232, 223, 208, 0.03));
+  --gradient-ai:         linear-gradient(135deg, var(--ai) 0%, var(--ai-2) 100%);
 
   /* The sidebar and topbar both use `.glass`. Sitting it *below* the page
      colour is what gives the shell its frame: chrome recedes, content comes
      forward. Raised opacity keeps text on it crisp through the blur. */
-  --glass:        rgba(8, 12, 24, 0.80);
-  --glass-border: rgba(148, 163, 184, 0.14);
-  --shimmer:      rgba(255, 255, 255, 0.06);
-  --row-hover:    rgba(96, 165, 250, 0.06);
+  --glass:               rgba(26, 24, 21, 0.72);
+  --glass-border:        rgba(240, 234, 224, 0.10);
+  --shimmer:             rgba(240, 234, 224, 0.07);
+  --row-hover:           rgba(232, 223, 208, 0.045);
 
   /* Navy-tinted rather than pure black. A black shadow over a navy surface
      desaturates the edge it falls on and is what made cards look smudged. */
-  --shadow-xs: 0 1px 2px rgba(2, 5, 14, 0.36);
-  --shadow-sm: 0 1px 3px rgba(2, 5, 14, 0.46), 0 1px 2px rgba(2, 5, 14, 0.28);
-  --shadow-md: 0 4px 14px -4px rgba(2, 5, 14, 0.52), 0 2px 6px -3px rgba(2, 5, 14, 0.34);
-  --shadow-lg: 0 14px 34px -10px rgba(2, 5, 14, 0.62), 0 4px 12px -6px rgba(2, 5, 14, 0.40);
-  --shadow-xl: 0 28px 64px -16px rgba(2, 5, 14, 0.76);
+  --shadow-xs: 0 1px 2px rgba(6, 5, 4, 0.36);
+  --shadow-sm: 0 1px 3px rgba(6, 5, 4, 0.46), 0 1px 2px rgba(6, 5, 4, 0.28);
+  --shadow-md: 0 4px 14px -4px rgba(6, 5, 4, 0.52), 0 2px 6px -3px rgba(6, 5, 4, 0.34);
+  --shadow-lg: 0 14px 34px -10px rgba(6, 5, 4, 0.62), 0 4px 12px -6px rgba(6, 5, 4, 0.40);
+  --shadow-xl: 0 28px 64px -16px rgba(6, 5, 4, 0.76);
 
-  --shadow-card:     0 1px 2px rgba(2, 5, 14, 0.42), 0 12px 30px -16px rgba(2, 5, 14, 0.70);
-  --shadow-floating: 0 26px 62px -20px rgba(2, 5, 14, 0.84), 0 6px 18px -8px rgba(2, 5, 14, 0.52);
+  --shadow-card:     0 1px 2px rgba(6, 5, 4, 0.42), 0 12px 30px -16px rgba(6, 5, 4, 0.70);
+  --shadow-floating: 0 26px 62px -20px rgba(6, 5, 4, 0.84), 0 6px 18px -8px rgba(6, 5, 4, 0.52);
   --shadow-glow:     0 0 0 1px var(--primary-border), 0 14px 38px -12px var(--primary-glow);
 }
 
@@ -465,6 +495,52 @@ html.dark {
    ════════════════════════════════════════════════════════════════════════════ */
 
 @layer components {
+  /* ── The assistant's surfaces ──────────────────────────────────────────────
+     Everything below is the only glow in the app. Applying `.ai-surface` to a
+     card is what marks it as the model's output rather than the ledger's. */
+
+  .ai-surface {
+    position: relative;
+    border: 1px solid var(--ai-border);
+    background:
+      linear-gradient(180deg, var(--ai-soft), transparent 70%),
+      var(--surface-raised);
+    box-shadow: 0 0 0 1px var(--ai-border), 0 18px 40px -22px var(--ai-glow);
+  }
+
+  /* A hairline of the accent along the top edge, the way a lit panel catches
+     light on its leading edge. */
+  .ai-surface::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 1px;
+    background: var(--gradient-ai);
+    opacity: 0.9;
+  }
+
+  .ai-accent {
+    background: var(--gradient-ai);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .ai-glow {
+    box-shadow: 0 10px 30px -10px var(--ai-glow), 0 0 0 1px var(--ai-border);
+  }
+
+  /* ── Figures ───────────────────────────────────────────────────────────────
+     Tabular so columns of money line up on the decimal, and a step brighter
+     than body text so the numbers lead the page. */
+  .numeral {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+    color: var(--numeral);
+    letter-spacing: -0.01em;
+  }
+
   /* ── Surfaces ────────────────────────────────────────────────────────── */
 
   /* A card is a solid surface plus a top-edge sheen. The sheen is what stops
@@ -599,9 +675,9 @@ html.dark {
 
   .btn-primary {
     @apply btn bg-primary-solid bg-gradient-primary text-primary-foreground
-           shadow-[0_1px_2px_rgba(10,16,32,0.12),0_6px_16px_-8px_var(--primary-glow)]
+           shadow-[0_1px_2px_rgba(26,23,19,0.12),0_6px_16px_-8px_var(--primary-glow)]
            hover:brightness-110
-           hover:shadow-[0_1px_2px_rgba(10,16,32,0.14),0_10px_24px_-8px_var(--primary-glow)];
+           hover:shadow-[0_1px_2px_rgba(26,23,19,0.14),0_10px_24px_-8px_var(--primary-glow)];
   }
 
   .btn-secondary {

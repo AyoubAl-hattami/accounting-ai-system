@@ -12,6 +12,8 @@ export interface CreateAccountInput {
   name: string;
   account_type: string;
   account_subtype: AccountSubtype | null;
+  /** Omit, or send null, for the company's own currency. */
+  currency?: string | null;
   parent_id: number | null;
   description: string | null;
 }

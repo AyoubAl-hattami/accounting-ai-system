@@ -35,6 +35,7 @@ from app.modules.accounting.schemas.fiscal import (
     FiscalYearUpdate,
 )
 from app.modules.accounting.services.accounting_lookup_facade import (
+    count_journal_entries_for_fiscal_period,
     count_journal_entries_for_fiscal_year,
     get_company_or_none,
     get_fiscal_period_by_name,
@@ -527,6 +528,33 @@ def update_fiscal_period_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Fiscal year not found",
         )
+
+    # The same protection the fiscal-year endpoint above already applies. A
+    # period's dates are not free to move once entries sit inside it: an entry
+    # records fiscal_period_id at creation and never revisits it, so narrowing
+    # the range leaves a posted entry attached to a period that no longer covers
+    # its date. find_fiscal_period_for_date then answers something else for that
+    # same date -- None while the range is uncovered, and a different period once
+    # another one is created over the gap.
+    date_change_requested = (
+        payload.start_date is not None
+        or payload.end_date is not None
+    )
+
+    if date_change_requested:
+        journal_entry_count = count_journal_entries_for_fiscal_period(
+            db=db,
+            fiscal_period_id=fiscal_period.id,
+        )
+
+        if journal_entry_count > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Fiscal period dates cannot be changed because journal "
+                    "entries already exist for this fiscal period"
+                ),
+            )
 
     new_start_date = payload.start_date or fiscal_period.start_date
     new_end_date = payload.end_date or fiscal_period.end_date

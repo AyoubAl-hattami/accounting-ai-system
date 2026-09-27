@@ -14,6 +14,7 @@ const PARENT: Account = {
   name: 'Assets',
   account_type: 'asset',
   account_subtype: null,
+  currency: 'USD',
   parent_id: null,
   description: null,
   is_active: true,
@@ -66,6 +67,8 @@ describe('new account modal', () => {
       name: 'محفظة جوالي',
       account_type: 'asset',
       account_subtype: 'e_wallet',
+      // Untouched, so the company's own currency: null, never a guessed code.
+      currency: null,
       parent_id: null,
       description: null,
     });

@@ -34,6 +34,8 @@ import { reportToneText, type ReportTone } from '../components/reportTone';
 import ReportSectionTable from '../components/ReportSectionTable';
 import ReportExportButtons from '../components/ReportExportButtons';
 import ReportDateField from '../components/ReportDateField';
+import ReportCurrencyField from '../components/ReportCurrencyField';
+import { useReportCurrency } from '../components/useReportCurrency';
 import ReportSearchField from '../components/ReportSearchField';
 import MoneyAmount from '../../../components/ui/MoneyAmount';
 import { useBalanceSheet } from './useBalanceSheet';
@@ -75,12 +77,15 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
   const [exporting, setExporting] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
 
+  // One report per currency: the picker chooses which, never a sum of both.
+  const reportCurrency = useReportCurrency(selectedCompanyId);
+
   const {
     data,
     isLoading: reportLoading,
     error,
     fetchReport,
-  } = useBalanceSheet({ companyId: selectedCompanyId, asOfDate });
+  } = useBalanceSheet({ companyId: selectedCompanyId, currency: reportCurrency.currency, asOfDate });
 
   useEffect(() => {
     fetchReport();
@@ -130,6 +135,7 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
       const { downloadFile } = await import('../../../lib/downloadFile');
       await downloadFile('/reports/balance-sheet/export.csv', {
         company_id: selectedCompanyId,
+        currency: reportCurrency.currency,
         as_of_date: asOfDate,
       }, 'balance-sheet.csv');
     } catch {
@@ -146,6 +152,7 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
       const { downloadFile } = await import('../../../lib/downloadFile');
       await downloadFile('/reports/balance-sheet/export.pdf', {
         company_id: selectedCompanyId,
+        currency: reportCurrency.currency,
         as_of_date: asOfDate,
       }, 'balance-sheet.pdf');
     } catch {
@@ -282,6 +289,13 @@ function BalanceSheetContent({ selectedCompanyId, companiesLoading }: BalanceShe
         transition={{ duration: 0.3, delay: 0.1 }}
         className="filter-bar"
       >
+        {reportCurrency.hasChoice && (
+          <ReportCurrencyField
+            value={reportCurrency.selected}
+            options={reportCurrency.available}
+            onChange={reportCurrency.setCurrency}
+          />
+        )}
         <ReportDateField label={t.common.asOfDate} value={asOfDate} onChange={setAsOfDate} />
         <ReportSearchField
           label={t.common.search}

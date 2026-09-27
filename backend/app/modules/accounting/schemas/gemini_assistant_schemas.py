@@ -277,8 +277,13 @@ class GeminiAssistantReply(BaseModel):
 
 class ConfirmJournalLinePayload(BaseModel):
     account_id: int = Field(..., ge=1)
-    debit: Decimal = Field(default=Decimal("0.00"), ge=0)
-    credit: Decimal = Field(default=Decimal("0.00"), ge=0)
+    # NUMERIC(18,2) in the database. Pydantic derives a whole-digit bound of
+    # max_digits - decimal_places = 16 from these two, which is exactly
+    # PostgreSQL's "must round to an absolute value less than 10^16". Without
+    # them an oversized amount reached the driver and surfaced as a 500, and an
+    # over-scale one was silently rounded to the nearest cent and stored.
+    debit: Decimal = Field(default=Decimal("0.00"), ge=0, max_digits=18, decimal_places=2)
+    credit: Decimal = Field(default=Decimal("0.00"), ge=0, max_digits=18, decimal_places=2)
     description: str | None = None
 
 

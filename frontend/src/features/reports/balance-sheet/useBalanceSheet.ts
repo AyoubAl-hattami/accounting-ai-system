@@ -6,10 +6,12 @@ import { dataEvents } from '../../../lib/dataEvents';
 
 interface UseBalanceSheetOptions {
   companyId: number | null;
+  /** Null means the company's own currency. */
+  currency?: string | null;
   asOfDate: string | null;
 }
 
-export function useBalanceSheet({ companyId, asOfDate }: UseBalanceSheetOptions) {
+export function useBalanceSheet({ companyId, currency, asOfDate }: UseBalanceSheetOptions) {
   const [data, setData] = useState<BalanceSheetRead | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +24,7 @@ export function useBalanceSheet({ companyId, asOfDate }: UseBalanceSheetOptions)
 
     try {
       let url = `/reports/balance-sheet?company_id=${companyId}`;
+      if (currency) url += `&currency=${encodeURIComponent(currency)}`;
       if (asOfDate) url += `&as_of_date=${asOfDate}`;
       const response = await apiClient.get<BalanceSheetRead>(url);
       setData(response.data);
@@ -36,7 +39,7 @@ export function useBalanceSheet({ companyId, asOfDate }: UseBalanceSheetOptions)
     } finally {
       setIsLoading(false);
     }
-  }, [companyId, asOfDate]);
+  }, [companyId, currency, asOfDate]);
 
   // Auto-refetch when posted journal data changes (post/review/void/reverse)
   useEffect(() => {

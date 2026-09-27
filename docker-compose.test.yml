@@ -1,0 +1,94 @@
+# Disposable stack for running the backend test suite locally.
+#
+# The suite is black-box: tests/conftest.py talks HTTP to
+# ACCOUNTING_TEST_BASE_URL and opens its own SessionLocal against DATABASE_URL,
+# so a runnable suite needs both a PostgreSQL and a live API.  That requirement
+# used to be documented only inside .github/workflows/backend-validation.yml.
+#
+#     docker compose -f docker-compose.test.yml up -d --wait
+#
+# Then, from backend/:
+#
+#     APP_ENV=test \
+#     SECRET_KEY=local-test-secret-key-not-for-production-abcdef \
+#     DATABASE_URL=postgresql+psycopg2://postgres:postgres@127.0.0.1:55432/accounting_ai \
+#     ACCOUNTING_TEST_BASE_URL=http://127.0.0.1:8010 \
+#     python -m pytest
+#
+# Teardown, discarding the database entirely:
+#
+#     docker compose -f docker-compose.test.yml down -v
+#
+# Host ports are deliberately non-default.  5432 and 8000 are the two most
+# likely things to already be running on a developer machine -- this repository
+# is normally developed against a local PostgreSQL on 5432 -- so the database is
+# published on 55432 and the API on 8010.  8010 is not arbitrary: it is the
+# default in conftest.py's ACCOUNTING_TEST_BASE_URL and the value CI uses.
+#
+# Credentials and database name mirror the CI job on purpose.  The suite is
+# known to pass there, so keeping postgres/postgres/accounting_ai identical
+# removes one variable when a test passes in CI and fails locally.
+#
+# NOT a production artifact.  docker-compose.production.example.yml is the
+# reference runtime; this file has a weak password, a published database port,
+# and no TLS, and exists only to be thrown away.
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: accounting_ai
+    ports:
+      # Host 55432 -> container 5432.  conftest's accounting_factory opens a
+      # SessionLocal from the host, not from inside the network, so this has to
+      # be published rather than merely exposed.
+      - "55432:5432"
+    tmpfs:
+      # Test data has no reason to outlive the container, and this keeps
+      # `down -v` from being the only way to get a clean slate.
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d accounting_ai"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  api:
+    build:
+      context: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: test
+      # APP_ENV=test also disables the registration rate limiter
+      # (auth_routes.py:66), which the suite depends on: it registers many
+      # accounts in one window.  The login limiter stays active and is tested.
+      SECRET_KEY: local-test-secret-key-not-for-production-abcdef
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/accounting_ai
+      AI_JOURNAL_PROVIDER: rules
+      OPENAI_API_KEY: ""
+      GEMINI_API_KEY: ""
+    ports:
+      - "8010:8000"
+    # Migrations run once here rather than in every worker.  alembic reads
+    # DATABASE_URL through app.core.config, so it targets the db service above
+    # and nothing else.
+    command: >-
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    healthcheck:
+      # /health/db, not /health: the latter answers ok without touching the
+      # database, so `--wait` would release before migrations finished.
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/db', timeout=3)
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 10s

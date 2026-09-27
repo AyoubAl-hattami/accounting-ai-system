@@ -28,12 +28,12 @@ export function canPostJournal(role: CompanyUserRole | null): boolean {
   return hasRole(role, ['admin', 'approver']);
 }
 
-/** Void entry: admin, accountant, approver */
+/** Void entry: admin, accountant */
 export function canVoidJournal(role: CompanyUserRole | null): boolean {
   return hasRole(role, ['admin', 'accountant']);
 }
 
-/** Reverse posted entry: admin, accountant */
+/** Reverse posted entry: admin, accountant, approver */
 export function canReverseJournal(role: CompanyUserRole | null): boolean {
   return hasRole(role, ['admin', 'accountant', 'approver']);
 }

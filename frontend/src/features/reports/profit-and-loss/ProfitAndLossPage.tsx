@@ -30,6 +30,8 @@ import ReportSummaryTile from '../components/ReportSummaryTile';
 import ReportSectionTable from '../components/ReportSectionTable';
 import ReportExportButtons from '../components/ReportExportButtons';
 import ReportDateField from '../components/ReportDateField';
+import ReportCurrencyField from '../components/ReportCurrencyField';
+import { useReportCurrency } from '../components/useReportCurrency';
 import ReportSearchField from '../components/ReportSearchField';
 import MoneyAmount from '../../../components/ui/MoneyAmount';
 import { useProfitAndLoss } from './useProfitAndLoss';
@@ -73,12 +75,15 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
   const [exporting, setExporting] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
 
+  // One report per currency: the picker chooses which, never a sum of both.
+  const reportCurrency = useReportCurrency(selectedCompanyId);
+
   const {
     data,
     isLoading: reportLoading,
     error,
     fetchReport,
-  } = useProfitAndLoss({ companyId: selectedCompanyId, startDate, endDate });
+  } = useProfitAndLoss({ companyId: selectedCompanyId, currency: reportCurrency.currency, startDate, endDate });
 
   useEffect(() => {
     fetchReport();
@@ -125,6 +130,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
       const { downloadFile } = await import('../../../lib/downloadFile');
       await downloadFile('/reports/profit-loss/export.csv', {
         company_id: selectedCompanyId,
+        currency: reportCurrency.currency,
         start_date: startDate,
         end_date: endDate,
       }, 'profit-and-loss.csv');
@@ -142,6 +148,7 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
       const { downloadFile } = await import('../../../lib/downloadFile');
       await downloadFile('/reports/profit-loss/export.pdf', {
         company_id: selectedCompanyId,
+        currency: reportCurrency.currency,
         start_date: startDate,
         end_date: endDate,
       }, 'profit-and-loss.pdf');
@@ -220,6 +227,13 @@ function ProfitAndLossContent({ selectedCompanyId, companiesLoading }: ProfitAnd
         transition={{ duration: 0.3, delay: 0.05 }}
         className="filter-bar"
       >
+        {reportCurrency.hasChoice && (
+          <ReportCurrencyField
+            value={reportCurrency.selected}
+            options={reportCurrency.available}
+            onChange={reportCurrency.setCurrency}
+          />
+        )}
         <ReportDateField
           label={t.common.startDate}
           value={startDate}

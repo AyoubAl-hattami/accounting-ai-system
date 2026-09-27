@@ -32,6 +32,8 @@ FIXED_SEED_ASSIGNMENTS = {
 EXPECTED_HTTP_INTEGRATION_FILES = frozenset(
     {
         "api/test_company_user_invitations.py",
+        "test_account_currency.py",
+        "test_report_currency.py",
         "test_ai_status.py",
         "test_ai_suggestions.py",
         "test_assistant_conversation_memory.py",
@@ -86,6 +88,8 @@ EXPECTED_SELF_CONTAINED_HTTP_FILES = frozenset(
 
 EXPECTED_FACTORY_BACKED_HTTP_FILES = frozenset(
     {
+        "test_account_currency.py",
+        "test_report_currency.py",
         "api/test_company_user_invitations.py",
         "test_ai_status.py",
         "test_ai_suggestions.py",
@@ -129,6 +133,11 @@ EXPECTED_DIRECT_SESSION_FILES = frozenset(
         "test_assistant_conversation_memory.py",
         "test_assistant_conversations.py",
         "test_invitation_lifecycle_integrity.py",
+        # The ledger output contract. It opens its own session because it has to
+        # run against PostgreSQL: the opening-balance scale it pins comes from
+        # coalesce(sum(...), 0) returning an integer, which SQLite does not
+        # reproduce.
+        "test_ledger_output_contract.py",
         "test_protected_accounts.py",
         "test_protected_company_users.py",
         "test_protected_journal_entries.py",

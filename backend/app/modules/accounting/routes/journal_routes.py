@@ -64,6 +64,8 @@ def validate_journal_accounts(
     company_id: int,
     payload: JournalEntryCreate | OpeningBalanceCreate,
 ):
+    currencies: dict[str, int] = {}
+
     for line in payload.lines:
         account = get_account(db=db, account_id=line.account_id)
 
@@ -84,6 +86,52 @@ def validate_journal_accounts(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Account {line.account_id} is inactive",
             )
+
+        currencies.setdefault(account.currency, account.id)
+
+    # One entry, one currency.
+    #
+    # An entry is valid when its debits equal its credits, and that comparison
+    # is only meaningful inside a single unit: 500 riyals on one side and 500
+    # dollars on the other balances arithmetically and means nothing. Allowing
+    # it would put a number in the trial balance that is the sum of two
+    # different things, which no later report could untangle.
+    #
+    # Moving value between currencies is a real operation with a rate and a
+    # gain or loss, and this system does not model it yet. Until it does,
+    # refusing is the honest answer -- a wrong number would be worse than a
+    # blocked entry.
+    if len(currencies) > 1:
+        named = ", ".join(sorted(currencies))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"A journal entry cannot mix currencies. This one touches "
+                f"{named}. Debits and credits only balance within one currency; "
+                f"record a transfer between currencies as two entries, one in "
+                f"each."
+            ),
+        )
+
+
+# The unique index behind the duplicate-entry_no check below.
+UNIQUE_ENTRY_NO_CONSTRAINT = "uq_journal_entries_company_entry_no"
+
+
+def _is_duplicate_entry_no(exc: IntegrityError) -> bool:
+    """Whether this violation is the duplicate entry_no and not some other one.
+
+    journal_entries also carries four foreign keys, a status check and a second
+    unique index. Mapping every IntegrityError to 409 would report any of them
+    as "entry number already exists", so the constraint is identified by name.
+    psycopg2 supplies it in diag; the string fallback is for a driver that does
+    not, and anything unrecognised is re-raised rather than guessed at.
+    """
+    diagnostics = getattr(getattr(exc, "orig", None), "diag", None)
+    name = getattr(diagnostics, "constraint_name", None)
+    if name:
+        return name == UNIQUE_ENTRY_NO_CONSTRAINT
+    return UNIQUE_ENTRY_NO_CONSTRAINT in str(getattr(exc, "orig", None) or exc)
 
 
 @router.post(
@@ -192,7 +240,23 @@ def create_journal_entry_endpoint(
         ),
     )
     repository = SqlAlchemyJournalRepository(db)
-    journal_entry = CreateJournalEntry(repository).execute(command)
+    # The get_journal_entry_by_no check above closes the ordinary case, but it
+    # is a read followed by a write with no lock between them. Two requests
+    # carrying the same entry_no both pass it, and the second one's flush hits
+    # uq_journal_entries_company_entry_no. Without this the client got a 500 for
+    # a conflict the endpoint already knows how to describe; the database was
+    # never at risk, only the answer was wrong.
+    try:
+        journal_entry = CreateJournalEntry(repository).execute(command)
+    except IntegrityError as exc:
+        if not _is_duplicate_entry_no(exc):
+            raise
+        # SqlAlchemyJournalRepository.create already rolled the session back
+        # before re-raising, so nothing is left to undo here.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Journal entry number already exists for this company",
+        ) from exc
 
     prepare_audit_log(
         db=db,

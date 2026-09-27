@@ -13,6 +13,7 @@ from app.application.accounts.dto import (
 from app.application.accounts.ports import AccountRepository
 from app.core.database import flush_or_rollback
 from app.modules.accounting.models.account import Account
+from app.modules.accounting.models.company import Company
 
 
 class SqlAlchemyAccountRepository(AccountRepository):
@@ -28,6 +29,7 @@ class SqlAlchemyAccountRepository(AccountRepository):
             name=account.name,
             account_type=account.account_type,
             account_subtype=account.account_subtype,
+            currency=account.currency,
             parent_id=account.parent_id,
             description=account.description,
             is_active=account.is_active,
@@ -47,6 +49,7 @@ class SqlAlchemyAccountRepository(AccountRepository):
             description=command.description,
             is_active=command.is_active,
             is_system=command.is_system,
+            currency=command.currency,
         )
         self._db.add(account)
         flush_or_rollback(self._db)
@@ -70,6 +73,14 @@ class SqlAlchemyAccountRepository(AccountRepository):
         created_accounts: list[AccountDTO] = []
         skipped_count = 0
         account_by_code: dict[str, AccountDTO] = {}
+
+        # A seeded chart belongs to the company that asked for it, so it is
+        # denominated in that company's own unit. Without this the model default
+        # applied and a riyal company was seeded a chart of dollar accounts.
+        base_currency = self._db.scalar(
+            select(Company.base_currency).where(Company.id == command.company_id)
+        )
+        currency = (base_currency or "USD").upper()
 
         for account_def in command.accounts:
             statement = select(Account).where(
@@ -103,6 +114,7 @@ class SqlAlchemyAccountRepository(AccountRepository):
                 name=account_def.name,
                 account_type=account_def.account_type,
                 account_subtype=account_def.account_subtype,
+                currency=currency,
                 parent_id=parent_id,
                 description=account_def.description,
                 is_active=True,

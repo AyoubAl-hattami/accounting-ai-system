@@ -5,11 +5,13 @@ import { dataEvents } from '../../../lib/dataEvents';
 
 interface UseProfitAndLossOptions {
   companyId: number | null;
+  /** Null means the company's own currency. */
+  currency?: string | null;
   startDate: string | null;
   endDate: string | null;
 }
 
-export function useProfitAndLoss({ companyId, startDate, endDate }: UseProfitAndLossOptions) {
+export function useProfitAndLoss({ companyId, currency, startDate, endDate }: UseProfitAndLossOptions) {
   const [data, setData] = useState<ProfitAndLossRead | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +24,7 @@ export function useProfitAndLoss({ companyId, startDate, endDate }: UseProfitAnd
 
     try {
       let url = `/reports/profit-and-loss?company_id=${companyId}`;
+      if (currency) url += `&currency=${encodeURIComponent(currency)}`;
       if (startDate) url += `&start_date=${startDate}`;
       if (endDate) url += `&end_date=${endDate}`;
       const response = await apiClient.get<ProfitAndLossRead>(url);
@@ -32,7 +35,7 @@ export function useProfitAndLoss({ companyId, startDate, endDate }: UseProfitAnd
     } finally {
       setIsLoading(false);
     }
-  }, [companyId, startDate, endDate]);
+  }, [companyId, currency, startDate, endDate]);
 
   // Auto-refetch when posted journal data changes (post/review/void/reverse)
   useEffect(() => {

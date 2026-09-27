@@ -1,15 +1,18 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { AlertCircle, Eye, EyeOff, Loader2, Scale } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { useI18n } from '../../i18n';
 import { ThemeToggleButton } from '../../components/ui/ThemeToggle';
 import { defaultAuthenticatedRoute } from '../../auth/defaultRoute';
+import { safeRedirectTarget } from '../../auth/safeRedirect';
+import { errorMessage } from '../../api/errorMessage';
 
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { t } = useI18n();
 
   const [email, setEmail] = useState('');
@@ -25,16 +28,37 @@ export default function LoginPage() {
 
     try {
       const signedIn = await login(email, password);
+      /* An invitation sends the visitor here with ?redirect= pointing back at
+         the accept page. Without honouring it they landed on the dashboard and
+         the invitation was lost, with no way back to it but the original email.
+
+         The temporary-password gate still wins: that redirect is not a
+         destination the user chose, and skipping it would leave the account on
+         a credential it is required to replace. */
+      const redirectTo = safeRedirectTarget(searchParams.get('redirect'));
       navigate(
         signedIn.must_change_password
           ? '/auth/change-temporary-password'
-          : defaultAuthenticatedRoute(signedIn),
+          : (redirectTo ?? defaultAuthenticatedRoute(signedIn)),
         { replace: true },
       );
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'response' in err) {
-        const axiosError = err as { response?: { data?: { detail?: string } } };
-        setError(axiosError.response?.data?.detail || t.login.invalidCredentials);
+        const axiosError = err as {
+          response?: { status?: number; data?: { detail?: string } };
+        };
+        /* A 401 is the one failure the client can word better than the server.
+           The server answers "Invalid email or password" in English, which read
+           as a foreign string in an Arabic UI; the translation already exists.
+
+           Every other status keeps the server's wording, because it carries
+           something only the server knows -- a lockout, an expired
+           subscription, a rejected address. */
+        setError(
+          axiosError.response?.status === 401
+            ? t.login.invalidCredentials
+            : errorMessage(err, t.login.invalidCredentials),
+        );
       } else {
         setError(t.login.networkError);
       }

@@ -230,6 +230,7 @@ def test_create_account_contract_normalization_and_read_pilots(
         "name",
         "account_type",
         "account_subtype",
+        "currency",
         "parent_id",
         "description",
         "is_active",
@@ -239,6 +240,9 @@ def test_create_account_contract_normalization_and_read_pilots(
     }
     assert account["company_id"] == company_id
     assert account["account_subtype"] is None
+    # Omitted on the way in, so it answers with the company's own unit rather
+    # than a global default. A wrong value here denominates a whole book.
+    assert account["currency"] == "USD"
     assert account["code"] == code.strip()
     assert account["name"] == "Normalized name"
     assert account["description"] == "  unchanged description  "
@@ -412,7 +416,7 @@ def test_update_account_contract_partial_normalization_and_explicit_parent_clear
 
     assert response.status_code == 200, response.text
     updated = response.json()
-    assert set(updated) == {"id", "company_id", "code", "name", "account_type", "account_subtype", "parent_id", "description", "is_active", "is_system", "created_at", "updated_at"}
+    assert set(updated) == {"id", "company_id", "code", "name", "account_type", "account_subtype", "currency", "parent_id", "description", "is_active", "is_system", "created_at", "updated_at"}
     assert updated["code"] == proposed_code
     assert updated["name"] == "After"
     assert updated["description"] == "  unchanged spacing  "

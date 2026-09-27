@@ -37,103 +37,27 @@ from app.modules.accounting.services.gemini_assistant_service import (
     detect_message_language,
     make_pending_context_token,
 )
+from app.modules.accounting.services.assistant_exchange import (
+    MAX_CONTEXT_CONTENT,
+    MAX_CONTEXT_MESSAGES,
+    find_idempotent_exchange as _find_idempotent_exchange,
+    message_type_for_reply as _message_type_for_reply,
+    safe_reply_metadata as _safe_reply_metadata,
+)
+from app.modules.accounting.services.assistant_conversation_service import (
+    _latest_pending_transaction,
+    _latest_profit_loss_grounding,
+    _recent_history,
+    _reply_from_message,
+    _update_automatic_title,
+    get_owned_conversation as _get_owned_conversation,
+)
 # Import the module so that monkeypatches on
 # assistant_conversation_service.dispatch_gemini_assistant are respected at
 # call time (the test seam depends on attribute lookup, not a local binding).
 from app.modules.accounting.services import assistant_conversation_service as _acs_module
 
 logger = logging.getLogger(__name__)
-
-MAX_CONTEXT_MESSAGES = 20
-MAX_CONTEXT_CONTENT = 500
-
-
-# ── Private helpers (duplicated from assistant_conversation_service to keep this
-#    module self-contained and avoid circular imports) ─────────────────────────
-
-
-def _safe_reply_metadata(reply: GeminiAssistantReply) -> dict:
-    return reply.model_dump(
-        mode="json",
-        exclude={"reply", "pending_context_token"},
-    )
-
-
-def _message_type_for_reply(reply: GeminiAssistantReply) -> str:
-    if reply.intent == "error":
-        return "error"
-    if reply.suggested_action:
-        return "journal_preview"
-    if reply.pending_transaction or reply.intent == "clarification":
-        return "clarification"
-    if "report" in reply.intent or reply.evidence:
-        return "report_result"
-    return "text"
-
-
-def _reply_from_message(message: AssistantMessage) -> GeminiAssistantReply:
-    from app.modules.accounting.services.assistant_conversation_service import (
-        _reply_from_message as _base_reply_from_message,
-    )
-    return _base_reply_from_message(message)
-
-
-def _find_idempotent_exchange(
-    db: Session,
-    *,
-    conversation_id: int,
-    client_message_id: str,
-) -> tuple[AssistantMessage | None, AssistantMessage | None]:
-    user_message = db.scalar(
-        select(AssistantMessage).where(
-            AssistantMessage.conversation_id == conversation_id,
-            AssistantMessage.client_message_id == client_message_id,
-            AssistantMessage.role == "user",
-        )
-    )
-    if not user_message:
-        return None, None
-    assistant_message = db.scalar(
-        select(AssistantMessage).where(
-            AssistantMessage.in_reply_to_id == user_message.id
-        )
-    )
-    return user_message, assistant_message
-
-
-def _recent_history(db, *, conversation_id, before_message_id):
-    from app.modules.accounting.services.assistant_conversation_service import (
-        _recent_history as _base_recent_history,
-    )
-    return _base_recent_history(db, conversation_id=conversation_id, before_message_id=before_message_id)
-
-
-def _latest_pending_transaction(db, *, conversation_id, before_message_id):
-    from app.modules.accounting.services.assistant_conversation_service import (
-        _latest_pending_transaction as _base,
-    )
-    return _base(db, conversation_id=conversation_id, before_message_id=before_message_id)
-
-
-def _latest_profit_loss_grounding(db, *, conversation_id, before_message_id):
-    from app.modules.accounting.services.assistant_conversation_service import (
-        _latest_profit_loss_grounding as _base,
-    )
-    return _base(db, conversation_id=conversation_id, before_message_id=before_message_id)
-
-
-def _update_automatic_title(conversation, *, message, language, reply):
-    from app.modules.accounting.services.assistant_conversation_service import (
-        _update_automatic_title as _base,
-    )
-    return _base(conversation, message=message, language=language, reply=reply)
-
-
-def _get_owned_conversation(db, *, conversation_id, company_id, user_id):
-    from app.modules.accounting.services.assistant_conversation_service import (
-        get_owned_conversation,
-    )
-    return get_owned_conversation(db, conversation_id=conversation_id, company_id=company_id, user_id=user_id)
 
 
 # ── Public API ────────────────────────────────────────────────────────────────

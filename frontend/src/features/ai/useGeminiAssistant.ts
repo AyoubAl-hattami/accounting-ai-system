@@ -180,6 +180,11 @@ export function useGeminiAssistant({ companyId, language = 'en' }: UseGeminiAssi
   const companyRequestRef = useRef(0);
   const conversationRequestRef = useRef(0);
   const historyRequestRef = useRef(0);
+  // Set when the restore effect below has itself fetched page 1 of the history
+  // with the default filters, so the debounced effect can skip the request it
+  // would otherwise repeat 250 ms later. Cleared if that fetch fails, which
+  // hands the fallback back to the debounced effect.
+  const historyFetchedByRestoreRef = useRef(false);
   const conversationsRef = useRef<AssistantConversation[]>([]);
 
   useEffect(() => {
@@ -298,6 +303,7 @@ export function useGeminiAssistant({ companyId, language = 'en' }: UseGeminiAssi
     setHistoryTotal(0);
     if (!companyId) return;
 
+    historyFetchedByRestoreRef.current = true;
     setIsRestoring(true);
     void apiClient
       .get<ConversationList>('/ai/conversations', {
@@ -326,6 +332,9 @@ export function useGeminiAssistant({ companyId, language = 'en' }: UseGeminiAssi
         if (requestId === companyRequestRef.current) applyConversationDetail(detail.data);
       })
       .catch(() => {
+        // The list was not fetched after all; let the debounced effect below
+        // make its request rather than skipping it.
+        historyFetchedByRestoreRef.current = false;
         if (requestId === companyRequestRef.current) {
           clearConversationState();
           setError(
@@ -340,9 +349,25 @@ export function useGeminiAssistant({ companyId, language = 'en' }: UseGeminiAssi
       });
   }, [applyConversationDetail, clearConversationState, companyId, language]);
 
+  // Search and status changes re-fetch the history, debounced so typing does
+  // not issue a request per keystroke.
+  //
+  // On a company switch or a language toggle this effect also re-runs --
+  // `fetchHistory` closes over both -- and the restore effect above has just
+  // fetched page 1 with these very filters. Without the guard that produced two
+  // identical GET /ai/conversations?status=active&page=1&page_size=20, measured
+  // in AssistantHistoryRequests.test.tsx. The flag is read when the timeout
+  // fires rather than when the effect runs, so a restore still in flight at
+  // 250 ms also counts.
   useEffect(() => {
     if (!companyId) return;
-    const timeout = window.setTimeout(() => void fetchHistory(false), 250);
+    const timeout = window.setTimeout(() => {
+      if (historyFetchedByRestoreRef.current) {
+        historyFetchedByRestoreRef.current = false;
+        return;
+      }
+      void fetchHistory(false);
+    }, 250);
     return () => window.clearTimeout(timeout);
   }, [companyId, fetchHistory, historySearch, historyStatus]);
 

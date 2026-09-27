@@ -63,6 +63,7 @@ def _csv_response(csv_text: str, filename: str) -> Response:
 @router.get("/trial-balance/export.csv")
 def export_trial_balance_csv(
     company_id: int = Query(..., ge=1),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),  # the company's own when omitted
     as_of_date: date | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -75,7 +76,7 @@ def export_trial_balance_csv(
 
     repository = SqlAlchemyReportRepository(db)
     report = GetTrialBalance(repository).execute(
-        TrialBalanceQuery(company_id=company_id, as_of_date=as_of_date)
+        TrialBalanceQuery(company_id=company_id, as_of_date=as_of_date, currency=currency)
     )
 
     csv_text = trial_balance_to_csv(report)
@@ -85,6 +86,7 @@ def export_trial_balance_csv(
 @router.get("/profit-loss/export.csv")
 def export_profit_loss_csv(
     company_id: int = Query(..., ge=1),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),  # the company's own when omitted
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
     db: Session = Depends(get_db),
@@ -102,6 +104,7 @@ def export_profit_loss_csv(
             company_id=company_id,
             start_date=start_date,
             end_date=end_date,
+            currency=currency,
         )
     )
 
@@ -112,6 +115,7 @@ def export_profit_loss_csv(
 @router.get("/balance-sheet/export.csv")
 def export_balance_sheet_csv(
     company_id: int = Query(..., ge=1),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),  # the company's own when omitted
     as_of_date: date | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -125,7 +129,7 @@ def export_balance_sheet_csv(
     try:
         repository = SqlAlchemyReportRepository(db)
         report = GetBalanceSheet(repository).execute(
-            BalanceSheetQuery(company_id=company_id, as_of_date=as_of_date)
+            BalanceSheetQuery(company_id=company_id, as_of_date=as_of_date, currency=currency)
         )
     except MissingFiscalYearForReportError as exc:
         raise HTTPException(
@@ -159,6 +163,11 @@ def export_account_ledger_csv(
             account_id=account_id,
             start_date=start_date,
             end_date=end_date,
+            # Explicitly the whole ledger, not the endpoint's page default: an
+            # exported ledger that stopped at line 200 would be wrong in a way
+            # nobody notices until they reconcile it.
+            line_skip=None,
+            line_limit=None,
         )
     )
 
@@ -175,6 +184,7 @@ def export_account_ledger_csv(
 @router.get("/general-ledger/export.csv")
 def export_general_ledger_csv(
     company_id: int = Query(..., ge=1),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),  # the company's own when omitted
     start_date: date | None = Query(default=None),
     end_date: date | None = Query(default=None),
     db: Session = Depends(get_db),
@@ -192,6 +202,10 @@ def export_general_ledger_csv(
             company_id=company_id,
             start_date=start_date,
             end_date=end_date,
+            # Explicitly every account, not the endpoint's page default.
+            account_skip=None,
+            account_limit=None,
+            currency=currency,
         )
     )
 

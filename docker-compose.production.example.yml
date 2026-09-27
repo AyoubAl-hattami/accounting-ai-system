@@ -7,13 +7,27 @@ services:
       - ./production.env
     expose:
       - "8000"
+    environment:
+      # Both proxy hops, as a CIDR over the pinned network below.  uvicorn walks
+      # X-Forwarded-For in reverse and returns the first address it does not
+      # trust, so naming only the frontend would stop the walk at Caddy and
+      # report Caddy's address as every client.  A CIDR rather than two literals
+      # because Compose assigns container addresses per network creation.
+      FORWARDED_ALLOW_IPS: 172.28.0.0/16
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      # /health/db, not /health: /health returns ok unconditionally and touches
+      # nothing, so a backend that cannot reach PostgreSQL reported healthy,
+      # frontend's depends_on released, and every request 500'd while restart
+      # never fired.  /health/db executes SELECT 1 against the real pool.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/db', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 20s
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--proxy-headers", "--forwarded-allow-ips=*"]
+    # No command override: backend/Dockerfile's CMD already runs uvicorn with
+    # --forwarded-allow-ips 127.0.0.1.  This file used to widen that to "*",
+    # which told uvicorn to trust X-Forwarded-For from any peer and let a caller
+    # choose its own request.client.host.
 
   frontend:
     build:
@@ -46,6 +60,15 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+
+networks:
+  default:
+    ipam:
+      config:
+        # Pinned so FORWARDED_ALLOW_IPS above stays true across recreation.
+        # Without this the addresses move and the allow-list silently stops
+        # matching, which does not fail -- it just reports Caddy as the client.
+        - subnet: 172.28.0.0/16
 
 # PostgreSQL is intentionally external and managed. Do not add development data
 # or credentials here. A TLS-verified DATABASE_URL is injected through the

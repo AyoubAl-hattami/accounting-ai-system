@@ -1,0 +1,27 @@
+# Pytest configuration for the backend suite.
+#
+# This file exists so that `pytest` works from a clean checkout without the
+# caller first reconstructing the invocation out of the CI workflow.  Before it,
+# `pytest` had to be run as
+#
+#     APP_ENV=test DATABASE_URL=... PYTHONPATH=<repo>/backend python -m pytest
+#
+# and that knowledge lived only in .github/workflows/backend-validation.yml.
+#
+# No package metadata is declared: the backend is deployed as a source tree via
+# backend/Dockerfile, not installed as a distribution, so adding [project] here
+# would create a second, unused definition of what this application is.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# Puts the backend root on sys.path so `import app...` resolves without the
+# caller exporting PYTHONPATH.  `tests/` itself is added by pytest, because it
+# has no __init__.py -- that is what makes conftest's `from factories.accounting
+# import ...` and `from fixture_readiness import ...` work.
+pythonpath = ["."]
+
+# Short tracebacks by default: the infrastructure-dependent portion of this
+# suite fails in bulk when the stack is down, and full tracebacks bury the one
+# line that says which fixture could not reach what.
+addopts = "-ra --strict-markers --tb=short"

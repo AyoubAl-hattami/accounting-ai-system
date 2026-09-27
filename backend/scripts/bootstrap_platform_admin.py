@@ -164,6 +164,19 @@ def main(argv: list[str] | None = None) -> int:
     if not args.generate_password and not args.temporary_password:
         print("Supply a password or use --generate-password.", file=sys.stderr)
         return 2
+    if args.generate_password and not args.show_temporary_password:
+        # The generated password is hashed into the row and otherwise exists
+        # only in a local variable that is discarded when this process ends.
+        # Without --show-temporary-password it is never printed, and the
+        # account is created as a superuser that nobody can sign in as. The
+        # script would report success.
+        print(
+            "--generate-password requires --show-temporary-password: the "
+            "generated value is not stored anywhere and cannot be recovered "
+            "after this process exits, leaving a superuser nobody can use.",
+            file=sys.stderr,
+        )
+        return 2
 
     from app.core.database import SessionLocal
 

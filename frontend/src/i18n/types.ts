@@ -283,6 +283,14 @@ export interface Translations {
     subtypeRevenue: string;
     subtypeExpense: string;
     subtypeOther: string;
+    currency: string;
+    currencyHelp: string;
+    currencyCompanyDefault: string;
+    typeAsset: string;
+    typeLiability: string;
+    typeEquity: string;
+    typeIncome: string;
+    typeExpense: string;
     parentAccount: string;
     parentNone: string;
     quickTemplates: string;
@@ -466,6 +474,7 @@ export interface Translations {
     shared: {
       filters: string;
       accountsShown: string;
+      currency: string;
       linesShown: string;
       noMatchTitle: string;
       noMatchDescription: string;

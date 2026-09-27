@@ -26,6 +26,7 @@ class CreateAccount:
             description=command.description,
             is_active=command.is_active,
             is_system=command.is_system,
+            currency=command.currency,
         )
         return self._repository.create(normalized_command)
 
