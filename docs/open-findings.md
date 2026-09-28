@@ -376,3 +376,145 @@ company's accounts will keep making this class of error.
 **Where** `gemini_assistant_service._resolve_bank_cash_answer`,
 `_resolve_transaction_type_answer` (same shape), and the `changed` flag in
 `_apply_clarification_answer` that suppresses the fallback.
+
+---
+
+## RAG-20 · The detector certifies replies the resolver behind it cannot read
+
+**Severity** Major · **Measured** 2026-09-28, branch
+`phase-61-subledger-and-agent`, commit `9aee18d`
+
+The ambiguity detector short-circuits an exact option match as unambiguous
+and sends it down the instant path, where a resolver reads it. The two
+disagree about what an option is. `clarification_ambiguity`'s `OPTION_FIRST`
+and `OPTION_SECOND` include `واحد`, `اتنين` and `اثنين`;
+`_resolve_transaction_type_answer` restates its own literal sets and does
+not. So the detector says "a pattern may read this", the pattern returns
+`None`, `changed` stays `False`, and the user gets **"لم أفهم إجابتك" plus
+the same two options again** — the failure this whole redesign exists to
+remove, arriving through the part of it that was supposed to be provably
+safe.
+
+**Measured**, by sweeping every reply in both option sets and every term in
+all six vocabulary lists against all four question fields (pure functions, no
+provider):
+
+```
+replies the detector passes that the resolver cannot read: 9
+  واحد / اتنين / اثنين  ×  transaction_type
+                        ×  supplier_or_expense
+                        ×  customer_or_income
+```
+
+### Reachability: 3 of the 9, and no test covers them
+
+`_missing_fields_for` emits only `payment_source`, `receiving_account`,
+`transaction_type` and `account_mapping`. The other two field names are
+produced nowhere (see RAG-21 and the sweeps recorded there), so six of the
+nine rows sit behind names that never occur. The three `transaction_type`
+rows are reachable in production: that name is appended whenever
+`parsed.transaction_type == "unknown"`.
+
+A runtime sweep of the **whole backend suite**, recording every field name
+handed to the detector, to `_apply_clarification_answer` and to
+`_pending_from_parsed`, saw exactly one:
+
+```
+  clarification_ambiguity       -> payment_source
+  _apply_clarification_answer   -> payment_source
+  _pending_from_parsed          -> payment_source
+  _resolve_transaction_type_answer -> never called
+```
+
+So the type resolver's dispatch has **no in-process test coverage at all**,
+which is why nine holes could sit in it unremarked. (Limit of that sweep:
+spies live in the pytest process, so the 39 HTTP files exercising the server
+process are not covered by it. The static enumeration under RAG-21 is the
+primary evidence for what can be produced; this corroborates it in-process.)
+
+### Not a regression, and that matters for how it is fixed
+
+Before the detector existed, `واحد` on a type question also fell through to
+the re-ask — the resolver has never read it. What is new is that escalation
+now exists and would read it correctly, and the option short-circuit is what
+prevents that. This is a **missed rescue**, not a break. It is filed Major
+rather than Critical for the same reason: the outcome is a visible re-ask,
+not a silent wrong entry.
+
+**The durable fix is not the harmonised list.** One option set closes these
+nine. The invariant that closes the class is: *for every reply the detector
+calls unambiguous, the resolver behind that field must return a value.*
+Without it, the next word added to either side reopens this silently, and
+nothing in the suite would notice — as nothing did.
+
+**Where** `clarification_ambiguity.OPTION_FIRST` / `OPTION_SECOND` versus the
+literal sets in `gemini_assistant_service._resolve_bank_cash_answer` and
+`_resolve_transaction_type_answer`; the short-circuit at
+`clarification_ambiguity.clarification_ambiguity`, the `option` branch.
+
+---
+
+## RAG-21 · The free path's correctness depends on a field-name agreement that nothing asserts
+
+**Severity** Medium · **Measured** 2026-09-28, branch
+`phase-61-subledger-and-agent`, commit `9aee18d`
+
+Filed as a structural finding, and deliberately filed even though the commit
+that follows removes today's instance of it. The instance is not the finding.
+
+Three modules branch on the name of the field being clarified —
+`clarification_ambiguity._concepts_present` decides which concepts are
+candidates, `_resolve_transaction_type_answer` decides which transaction type
+a term means, and `clarification_interpreter.FILLABLE_FIELDS` decides what
+the model may fill. A fourth, `_missing_fields_for`, decides which names are
+ever produced. **Nothing checks that those four agree**, and the ways they
+disagree are not symmetric:
+
+| disagreement | consequence |
+|---|---|
+| a name the detector knows and the resolver does not | RAG-20: certified, unreadable, re-ask |
+| a name produced but unknown to the detector | no concepts found, so **every** reply to that question escalates — the free path dies silently, and only the quota bill would say so |
+| a name known to both but outside the question asked | the resolver answers a question that was not asked |
+
+Today's instance is the third: `_resolve_transaction_type_answer` returns
+`supplier_payment` for `مورد` even when the question asked was
+`customer_or_income`. That is harmless **only** because
+`_missing_fields_for` never emits that name — a safety property that lives in
+a different function, is stated nowhere, and would be silently lost by a
+one-line change there.
+
+**Confirmed by sweep, not by reading**, because a deletion is the claim that
+costs if wrong. Two independent sweeps:
+
+*Static* — every call that can write a pending envelope's `missing_fields`,
+enumerated from the AST of the whole `backend/app` tree, with the source text
+of each argument: seven sites, all in `gemini_assistant_service`, all
+resolving to `_missing_fields_for`'s return, a literal list in
+`_handle_action_request`, or a re-circulated `pending.missing_fields`. The
+closed set of producible names is `{payment_source, receiving_account,
+transaction_type, account_mapping}`. Every occurrence of the two suspect
+names anywhere in the tree is in a *consumer* position — `Set`, `Compare` or
+`Tuple` used for membership — and none in a producer position. Also checked:
+the orchestrator has its own separate vocabulary (`AssistantMissingField`, a
+closed `Literal` using `receipt_destination` where this path uses
+`receiving_account`) and `gemini_assistant_service` never reads
+`decision.missing_fields`, so it cannot leak in from there.
+
+*Runtime* — the whole suite, spied: `payment_source` only, as recorded under
+RAG-20.
+
+### What the invariant test does not catch, and that is the point
+
+The test added for RAG-20 proves the first row of that table: no reply is
+certified that the resolver cannot read. It proves **neither of the other
+two**. It cannot see a produced name that reaches nobody (the detector
+returns "escalate", which is a valid answer, so there is nothing to fail on),
+and it cannot see a resolver answering the wrong question (the resolver
+returns a value, so it passes). Closing those needs a different assertion —
+that the set of producible names equals the set each consumer branches on —
+and that assertion does not exist. **This finding stays open until it does.**
+
+**Where** `gemini_assistant_service._missing_fields_for` (the producer),
+`clarification_ambiguity._concepts_present`,
+`gemini_assistant_service._resolve_transaction_type_answer`, and
+`clarification_interpreter.FILLABLE_FIELDS` (the three consumers).
