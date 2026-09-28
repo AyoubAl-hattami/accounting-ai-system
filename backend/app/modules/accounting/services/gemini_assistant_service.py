@@ -1884,7 +1884,7 @@ def _clarification_options_for_missing_fields(
             ClarificationOption(label="البنك" if language == "ar" else "Bank", value="bank"),
             ClarificationOption(label="الصندوق" if language == "ar" else "Cash", value="cash"),
         ]
-    if first in {"supplier_or_expense", "transaction_type"}:
+    if first == "transaction_type":
         return [
             ClarificationOption(
                 label="سداد مورد" if language == "ar" else "Supplier payment",
@@ -1895,17 +1895,11 @@ def _clarification_options_for_missing_fields(
                 value="expense_payment",
             ),
         ]
-    if first == "customer_or_income":
-        return [
-            ClarificationOption(
-                label="تحصيل من عميل" if language == "ar" else "Customer collection",
-                value="customer_receipt",
-            ),
-            ClarificationOption(
-                label="إيراد جديد" if language == "ar" else "New revenue",
-                value="income_receipt",
-            ),
-        ]
+    # A "customer_or_income" branch offering "تحصيل من عميل / إيراد جديد" sat
+    # here. Nothing has ever produced that field name, so the branch could not
+    # be reached and those options have never been shown to anyone (RAG-21).
+    # Receipts reach the bank/cash question above through "receiving_account";
+    # a customer-versus-revenue question would be new work, not a restoration.
     return []
 
 
@@ -2005,9 +1999,7 @@ def _apply_interpreted_reply(
     elif interpreted.field in {"receiving_account"} and hint:
         updated.receiving_account_hint = hint
         changed = True
-    elif interpreted.field in {
-        "transaction_type", "supplier_or_expense", "customer_or_income",
-    } and interpreted.value in {
+    elif interpreted.field == "transaction_type" and interpreted.value in {
         "supplier_payment", "expense_payment", "customer_receipt", "income_receipt",
     }:
         updated.transaction_type = interpreted.value
@@ -2088,17 +2080,22 @@ def _resolve_bank_cash_answer(message: str) -> str | None:
 
 
 def _resolve_transaction_type_answer(message: str, missing_field: str) -> str | None:
+    """Read a reply to the "supplier payment or new expense?" question.
+
+    `missing_field` had three accepted values. Two of them -- "supplier_or_expense"
+    and "customer_or_income" -- are produced by nothing, so their branches could
+    not run, and the "customer_or_income" pair was the only place a positional
+    ordinal could mean a receipt. Both are gone (RAG-21); the ordinals now mean
+    what the question offers, and only that. The four term scans below are
+    unchanged and stay ungated on the field: a type question can be answered
+    with any of the four concepts, whichever two were shown as options.
+    """
     text = _normalize_clarification_answer(message)
-    if text in OPTION_FIRST:
-        if missing_field in {"supplier_or_expense", "transaction_type"}:
+    if missing_field == "transaction_type":
+        if text in OPTION_FIRST:
             return "supplier_payment"
-        if missing_field == "customer_or_income":
-            return "customer_receipt"
-    if text in OPTION_SECOND:
-        if missing_field in {"supplier_or_expense", "transaction_type"}:
+        if text in OPTION_SECOND:
             return "expense_payment"
-        if missing_field == "customer_or_income":
-            return "income_receipt"
     if any(term in text for term in SUPPLIER_TERMS):
         return "supplier_payment"
     if any(term in text for term in EXPENSE_TERMS):
@@ -2130,21 +2127,23 @@ def _apply_clarification_answer(
             updated.receiving_account_hint = destination
             changed = True
 
-    for field_name in ("transaction_type", "supplier_or_expense", "customer_or_income"):
-        if field_name in missing:
-            tx_type = _resolve_transaction_type_answer(answer, field_name)
-            if tx_type:
-                updated.transaction_type = tx_type
-                if tx_type == "supplier_payment":
-                    updated.debit_account_hint = "accounts payable"
-                elif tx_type == "expense_payment":
-                    updated.debit_account_hint = updated.debit_account_hint or "expense"
-                elif tx_type == "customer_receipt":
-                    updated.credit_account_hint = "accounts receivable"
-                elif tx_type == "income_receipt":
-                    updated.credit_account_hint = updated.credit_account_hint or "sales revenue"
-                changed = True
-            break
+    # This was a loop over three field names with a break after the first one
+    # present. Two of the three are produced by nothing, so it was a loop over
+    # one (RAG-21). All four transaction types stay reachable: which one a reply
+    # means is decided by the reply, not by which two were offered.
+    if "transaction_type" in missing:
+        tx_type = _resolve_transaction_type_answer(answer, "transaction_type")
+        if tx_type:
+            updated.transaction_type = tx_type
+            if tx_type == "supplier_payment":
+                updated.debit_account_hint = "accounts payable"
+            elif tx_type == "expense_payment":
+                updated.debit_account_hint = updated.debit_account_hint or "expense"
+            elif tx_type == "customer_receipt":
+                updated.credit_account_hint = "accounts receivable"
+            elif tx_type == "income_receipt":
+                updated.credit_account_hint = updated.credit_account_hint or "sales revenue"
+            changed = True
 
     return updated, changed
 

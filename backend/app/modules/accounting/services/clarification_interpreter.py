@@ -58,9 +58,14 @@ from app.modules.accounting.services.gemini_agent_contract import (
 logger = logging.getLogger(__name__)
 
 # Fields a reply may FILL -- the ones a clarification question can ask about.
+#
+# This used to include "supplier_or_expense" and "customer_or_income". Nothing
+# produces either name -- confirmed by a static enumeration of every call that
+# can write a pending envelope's missing_fields across the app tree, and by a
+# runtime spy over the whole suite -- so they widened what a model reply could
+# fill without ever authorising anything. See RAG-21.
 FILLABLE_FIELDS = frozenset({
-    "payment_source", "receiving_account",
-    "transaction_type", "supplier_or_expense", "customer_or_income",
+    "payment_source", "receiving_account", "transaction_type",
 })
 
 # Fields a reply may REPLACE -- things already captured that a correction can

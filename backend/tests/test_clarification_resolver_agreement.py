@@ -101,12 +101,6 @@ RESOLVED_BY = {
     "transaction_type": lambda reply: svc._resolve_transaction_type_answer(
         reply, "transaction_type"
     ),
-    "supplier_or_expense": lambda reply: svc._resolve_transaction_type_answer(
-        reply, "supplier_or_expense"
-    ),
-    "customer_or_income": lambda reply: svc._resolve_transaction_type_answer(
-        reply, "customer_or_income"
-    ),
 }
 
 # Field names that can be produced and that NOTHING resolves. Each needs a
@@ -123,15 +117,12 @@ RESOLVED_BY = {
 # different piece of work.
 NO_RESOLVER = {"account_mapping"}
 
-# The mirror image: names RESOLVED_BY covers that nothing ever produces. Both
-# are branched on by the detector, both resolvers and the interpreter, and
-# `_missing_fields_for` emits neither -- confirmed by a static enumeration of
-# every call that can write a pending envelope's missing_fields across the app
-# tree, and by a runtime spy over the whole suite. They are listed rather than
-# ignored so the equality below stays an equality, and they are deleted in the
-# commit after this one, at which point this set and their RESOLVED_BY entries
-# go together. See RAG-21.
-DEAD_FIELDS = {"supplier_or_expense", "customer_or_income"}
+# This briefly held "supplier_or_expense" and "customer_or_income" -- names
+# every consumer branched on and nothing produced. They are gone from the
+# service, the detector and the interpreter, so the equality below needs no
+# exemption set at all. Keeping the name here, empty, would invite one back;
+# if a name ever has to be exempted again, add the set with its reason in the
+# same commit that adds the name. See RAG-21.
 
 
 # ── the corpus ──────────────────────────────────────────────────────────────
@@ -212,20 +203,21 @@ def test_every_reply_the_detector_certifies_can_be_read():
     )
 
 
-def test_the_nine_replies_that_opened_rag_20_resolve():
+def test_the_replies_that_opened_rag_20_resolve():
     """Named explicitly, so a corpus change cannot quietly drop them.
 
-    The invariant above would catch these anyway. They are spelled out because
-    a regression here is the exact user-visible bug, and a named test says so
-    in its own failure message.
+    RAG-20 counted nine field/reply pairs: three replies across three field
+    names. Six of the nine sat behind names nothing produced and went away with
+    those names; these three are the reachable ones. The invariant above would
+    catch them anyway -- they are spelled out because a regression here is the
+    exact user-visible bug, and a named test says so in its failure message.
     """
     for reply in ("واحد", "اتنين", "اثنين"):
-        for field in ("transaction_type", "supplier_or_expense", "customer_or_income"):
-            verdict = clarification_ambiguity(reply, CHART, [field])
-            assert verdict.unambiguous, f"{reply!r} on {field} no longer certified"
-            assert RESOLVED_BY[field](reply) is not None, (
-                f"{reply!r} is certified for {field} and resolves to None -- RAG-20 again"
-            )
+        verdict = clarification_ambiguity(reply, CHART, ["transaction_type"])
+        assert verdict.unambiguous, f"{reply!r} is no longer certified"
+        assert RESOLVED_BY["transaction_type"](reply) is not None, (
+            f"{reply!r} is certified and resolves to None -- RAG-20 again"
+        )
 
 
 def test_the_invariant_bites_when_the_option_sets_are_pulled_apart():
@@ -375,12 +367,12 @@ def test_every_producible_field_has_a_resolver_or_is_a_recorded_gap():
     """
     producible = _producible_fields()
     accounted_for = set(RESOLVED_BY) | NO_RESOLVER
-    assert producible | DEAD_FIELDS == accounted_for, (
+    assert producible == accounted_for, (
         "a produced field name is neither resolved nor recorded as a gap: "
         f"{sorted(producible - accounted_for)}; "
-        "or a name is accounted for here and produced nowhere, which means it "
-        "belongs in DEAD_FIELDS or should be deleted: "
-        f"{sorted(accounted_for - producible - DEAD_FIELDS)}"
+        "or a name is resolved here and produced nowhere, which makes its "
+        "branches unreachable and should be deleted: "
+        f"{sorted(accounted_for - producible)}"
     )
 
 

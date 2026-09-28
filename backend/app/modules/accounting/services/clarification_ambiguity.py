@@ -153,9 +153,11 @@ def _concepts_present(text: str, missing_fields: Sequence[str]) -> set[str]:
     """
     found: set[str] = set()
     wants_source = {"payment_source", "receiving_account"} & set(missing_fields)
-    wants_type = {
-        "transaction_type", "supplier_or_expense", "customer_or_income",
-    } & set(missing_fields)
+    # "supplier_or_expense" and "customer_or_income" were listed here too. No
+    # code produces either name, so they were a third spelling of the same
+    # question that could never arrive (RAG-21). All four type concepts stay
+    # below: a "transaction_type" question can be answered with any of them.
+    wants_type = {"transaction_type"} & set(missing_fields)
 
     if wants_source:
         if any(term in text for term in BANK_TERMS):

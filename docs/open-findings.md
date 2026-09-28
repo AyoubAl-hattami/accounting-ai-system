@@ -462,13 +462,15 @@ literal sets in `gemini_assistant_service._resolve_bank_cash_answer` and
 Filed as a structural finding, and deliberately filed even though the commit
 that follows removes today's instance of it. The instance is not the finding.
 
-Three modules branch on the name of the field being clarified —
+Four places branch on the name of the field being clarified —
 `clarification_ambiguity._concepts_present` decides which concepts are
 candidates, `_resolve_transaction_type_answer` decides which transaction type
-a term means, and `clarification_interpreter.FILLABLE_FIELDS` decides what
-the model may fill. A fourth, `_missing_fields_for`, decides which names are
-ever produced. **Nothing checks that those four agree**, and the ways they
-disagree are not symmetric:
+a term means, `clarification_interpreter.FILLABLE_FIELDS` decides what the
+model may fill, and `_apply_interpreted_reply` decides what an accepted
+interpretation writes. (This entry first said three; the fourth was found by
+the deletion sweep, which is itself the finding.) A fifth,
+`_missing_fields_for`, decides which names are ever produced. **Nothing checks
+that they agree**, and the ways they disagree are not symmetric:
 
 | disagreement | consequence |
 |---|---|
@@ -548,7 +550,8 @@ assertion that would catch it — that each consumer's branch set is confined to
 the question actually asked — does not exist. **This finding stays open on that
 row, and on `account_mapping`.**
 
-**Where** `gemini_assistant_service._missing_fields_for` (the producer),
+**Where** `gemini_assistant_service._missing_fields_for` (the producer), and
 `clarification_ambiguity._concepts_present`,
-`gemini_assistant_service._resolve_transaction_type_answer`, and
-`clarification_interpreter.FILLABLE_FIELDS` (the three consumers).
+`gemini_assistant_service._resolve_transaction_type_answer`,
+`gemini_assistant_service._apply_interpreted_reply` and
+`clarification_interpreter.FILLABLE_FIELDS` (the four consumers).
