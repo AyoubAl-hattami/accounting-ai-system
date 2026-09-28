@@ -71,6 +71,10 @@ from app.modules.accounting.services.assistant_intent_orchestrator import (
     SemanticIntentClassifier,
     orchestrate_assistant_intent,
 )
+from app.modules.accounting.services.clarification_interpreter import (
+    InterpretedReply,
+    interpret_clarification_reply,
+)
 from app.modules.accounting.services.clarification_ambiguity import (
     BANK_TERMS,
     CASH_TERMS,
@@ -1847,6 +1851,27 @@ def _missing_fields_for(parsed: ParsedTransaction, mapped: MappedTransaction) ->
     return missing or ["account_mapping"]
 
 
+def _clarification_question_for_missing_fields(
+    missing_fields: list[str],
+    language: str,
+) -> str | None:
+    """The question the user is answering, rebuilt from the field it asked about.
+
+    The interpreter needs to know what was asked -- "from bank or cash?" and
+    "supplier or expense?" make the same reply mean different things. The
+    pending envelope stores the missing FIELDS rather than the sentence, so
+    this reconstructs it from the same option labels the sentence was built
+    from, rather than storing a second copy that could drift.
+    """
+    options = _clarification_options_for_missing_fields(missing_fields, language)
+    if not options:
+        return None
+    labels = " / ".join(option.label for option in options)
+    return (
+        f"أيهما: {labels}؟" if language == "ar" else f"Which one: {labels}?"
+    )
+
+
 def _clarification_options_for_missing_fields(
     missing_fields: list[str],
     language: str,
@@ -1900,6 +1925,123 @@ def _build_pending_clarification_result(
         clarification_options=options,
         pending_context_token=token,
     )
+
+
+def _build_free_form_clarification_result(
+    question: str | None,
+    parsed: ParsedTransaction,
+    company_id: int,
+    missing_fields: list[str],
+    language: str,
+) -> ActionRequestResult:
+    """Re-ask in prose, with nothing for the user to match against.
+
+    The sibling above appends a numbered menu built from the missing fields.
+    That menu is exactly what the interpreter exists to stop depending on: a
+    fixed set of follow-ups is the same closed vocabulary one layer up, and
+    the user who typed "من محفظة جيب" was already looking at one.
+
+    So the question is the model's own wording, verbatim and bounded, with no
+    options attached. The pending token is still issued, so the next reply
+    re-enters the same path -- detector first, interpreter behind it.
+    """
+    pending = _pending_from_parsed(parsed, company_id, missing_fields)
+    token = _make_pending_context_token(pending) if pending else None
+    return ActionRequestResult(
+        reply=question or _fallback_clarification_prompt(language),
+        pending_transaction=pending,
+        clarification_options=[],
+        pending_context_token=token,
+    )
+
+
+def _fallback_clarification_prompt(language: str) -> str:
+    return (
+        "أحتاج مزيدًا من التوضيح."
+        if language == "ar"
+        else "I need a little more detail."
+    )
+
+
+def _account_by_code(
+    accounts: list[dict], code: str | None
+) -> dict | None:
+    if not code:
+        return None
+    for account in accounts:
+        if str(account.get("code")) == str(code):
+            return account
+    return None
+
+
+def _apply_interpreted_reply(
+    parsed: ParsedTransaction,
+    interpreted: "InterpretedReply",
+    accounts: list[dict],
+) -> tuple[ParsedTransaction, bool]:
+    """Turn a validated proposal into hints, and nothing more.
+
+    The interpreter names an account by CODE. This looks that code up in the
+    live chart and sets the hint to the account's NAME, because that is what
+    `map_to_accounts` resolves -- so the account is chosen by the same mapper
+    that chooses it for a deterministically parsed message, against the same
+    data, with no special path for model output. The caller then checks that
+    the mapper landed on the code the interpreter named.
+
+    Nothing here writes an account id, a journal line, or an amount the
+    interpreter was not explicitly allowed to replace.
+    """
+    updated = parsed.model_copy(deep=True)
+    changed = False
+
+    account = _account_by_code(accounts, interpreted.account_code)
+    hint = account.get("name") if account else interpreted.value
+
+    if interpreted.field in {"payment_source"} and hint:
+        updated.payment_source_hint = hint
+        changed = True
+    elif interpreted.field in {"receiving_account"} and hint:
+        updated.receiving_account_hint = hint
+        changed = True
+    elif interpreted.field in {
+        "transaction_type", "supplier_or_expense", "customer_or_income",
+    } and interpreted.value in {
+        "supplier_payment", "expense_payment", "customer_receipt", "income_receipt",
+    }:
+        updated.transaction_type = interpreted.value
+        if interpreted.value == "supplier_payment":
+            updated.debit_account_hint = "accounts payable"
+        elif interpreted.value == "expense_payment":
+            updated.debit_account_hint = updated.debit_account_hint or "expense"
+        elif interpreted.value == "customer_receipt":
+            updated.credit_account_hint = "accounts receivable"
+        elif interpreted.value == "income_receipt":
+            updated.credit_account_hint = updated.credit_account_hint or "sales revenue"
+        changed = True
+
+    if interpreted.variant == "replace" and interpreted.amount is not None:
+        updated.amount = interpreted.amount
+        changed = True
+
+    return updated, changed
+
+
+def _interpretation_landed_on_the_named_account(
+    mapped: "MappedTransaction",
+    interpreted: "InterpretedReply | None",
+) -> bool:
+    """Did the mapper resolve to the account the interpreter actually named?
+
+    This is the check that does not trust anything the model said. The
+    interpreter proposes a code; `map_to_accounts` independently resolves the
+    name; if the two disagree, the draft would be against an account nobody
+    chose -- which is RAG-19's shape with a different cause. Disagreement is
+    treated as unresolved, not as a near-enough answer.
+    """
+    if interpreted is None or not interpreted.account_code:
+        return True
+    landed = {mapped.debit_account_code, mapped.credit_account_code}
+    return str(interpreted.account_code) in {str(code) for code in landed if code}
 
 
 def _normalize_clarification_answer(message: str) -> str:
@@ -2160,26 +2302,89 @@ def _handle_pending_transaction_answer(
     # this company's live accounts, not a word list, because "كاش" is only
     # ambiguous once the chart contains an account named after it.
     #
-    # At this commit escalation has nowhere to go: there is no interpretation
-    # step yet, so an escalated reply falls through to the same "I did not
-    # understand" the user already gets for an unrecognised answer. That is
-    # not the fix, but it is strictly better than the alternative -- a wrong
-    # entry becomes a visible re-ask. The interpretation step replaces this
-    # fall-through; the detector stays exactly as it is.
+    # What it escalates is INTERPRETED. The model reads the reply against this
+    # company's chart and proposes a field value; it proposes nothing else,
+    # and everything it proposes is re-resolved below by map_to_accounts and
+    # re-checked against the code it named. When it is unavailable, over
+    # budget, or answers something this backend does not recognise, the
+    # interpretation is None and the deterministic re-ask runs -- which is
+    # what this path did before the interpreter existed.
     ambiguity = clarification_ambiguity(
         message, active_accounts, pending.missing_fields
     )
+    interpreted = None
     if ambiguity:
         parsed, changed = _apply_clarification_answer(parsed, pending, message)
     else:
-        changed = False
         logger.info(
             "intent=clarification_answer outcome=escalated reason=%s accounts=%s",
             ambiguity.reason,
             ",".join(ambiguity.matched_accounts) or "-",
         )
+        interpreted = interpret_clarification_reply(
+            reply=message,
+            missing_fields=pending.missing_fields,
+            known_fields={
+                "amount": parsed.amount,
+                "transaction_type": parsed.transaction_type,
+                "description": parsed.description,
+                "counterparty": parsed.counterparty,
+            },
+            # PendingTransaction carries the fields it is missing, not the
+            # sentence they were asked with, so the question is rebuilt from
+            # the same helper that produced it.
+            question_asked=_clarification_question_for_missing_fields(
+                pending.missing_fields, language
+            ),
+            accounts=active_accounts,
+            language=language,
+        )
+        changed = False
+
+        if interpreted is not None and interpreted.variant == "abandon":
+            # The token is a stateless signed envelope, so discarding it is
+            # simply not handing one back: nothing is echoed, the client stops
+            # sending it, and the next message starts clean.
+            return ActionRequestResult(
+                reply=(
+                    "تم إلغاء العملية. لم يتم حفظ أي قيد."
+                    if language == "ar"
+                    else "Cancelled. Nothing was recorded."
+                )
+            )
+
+        if interpreted is not None and interpreted.variant == "unclear":
+            # Free-form, and deliberately not a menu: a fixed set of
+            # follow-ups is the same closed vocabulary one layer up. The
+            # answer re-enters this same path.
+            return _build_free_form_clarification_result(
+                question=interpreted.question,
+                parsed=parsed,
+                company_id=company_id,
+                missing_fields=pending.missing_fields,
+                language=language,
+            )
+
+        if interpreted is not None and interpreted.variant in {"fill", "replace"}:
+            parsed, changed = _apply_interpreted_reply(parsed, interpreted, active_accounts)
 
     mapped = map_to_accounts(parsed, active_accounts, language)
+
+    # The interpreter named a code; the mapper resolved a name. If they
+    # disagree, nobody chose the account that would be drafted, so this is
+    # unresolved rather than near enough. The check runs on the mapper's
+    # output, so it holds whatever the model said.
+    if not _interpretation_landed_on_the_named_account(mapped, interpreted):
+        logger.warning(
+            "intent=clarification_interpreter outcome=code_mismatch "
+            "named=%s landed=%s/%s",
+            interpreted.account_code if interpreted else None,
+            mapped.debit_account_code,
+            mapped.credit_account_code,
+        )
+        changed = False
+        mapped = mapped.model_copy(update={"needs_clarification": True})
+
     if mapped.needs_clarification:
         missing_fields = _missing_fields_for(parsed, mapped)
         question = mapped.clarification_question

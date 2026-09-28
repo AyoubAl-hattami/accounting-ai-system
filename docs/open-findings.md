@@ -320,6 +320,38 @@ inside the understanding/authority redesign, where a reply containing a
 negation marker or more than one candidate concept is by definition not
 unambiguous and is interpreted rather than matched.
 
+### Status 2026-09-28 — still open, and why
+
+The redesign has landed in three commits and this finding is **not closed**,
+because the table that would close it is incomplete.
+
+* `6fda7eb` made every phrasing above **unreachable** by the buggy resolvers.
+  A silent wrong entry became a visible re-ask. That is the safe failure
+  mode, not the fix.
+* `2064479` put the three trust boundaries in the prompt first.
+* The interpreter now resolves the escalated replies. Measured end to end on
+  company 13116: `محفظة ون كاش` and `ون كاش` produce **1130**, `من محفظة جيب`
+  produces **1140**, `not bank, cash` produces **1100**. Abandonment
+  discards the pending token; an unreadable reply asks a free-form question.
+  All eight option/ordinal/plain answers still resolve with **0 provider
+  calls**, counted rather than assumed.
+
+**What is unverified.** Four of the Arabic negation phrasings and the bare
+`جيب` have not been shown resolving, because the Gemini free tier's daily
+cap stopped the run:
+
+```
+429 RESOURCE_EXHAUSTED
+quotaId: GenerateRequestsPerDayPerProjectPerModel, limit: 20,
+model: gemini-3.6-flash
+```
+
+Those five fell back to the deterministic re-ask, which is the designed
+behaviour under an unavailable provider and is itself worth having measured
+— but it is not evidence that they interpret correctly. **This finding
+closes when those five are shown producing the account the user meant, on a
+day with quota, and not before.**
+
 ### A second case, same root cause: a real account name read as a generic concept
 
 Found while modelling the fix, and it is not a negation at all. The chart has
