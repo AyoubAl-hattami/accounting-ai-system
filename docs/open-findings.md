@@ -480,3 +480,107 @@ row, and on `account_mapping`.**
 `gemini_assistant_service._resolve_transaction_type_answer`,
 `gemini_assistant_service._apply_interpreted_reply` and
 `clarification_interpreter.FILLABLE_FIELDS` (the four consumers).
+
+---
+
+## RAG-22 · The first turn offers two accounts without asking whether the company has them
+
+**Severity** Major · **Measured** 2026-09-28, branch
+`phase-61-subledger-and-agent`, commit `45e5786`
+
+Reported from a live click-through in *Demo Company Ltd* (15449), whose chart
+has a bank account and **no cash account at all**:
+
+```
+  turn 1  دفعت 300 كهربا
+          🤔 هل تم دفع 300.00 من البنك أم الصندوق؟   1. البنك   2. الصندوق
+  turn 2  2
+          Recognized intent (expense_payment) but couldn't match the
+          required accounts. Please create the entry manually.
+```
+
+Option 2 names an account the company does not have, and choosing it dead-ends
+the entry the user was in the middle of making.
+
+### The options are fixed in code, not derived from the chart
+
+Measured by running the identical turn-1 message against both companies and
+comparing what came back. No provider calls, counted:
+
+| company | cash accounts in chart | options offered |
+|---|---|---|
+| 15449 Demo Company Ltd | **NONE** | `[('البنك', 'bank'), ('الصندوق', 'cash')]` |
+| 13116 Acme Demo Trading | `1100 الصندوق` | `[('البنك', 'bank'), ('الصندوق', 'cash')]` |
+
+Identical. The structural proof is the signature:
+`_clarification_options_for_missing_fields(missing_fields, language)` takes
+**no accounts argument**, so it cannot consult the chart even in principle.
+The same pair builds the question text through
+`_clarification_question_for_missing_fields`, so the sentence and the buttons
+are wrong together.
+
+### The path is sound; only the option is wrong
+
+Measured in the same company, same turn 1:
+
+| turn 2 | result |
+|---|---|
+| `1` (bank — exists) | drafts **`1110 Main Bank`**, correct |
+| `2` (cash — does not exist) | the failure message above |
+
+So this is not a broken clarification path. It is one offered option that no
+account can satisfy. A user who happens to pick the other one never sees it.
+
+### Why this is wider than RAG-19
+
+RAG-19 and RAG-20 are about reading the user's **reply**. This is about what
+the assistant **says first**, before the user has typed anything, and it is
+wrong for every company whose chart lacks one of the two hard-coded concepts.
+The ambiguity detector added in `6fda7eb` reads the live chart precisely so
+that "cash" is judged against this company's accounts — and the question that
+provokes the reply still does not.
+
+Note the detector inherits the blind spot in a second way: for a reply naming
+a concept with no matching account, `_concepts_present` still reports the
+concept, because it is keyed on the vocabulary rather than on the chart.
+
+**Not fixed here.** Deriving the options from the chart changes what every
+clarification question says, and a company with several cash accounts, or
+none, or only wallets, each need an answer. That is design work, not a patch.
+
+**Where** `gemini_assistant_service._clarification_options_for_missing_fields`
+(no `accounts` parameter), `_clarification_question_for_missing_fields`, and
+the `len(lines) < 2` guard at `_build_preview` that produces the dead end.
+
+### A second, separable problem in the same exchange: the reply's language
+
+The failure message arrived in **English inside an all-Arabic thread**. This is
+**not** a missing translation. Both sites that build it carry an Arabic form —
+`gemini_assistant_service.py:2225` and `:2604` — and the Arabic form was
+reproduced simply by changing what the request carried:
+
+```
+request language='en'  -> "Recognized intent (expense_payment) but couldn't match…"
+request language='ar'  -> "تم التعرف على النية (expense_payment) لكن لا يمكن مطابقة الحسابات."
+```
+
+Turn 1 answered in Arabic in **both** runs, because that message contains
+Arabic. So one exchange answered turn 1 in Arabic and turn 2 in English.
+
+This is **N24 as filed** — language is re-detected per message at
+`dispatch_gemini_assistant` (`language = detect_message_language(message, language)`)
+— with a subcase worth recording: `"2"` carries *neither* script, so
+`detect_message_language` returns its **fallback**, and the fallback is the
+language the request carried, which is the UI's language toggle rather than
+the thread's language.
+
+```
+detect_message_language('2', fallback='en') -> 'en'
+detect_message_language('2', fallback='ar') -> 'ar'
+```
+
+So a user with the UI in English who types Arabic gets Arabic answers to every
+message containing Arabic letters and English answers to every bare number,
+ordinal or digit — which is exactly the set of replies the clarification
+options invite. The fix is not a translation; it is deciding whether a thread
+has a language that a scriptless reply should inherit.
