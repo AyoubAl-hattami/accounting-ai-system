@@ -503,16 +503,50 @@ closed `Literal` using `receipt_destination` where this path uses
 *Runtime* — the whole suite, spied: `payment_source` only, as recorded under
 RAG-20.
 
-### What the invariant test does not catch, and that is the point
+### A live instance of the second row: `account_mapping`
 
-The test added for RAG-20 proves the first row of that table: no reply is
-certified that the resolver cannot read. It proves **neither of the other
-two**. It cannot see a produced name that reaches nobody (the detector
-returns "escalate", which is a valid answer, so there is nothing to fail on),
-and it cannot see a resolver answering the wrong question (the resolver
-returns a value, so it passes). Closing those needs a different assertion —
-that the set of producible names equals the set each consumer branches on —
-and that assertion does not exist. **This finding stays open until it does.**
+Found while writing the invariant test, and not removed by deleting the dead
+names. `_missing_fields_for` returns `["account_mapping"]` as its fallback. No
+consumer branches on that name, so `_concepts_present` finds no candidate
+concepts for it. Measured, every reply shape against a Yemen-shaped chart:
+
+| reply to an `account_mapping` question | detector | resolved |
+|---|---|---|
+| `1` / `2` / `الأول` | instant, `option` | **nothing** |
+| `البنك` / `الصندوق` / `محفظة ون كاش` | escalate, `named_account_no_concept` | nothing |
+| `bank` / `مورد` | escalate, `no_match` | nothing |
+
+For that question the instant path cannot answer anything. Every reply either
+escalates — a provider call each, where the same reply to a bank/cash question
+costs none — or is certified and resolves nothing. The option rows are RAG-20's
+shape again, three more of them; their severity is lower only because this
+question carries no options the user could have been offered
+(`_clarification_options_for_missing_fields` returns `[]` for it). Recorded
+rather than fixed, because the question is "which account?", not "bank or
+cash?", and giving it a resolver is different work.
+
+### What the invariant test catches, and what it still cannot
+
+`backend/tests/test_clarification_resolver_agreement.py` asserts row 1 in
+full: over a 1,574-reply corpus, closed over both option sets, all six
+vocabulary lists and the chart, no reply the detector certifies is one the
+resolver behind that field answers `None` to. Between 527 and 640 replies are
+certified per field, so the assertion is nowhere near vacuous, and
+`test_the_invariant_bites_when_the_option_sets_are_pulled_apart` reproduces
+the pre-fix resolver and requires the invariant to fail on exactly the three
+replies RAG-20 names.
+
+It also asserts **part of row 2**: the set of producible field names must
+equal the set that has a resolver plus an explicitly recorded gap set. That is
+what makes `account_mapping` visible above instead of invisible, and it means a
+newly produced name with no consumer fails a test rather than quietly doubling
+the provider bill.
+
+It does **not** cover row 3. A resolver answering a question that was not
+asked returns a value, so the invariant passes and the value is wrong. The
+assertion that would catch it — that each consumer's branch set is confined to
+the question actually asked — does not exist. **This finding stays open on that
+row, and on `account_mapping`.**
 
 **Where** `gemini_assistant_service._missing_fields_for` (the producer),
 `clarification_ambiguity._concepts_present`,
