@@ -2064,8 +2064,9 @@ def _normalize_clarification_answer(message: str) -> str:
 #
 # What keeps this closed is not the shared import. It is the invariant that
 # lands next: the detector must never certify a reply the resolver behind that
-# field cannot read. See RAG-20 in docs/open-findings.md -- a shared import
-# stops today's drift, an assertion stops the class.
+# field cannot read: tests/test_clarification_resolver_agreement.py. A shared
+# import stops today's drift; the assertion stops the class. See RAG-20 in
+# docs/closed-findings.md.
 def _resolve_bank_cash_answer(message: str) -> str | None:
     text = _normalize_clarification_answer(message)
     if text in OPTION_FIRST:

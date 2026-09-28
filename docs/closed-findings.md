@@ -94,6 +94,7 @@ mapping is a real piece of work and remains undone.
 | RAG-11 | An empty model answer was reported as "your request was processed successfully" | read, RV | `7e7d687` |
 | RAG-12 | 30 of the new tests failed, 5 of them needing the network; 142 pass offline | run, RV | `7e7d687` |
 | RAG-15 | Four of the six grounding cards were built, stored and discarded | component, RV | `23a79ca` |
+| RAG-20 ‡ | The detector certified nine replies the resolver behind it answered `None` to | measured, sweep | `f7243ee` `21f96cc` |
 
 ### E1, the handler-registry refactor, in order
 
@@ -116,6 +117,70 @@ After it: `if intent == ...` appears nowhere in the dispatcher, every
 producible intent is answered from `ASSISTANT_HANDLERS`, `NOT_DISPATCHED`
 and `INLINE_GATED_HANDLERS` are both empty, and a handler cannot be added
 without naming the permission set that gates it.
+
+### ‡ RAG-20, and why its second commit is the one that closes it
+
+`f7243ee` made both resolvers import the detector's option sets instead of
+restating them, which closed the nine field/reply pairs the finding named.
+That alone would have left the finding fixed and the class open: the two sides
+only have to describe one reply differently for "لم أفهم إجابتك" to come back,
+and for as long as the divergence existed nothing in the suite noticed it.
+
+`21f96cc` is the closure. `tests/test_clarification_resolver_agreement.py`
+asserts that no reply the detector certifies is one the resolver behind that
+field answers `None` to, over a 1,574-reply corpus closed over both option
+sets, all six vocabulary lists and the chart, with 527 to 640 replies
+certified per field so the assertion cannot pass vacuously. It carries its own
+proof of teeth: `test_the_invariant_bites_when_the_option_sets_are_pulled_apart`
+reproduces the pre-fix resolver and requires the invariant to fail, on exactly
+the three replies RAG-20 names, through the `option` short-circuit and no
+other rule. Demonstrated against the real source too, by reverting the fix:
+nine violations, then restored.
+
+What was measured when it was filed, by sweeping every reply in both option
+sets and every term in all six vocabulary lists against all four question
+fields (pure functions, no provider):
+
+```
+before: replies the detector passes that the resolver cannot read: 9
+  واحد / اتنين / اثنين  ×  transaction_type
+                        ×  supplier_or_expense
+                        ×  customer_or_income
+after f7243ee:                                                      0
+```
+
+Six of the nine pairs sat behind field names nothing produced and went away
+with those names in `2a758e3`. The three `transaction_type` pairs were
+reachable in production — that name is appended whenever
+`parsed.transaction_type == "unknown"` — and none was covered by any test. A
+runtime spy over the whole suite, recording every field name handed to each
+consumer, saw one:
+
+```
+  clarification_ambiguity            -> payment_source
+  _apply_clarification_answer        -> payment_source
+  _pending_from_parsed               -> payment_source
+  _resolve_transaction_type_answer   -> never called
+```
+
+So the type resolver's dispatch had no in-process test coverage at all, which
+is how nine holes sat in it unremarked. (Limit of that spy: it lives in the
+pytest process, so the HTTP files exercising the server process are outside it.
+The static enumeration recorded under RAG-21 is the primary evidence for what
+can be produced; this corroborates it in-process.)
+
+**Not a regression.** Before the detector existed, `واحد` on a type question
+also fell through to the re-ask — the resolver had never read it. What was new
+is that escalation now exists and would read it correctly, and the option
+short-circuit skipped it. A missed rescue, which is why it was filed Major
+rather than Critical: the outcome was a visible re-ask, not a silent wrong
+entry.
+
+**Still open beside it:** RAG-21, the structural half. The invariant covers one
+of the three ways the field-name agreement can break, and part of a second; the
+third — a resolver answering a question that was not asked — returns a value, so
+the invariant passes and the value is wrong. `account_mapping` remains a
+recorded gap. See `open-findings.md`.
 
 ### † B7, and the half of it that was never filed
 
@@ -189,9 +254,10 @@ worth recording than one nobody ever doubted.
 
 ## Where the rest are, and where they are not
 
-`open-findings.md` carries four written-up entries: **RAG-13, RAG-14,
-RAG-16, RAG-17**. Those are the open findings with a reproducible
-measurement attached.
+`open-findings.md` carries seven written-up entries: **RAG-13, RAG-14,
+RAG-16, RAG-17, RAG-18, RAG-19, RAG-21**. Those are the open findings with a
+reproducible measurement attached. (RAG-20 was filed there on 2026-09-28 and
+closed the same day; its record is the ‡ section above.)
 
 The rest of what is open has **no durable entry anywhere**, in that file or
 this one. They were measured in conversation and named in a ledger that was

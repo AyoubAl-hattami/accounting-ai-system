@@ -24,7 +24,9 @@ importing them, the detector accepted three spelled-out ordinals the
 transaction-type resolver did not, and because an exact option match
 SHORT-CIRCUITS every other rule in the detector, those three arrived at a
 resolver that answered ``None``. Nine field/reply pairs, none covered by any
-test. That is RAG-20 in ``docs/open-findings.md``.
+test. That is RAG-20, closed by this file and recorded in
+``docs/closed-findings.md``; RAG-21, in ``docs/open-findings.md``, is the half
+of it that stays open.
 
 Sharing the word lists closed those nine. It does not close the class: a word
 added to either side, a resolver given a new early return, a field routed to a
