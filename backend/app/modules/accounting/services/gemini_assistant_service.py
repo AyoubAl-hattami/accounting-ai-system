@@ -81,6 +81,8 @@ from app.modules.accounting.services.clarification_ambiguity import (
     CUSTOMER_TERMS,
     EXPENSE_TERMS,
     INCOME_TERMS,
+    OPTION_FIRST,
+    OPTION_SECOND,
     SUPPLIER_TERMS,
     clarification_ambiguity,
     normalize as normalize_clarification_text,
@@ -2048,22 +2050,35 @@ def _normalize_clarification_answer(message: str) -> str:
     return normalize_clarification_text(message)
 
 
-# The two resolvers below are UNCHANGED in behaviour. The only edit is that
-# their term lists now come from clarification_ambiguity instead of being
-# written out here, so the detector that decides whether a reply may reach
-# them is reading the same words they are. Two copies would drift, and the
-# drift would be invisible: the detector would start passing replies the
-# resolver reads differently, which is the exact failure RAG-19 describes.
+# Both resolvers read their vocabulary AND their option sets from
+# clarification_ambiguity, so the detector that decides whether a reply may
+# reach them is reading exactly the words they are.
 #
-# Their OPTION sets are deliberately still literal, because the two functions
-# genuinely disagree -- "واحد" and "اتنين" are accepted as ordinals by the
-# bank/cash resolver and not by the transaction-type one. That disagreement
-# predates this change and is preserved rather than quietly harmonised.
+# The option sets used to be restated here, and the earlier version of this
+# comment called the resulting disagreement deliberate: "واحد" and "اتنين"
+# were ordinals to the bank/cash resolver and not to the transaction-type one.
+# That was harmless while nothing acted on the detector's verdict. It stopped
+# being harmless when the detector began SHORT-CIRCUITING an exact option
+# match as unambiguous -- the detector certified nine replies the
+# transaction-type resolver answers None to, which is the "لم أفهم إجابتك"
+# re-ask reappearing inside the path built to remove it. That is RAG-20, and
+# one definition is what closes it.
+#
+# Note the bank/cash resolver's sets also carried "bank" and "cash". Those are
+# in BANK_TERMS and CASH_TERMS, so the scan below returns the same answer for
+# them and this narrowing changes nothing. The transaction-type resolver is
+# the one that gains: واحد, اتنين and اثنين now resolve there as they always
+# did for bank/cash.
+#
+# What keeps this closed is not the shared import. It is the invariant that
+# lands next: the detector must never certify a reply the resolver behind that
+# field cannot read. See RAG-20 in docs/open-findings.md -- a shared import
+# stops today's drift, an assertion stops the class.
 def _resolve_bank_cash_answer(message: str) -> str | None:
     text = _normalize_clarification_answer(message)
-    if text in {"1", "اول", "الأول", "الاول", "واحد", "bank"}:
+    if text in OPTION_FIRST:
         return "bank"
-    if text in {"2", "ثاني", "الثاني", "اتنين", "اثنين", "cash"}:
+    if text in OPTION_SECOND:
         return "cash"
     if any(term in text for term in BANK_TERMS):
         return "bank"
@@ -2074,12 +2089,12 @@ def _resolve_bank_cash_answer(message: str) -> str | None:
 
 def _resolve_transaction_type_answer(message: str, missing_field: str) -> str | None:
     text = _normalize_clarification_answer(message)
-    if text in {"1", "اول", "الأول", "الاول"}:
+    if text in OPTION_FIRST:
         if missing_field in {"supplier_or_expense", "transaction_type"}:
             return "supplier_payment"
         if missing_field == "customer_or_income":
             return "customer_receipt"
-    if text in {"2", "ثاني", "الثاني"}:
+    if text in OPTION_SECOND:
         if missing_field in {"supplier_or_expense", "transaction_type"}:
             return "expense_payment"
         if missing_field == "customer_or_income":
