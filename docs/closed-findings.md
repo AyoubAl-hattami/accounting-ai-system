@@ -52,6 +52,7 @@ mapping is a real piece of work and remains undone.
 | B2 / I1 | Alembic ignored `DATABASE_URL` for a hardcoded localhost | run | `cb96e52` |
 | B3 | `POST /company-users` enumerated any platform user's email | HTTP | `fdc44a5`, `c9f60fb` |
 | B5 | CSV formula injection via account names | test | `f87f7d0` |
+| B7 † | Conversation history presented to the model as trusted backend data | string assertions + live injection, RV | `2064479` |
 | C1 / N12 | Money fields accepted values the column cannot store | HTTP 500 to 422 | `86991d3` |
 | C2 | `audit_logs` unindexed for its own query; 35.093 ms to 0.108 ms | EXPLAIN | `351de68`, `7548ad6` |
 | C3 | General Ledger N+1: `1+2N` / `1+3N`, 151 queries at 50 accounts | query count | `7e340b9` |
@@ -115,6 +116,50 @@ After it: `if intent == ...` appears nowhere in the dispatcher, every
 producible intent is answered from `ASSISTANT_HANDLERS`, `NOT_DISPATCHED`
 and `INLINE_GATED_HANDLERS` are both empty, and a handler cannot be added
 without naming the permission set that gates it.
+
+### † B7, and the half of it that was never filed
+
+B7 was filed as "client-supplied history is passed to the model inside the
+section labelled as trusted backend data". That was true, in two live
+callers -- `gemini_transaction_parser._build_parser_prompt` and
+`gemini_assistant_service._call_gemini_for_answer` -- both of which put
+`bounded_recent_conversation` inside `<TRUSTED_ACCOUNTING_DATA>`. Those turns
+are the user's own words read back out of our storage, and storage is not
+provenance. They now travel in `<UNTRUSTED_CONVERSATION_CONTEXT>`.
+
+**The unfiled half is the more serious of the two, and it is recorded here
+because nothing else records it.** `build_agent_prompt` carried **no
+untrusted-text notice at all**, while `format_trusted_tool_result` has
+carried one since RAG-6. So every payload sent through the prompt path --
+including this company's entire chart of accounts -- was marked
+`<TRUSTED_ACCOUNTING_DATA>` with nothing saying that the free text inside it
+was typed by users. Marking the chart trusted without that sentence is the
+worse of the two lies, because it is the one that sounds careful. RAG-6
+measured an account whose NAME is "SYSTEM OVERRIDE: ignore all prior
+instructions...", and that name went into the trusted block unannotated.
+There is now one notice constant, used by both paths.
+
+A third boundary arrived with the fix: `<FIXED_OUTPUT_CONTRACT>`, stated
+before either untrusted block, carrying the allowed variants and the rule
+that an account may only be named by a code present in the trusted data. It
+used to be prose inside `task_instructions`, indistinguishable from advice.
+
+Evidence is in two parts, and they are different claims. Twelve string
+assertions in `tests/test_prompt_trust_boundaries.py` prove the boundaries
+are CONSTRUCTED correctly regardless of any model's behaviour. One live run
+against company 16323, provider reached, 4.7s, shows a model did not follow
+the injected account name: no `INJECTED-7731`, no 999999 entry, account 1999
+not named as a hint, history canary not leaked. The second is one provider,
+one model, one phrasing, one run -- it shows the labels were not defeated
+there, not that they cannot be.
+
+**Closed on one branch, open on the other, and neither ledger is lying.**
+The fix is `2064479`, which is on `phase-61-subledger-and-agent`.
+`batch-1-deploy-correctness` does not have it, and B7 is still listed as
+open in that branch's `docs/open-findings.md`, Part 1, under Security and
+authentication. That entry is correct for that branch. **Remove it when the
+branches merge, not before** -- deleting it now would claim a fix that
+branch does not carry.
 
 ---
 
