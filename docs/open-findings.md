@@ -352,7 +352,9 @@ because the table that would close it is incomplete.
   produces **1140**, `not bank, cash` produces **1100**. Abandonment
   discards the pending token; an unreadable reply asks a free-form question.
   All eight option/ordinal/plain answers still resolve with **0 provider
-  calls**, counted rather than assumed.
+  calls**. The corrected table, with HTTP requests rather than client
+  constructions, is under "Status 2026-09-29" below — the figures given on
+  2026-09-27 were counted with the wrong instrument.
 
 **What is unverified.** Four of the Arabic negation phrasings and the bare
 `جيب` have not been shown resolving, because the Gemini free tier's daily
@@ -392,17 +394,64 @@ limit: 20, model: gemini-3.6-flash
 Please retry in 43.9s
 ```
 
-**A caveat on every call count in this file.** The counter used throughout
-wraps `genai.Client.__init__`, so it counts client *constructions*, not HTTP
-requests. A row reported as `calls=1` is one client and at least one request;
-if the SDK retries internally — which the two `ServerError` rows make likely —
-it is more. The `calls=0` figures are unaffected: no client is built, so no
-request is issued, and the "instant and free" claim stands. The `calls=1`
-figures may undercount, and a sub-minute retry hint against a limit of 20 is
-hard to reconcile with four counted calls unless they do.
+### The call counts were produced by the wrong instrument — corrected
 
-**Still open.** Four rows, and now also the question of what the real request
-count is.
+Every "provider calls" figure recorded before 2026-09-29 came from a wrapper
+around `google.genai.Client.__init__`, which counts client **constructions**.
+That cannot see a second request through one client, and cannot see an
+SDK-internal retry at all.
+
+The right instrument counts HTTP attempts, and it is now in the repository:
+`backend/scripts/count_provider_requests.py` wraps `httpx.Client.send` — the
+call `google.genai` issues requests through — **and** `HTTPTransport.handle_request`
+underneath it, so a retry below `send` would show as the two numbers
+disagreeing.
+
+**Measured 2026-09-29, company 13116:**
+
+| what | HTTP requests (`send`) | (`transport`) |
+|---|---|---|
+| turn 1, `دفعت 300 كهربا` | **0** | 0 |
+| turn 2, an offered option (`2`) | **0** | 0 |
+| turn 2, an escalated reply (`من محفظة جيب`) | **1** | 1 |
+
+Five separate observations of the escalated case; `send` and `transport`
+agreed every time, so **there is no hidden retry**. That matches the SDK's
+default — `retry_args(None)` returns `stop_after_attempt(1)`, i.e. never
+retry, and nothing here passes `retry_options`.
+
+**So the correction is that the instrument was wrong, not the numbers.** The
+step-3 table's `calls=0` rows were sound by construction (no client, no
+request) and two of them are now re-verified at the transport layer; its
+`calls=1` rows are one HTTP request each, which the right instrument
+confirms. No figure in this file moves.
+
+One gap remains, and it is labelled rather than papered over: every escalated
+reply measured on 2026-09-29 returned **HTTP 503**, so the cost of a
+*successful* escalated reply is **inferred** — from the 1:1 send/transport
+ratio and the never-retry default — not measured. Re-measure on a day the
+provider answers.
+
+### What one clarification turn costs, for budgeting
+
+```
+turn 1 (the message that opens the clarification)      0 requests
+turn 2 resolved by an option, ordinal or plain word    0 requests
+turn 2 escalated to the interpreter                    1 request
+    -- whatever the outcome: resolved, 429 or 503
+```
+
+A two-turn exchange therefore costs **0 or 1** requests, and nothing costs
+more than one. On the free tier's 20/day that is **20 escalated replies per
+day across all users of the deployment**, with every option, ordinal and plain
+bank/cash answer free and unlimited.
+
+The number that matters for step 4: a semantic classifier on every
+unclassified message adds **1 request per message**, not per clarification, so
+its ceiling on this tier is 20 messages a day. That is the line the free tier
+cannot be argued past.
+
+**Still open.** Four rows. The counting question is settled.
 
 ### A second case, same root cause: a real account name read as a generic concept
 
