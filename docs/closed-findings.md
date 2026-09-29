@@ -218,13 +218,20 @@ not named as a hint, history canary not leaked. The second is one provider,
 one model, one phrasing, one run -- it shows the labels were not defeated
 there, not that they cannot be.
 
-**Closed on one branch, open on the other, and neither ledger is lying.**
-The fix is `2064479`, which is on `phase-61-subledger-and-agent`.
-`batch-1-deploy-correctness` does not have it, and B7 is still listed as
-open in that branch's `docs/open-findings.md`, Part 1, under Security and
-authentication. That entry is correct for that branch. **Remove it when the
-branches merge, not before** -- deleting it now would claim a fix that
-branch does not carry.
+**It was closed on one branch and open on the other, and neither ledger was
+lying.** The fix is `2064479`, on `phase-61-subledger-and-agent`.
+`batch-1-deploy-correctness` did not carry it, so B7 stayed listed as open in
+that branch's `docs/open-findings.md`, Part 1, under Security and
+authentication, and that entry was correct for that branch. The instruction
+here was to remove it when the branches merged and not before, because
+deleting it earlier would have claimed a fix that branch did not carry.
+
+**Done.** `batch-1-deploy-correctness` was merged into
+`phase-61-subledger-and-agent` to resolve the add/add conflict on
+`docs/open-findings.md`; the fix and the entry are now in one tree, so the
+row was removed and replaced with a note pointing here. The note also keeps
+the row's cross-reference to RAG-6, which was the tool-result half of the
+same labelling problem.
 
 ---
 
@@ -254,26 +261,31 @@ worth recording than one nobody ever doubted.
 
 ## Where the rest are, and where they are not
 
-`open-findings.md` carries seven written-up entries: **RAG-13, RAG-14,
-RAG-16, RAG-17, RAG-18, RAG-19, RAG-21**. Those are the open findings with a
-reproducible measurement attached. (RAG-20 was filed there on 2026-09-28 and
-closed the same day; its record is the ‡ section above.)
+**This section said something that is no longer true, and the correction is
+the point of it.** It used to say that everything open apart from a handful
+of RAG entries had no durable entry anywhere. That was accurate while the two
+ledgers sat on two branches; it stopped being accurate when
+`batch-1-deploy-correctness` was merged into `phase-61-subledger-and-agent`
+and the two `open-findings.md` files were concatenated.
 
-The rest of what is open has **no durable entry anywhere**, in that file or
-this one. They were measured in conversation and named in a ledger that was
-never committed, so all that survives of them is the ID:
+`open-findings.md` now carries two halves:
 
-    A7  A8  B4  B6  B7  B8  C4  E2  E4  E5  E8  F3  F4  G2  G3  G4
-    N1  N2  N3  N4  N5  N6  N8  N10  N13  N17  N18  N19  N20  N21
-    N22  N23  N24
-    G1 (the tidiness half)   D1, D4, A3, E7, I3 (as re-scoped above)
+* **The RAG series** -- eight written-up entries: **RAG-13, RAG-14, RAG-16,
+  RAG-17, RAG-18, RAG-19, RAG-21, RAG-22**, each with a reproducible
+  measurement. (RAG-20 was filed there on 2026-09-28 and closed the same day;
+  its record is the ‡ section above. B7 was removed from Part 1 by the merge;
+  its record is the † section.)
+* **Parts 1 to 3** -- the carried-forward backlog, one table per area, each
+  row stating whether it is **MEASURED**, **READING-ONLY** or **ID ONLY**.
+  This is where A7, A8, B4, B6, B8, C4, E2, E4, E5, E8, F3, F4, G1, N1--N6,
+  N8, N10, N13, N17--N24 now live.
 
-Listing the IDs here is not the same as filing them, and should not be read
-as filing them. `open-findings.md` requires a measurement per entry and
-these do not have one in written form -- which is precisely the failure this
-row is recording. Anyone picking one up starts by re-measuring it.
+What still has **no recoverable substance** is Part 2: **G2, G3, G4**, where
+all that survives is an ID and a gist, and the entry says so. Those three are
+a failure of record-keeping rather than findings, and anyone picking one up
+starts by re-measuring it.
 
-Three of the unfiled ones are nonetheless held still by tests, which is a
+Three of them are nonetheless held still by tests, which is a
 different thing again. N17, N18 and N19
 record `pl_contribution_question` answering with another handler's intent,
 reporting high confidence on an empty result, and filling `grounding.entries`
