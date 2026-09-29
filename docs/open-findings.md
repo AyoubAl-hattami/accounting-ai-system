@@ -352,6 +352,40 @@ behaviour under an unavailable provider and is itself worth having measured
 closes when those five are shown producing the account the user meant, on a
 day with quota, and not before.**
 
+### Status 2026-09-29 — one more row verified, four still not
+
+| reply | means | got |
+|---|---|---|
+| `لا، خليها من الصندوق بدل البنك` | not the bank — the cash box | **1100 الصندوق** ✓ |
+
+The first Arabic negation phrasing is verified. It resolved on 2026-09-28, in
+the two requests that got through before the cap closed again.
+
+The remaining four — `من الصندوق مش من البنك`, `ليس من البنك، من الصندوق`,
+`from cash not bank` and the bare `جيب` — have now failed to run on two
+separate days. Both times the interpreter returned `None` for a **provider
+error**, not for a wrong answer: on 2026-09-29 two rows raised `ServerError`
+(a 5xx from Google) and two raised `ClientError`, and a raw call made
+immediately after returned
+
+```
+429 RESOURCE_EXHAUSTED  metric: generate_content_free_tier_requests
+limit: 20, model: gemini-3.6-flash
+Please retry in 43.9s
+```
+
+**A caveat on every call count in this file.** The counter used throughout
+wraps `genai.Client.__init__`, so it counts client *constructions*, not HTTP
+requests. A row reported as `calls=1` is one client and at least one request;
+if the SDK retries internally — which the two `ServerError` rows make likely —
+it is more. The `calls=0` figures are unaffected: no client is built, so no
+request is issued, and the "instant and free" claim stands. The `calls=1`
+figures may undercount, and a sub-minute retry hint against a limit of 20 is
+hard to reconcile with four counted calls unless they do.
+
+**Still open.** Four rows, and now also the question of what the real request
+count is.
+
 ### A second case, same root cause: a real account name read as a generic concept
 
 Found while modelling the fix, and it is not a negation at all. The chart has
