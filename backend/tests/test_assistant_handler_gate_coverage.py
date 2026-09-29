@@ -27,12 +27,38 @@ One hole the old version did not cover is closed here: an intent that the
 resolution chain can produce but that nothing dispatches. That used to fall
 through silently.
 
+A second invariant arrived with the last handler to move. There is one
+registry loop, and it sits below two branches that do not test `intent`, so
+a registered handler answers only if neither fired first. Nine handlers
+always sat there; `pl_contribution_question` was moved down past both on a
+proof that they cannot fire for the messages it answers. That proof is an
+exhaustion over two closed phrase sets, and the section "the loop's position"
+below re-runs it against the source on every CI run -- because a phrase added
+to either list is all it would take to make it false again, and nothing else
+would fail.
+
 Pure AST plus one import of the registry module, which is dataclasses only --
 it pulls in neither the service, nor sqlalchemy, nor settings (measured: 0.06s,
 no side effects). No HTTP, no database. It runs in the static CI job.
 
-It still does NOT check that a handler's gate is the CORRECT one. Choosing the
-right permission set remains a review judgement.
+THE SECOND DISPATCH PATH
+------------------------
+``dispatch_unified_agent`` answers the same endpoint by letting Gemini call
+tools from ``AccountingToolRegistry`` instead of resolving an intent, so none of
+the invariants above can see it. It arrived with its own copy of the ``_CAN_*``
+sets, already two roles wider than the originals, and a viewer could read every
+member's email through it while REST answered the same viewer with 403. The
+last three tests in this file close that: the tool registry must IMPORT the
+permission vocabulary rather than restate it, every tool must carry one of those
+sets, and no tool may be reachable by a role its REST equivalent refuses.
+
+The tool registry is read as source, not imported: it pulls in google.genai,
+sqlalchemy and settings, which would make this file need the stack and drop it
+out of the static job.
+
+It still does NOT check that an INTENT handler's gate is the correct one.
+Choosing the right permission set there remains a review judgement; for tools,
+the REST comparison below decides it.
 """
 
 import ast
@@ -61,12 +87,13 @@ INLINE_GATED_HANDLERS: set[str] = set()
 
 # Produced by the resolution chain but deliberately not dispatched by any
 # handler.  Each needs a reason.
-NOT_DISPATCHED = {
-    # Falls past the whole chain to the clarification reply at the end of the
-    # dispatcher.  It is what the classifier returns when nothing matched, so
-    # there is nothing to authorise.
-    "unknown",
-}
+#
+# Empty. "unknown" was the last entry and is now registered like every other
+# intent: it is what the classifier returns when nothing matched, and what
+# answers it is the tool-calling model with the capability menu behind it.
+# Being registered is what puts it behind a permission set and inside the
+# invariants below.
+NOT_DISPATCHED: set[str] = set()
 
 
 def _module() -> ast.Module:
@@ -341,3 +368,482 @@ def test_inline_gate_allowlist_entries_still_exist_and_still_gate_themselves():
         "The inline gate exemption assumes a permission-set check exists in "
         f"{SERVICE.name}; none was found."
     )
+
+
+# ── the loop's position, and the one handler that had to move past a branch ──
+#
+# There is ONE registry loop, and it sits BELOW two branches that do not test
+# `intent` and so could never become entries: `if structured_followup:` and
+# `if generic_without_context:`. Every registered handler therefore answers
+# only if neither of those fired first.
+#
+# For nine of the ten handlers that is how it always was -- their branches sat
+# below both, so relocating them changed nothing. `pl_contribution_question`
+# is the exception: its branch sat ABOVE both, and registering it moved it
+# DOWN past them. That is a behaviour change unless neither branch can fire
+# for the messages it answers.
+#
+# `generic_without_context` cannot, by construction: it is
+# `_is_generic_entries_request(message) and contribution_metric is None`, and
+# the intent is set exactly when `contribution_metric` is truthy.
+#
+# `structured_followup` needed the proof below. Both predicates are closed
+# over literal phrase sets, so "they cannot both fire" is settled by
+# exhaustion rather than by sampling -- and an exhaustion is worth something
+# only while the sets stay closed, which is why the readers below refuse to
+# guess at a test whose shape they do not recognise.
+
+
+def _structured_followup_phrases() -> set[str]:
+    """Every message `_is_generic_structured_followup` accepts.
+
+    Its shape is `text = message.casefold().strip()` followed by one
+    `if text in {...}: return ...` per action. Anything else fails here: a
+    test this reader does not understand is an open set, and an exhaustion
+    over an open set proves nothing.
+    """
+    function = _function("_is_generic_structured_followup")
+    accepted: set[str] = set()
+    for statement in function.body[1:]:
+        if isinstance(statement, ast.Return):
+            continue
+        assert isinstance(statement, ast.If), (
+            "_is_generic_structured_followup grew a statement this reader does "
+            f"not understand: {ast.unparse(statement)[:80]}"
+        )
+        test = statement.test
+        assert (
+            isinstance(test, ast.Compare)
+            and isinstance(test.left, ast.Name)
+            and test.left.id == "text"
+            and len(test.ops) == 1
+            and isinstance(test.ops[0], ast.In)
+            and isinstance(test.comparators[0], ast.Set)
+        ), (
+            "_is_generic_structured_followup no longer accepts by literal "
+            f"membership: {ast.unparse(test)[:80]}. The exhaustion below is "
+            "valid only over a closed set -- re-derive it before changing this."
+        )
+        accepted |= {
+            element.value
+            for element in test.comparators[0].elts
+            if isinstance(element, ast.Constant) and isinstance(element.value, str)
+        }
+    return accepted
+
+
+def _contribution_triggers() -> tuple[set[str], set[str]]:
+    """What makes `_contribution_metric` return a metric: substrings, then phrases.
+
+    Its shape is `text = message.strip().lower()` followed by
+    `if any(x in text for x in (...))` twice and one `if text in {...}`. Same
+    refusal as above for anything else.
+    """
+    function = _function("_contribution_metric")
+    needles: set[str] = set()
+    phrases: set[str] = set()
+    for statement in function.body[1:]:
+        if isinstance(statement, ast.Return):
+            continue
+        assert isinstance(statement, ast.If), ast.unparse(statement)[:80]
+        test = statement.test
+        if isinstance(test, ast.Call) and getattr(test.func, "id", None) == "any":
+            generator = test.args[0]
+            assert isinstance(generator, ast.GeneratorExp), ast.unparse(test)[:80]
+            comparison = generator.elt
+            assert (
+                isinstance(comparison, ast.Compare)
+                and isinstance(comparison.ops[0], ast.In)
+                and isinstance(comparison.comparators[0], ast.Name)
+                and comparison.comparators[0].id == "text"
+            ), ast.unparse(comparison)[:80]
+            needles |= {
+                element.value
+                for element in ast.walk(generator.generators[0].iter)
+                if isinstance(element, ast.Constant)
+                and isinstance(element.value, str)
+            }
+        else:
+            assert (
+                isinstance(test, ast.Compare)
+                and isinstance(test.left, ast.Name)
+                and test.left.id == "text"
+                and isinstance(test.ops[0], ast.In)
+                and isinstance(test.comparators[0], ast.Set)
+            ), (
+                "_contribution_metric no longer fires by literal substring or "
+                f"literal membership: {ast.unparse(test)[:80]}."
+            )
+            phrases |= {
+                element.value
+                for element in test.comparators[0].elts
+                if isinstance(element, ast.Constant)
+                and isinstance(element.value, str)
+            }
+    return needles, phrases
+
+
+def test_the_two_phrase_sets_are_still_closed_and_non_empty():
+    """Guard the guard: an empty set exhausts trivially and proves nothing."""
+    followup = _structured_followup_phrases()
+    needles, phrases = _contribution_triggers()
+    assert followup, "_is_generic_structured_followup accepts nothing"
+    assert needles and phrases, "_contribution_metric fires on nothing"
+
+
+def test_no_structured_followup_phrase_can_set_a_contribution_metric():
+    """The proof that lets pl_contribution_question live below the two branches.
+
+    If this fails, the registry loop is answering a message that
+    `if structured_followup:` used to answer first, and the reply changed. The
+    fix is not to delete this test: it is to decide which of the two should
+    win, and either put the handler back where it wins or change the phrase
+    that collided.
+    """
+    needles, phrases = _contribution_triggers()
+
+    for accepted in sorted(_structured_followup_phrases()):
+        matched = sorted(needle for needle in needles if needle in accepted)
+        assert not matched, (
+            f"{accepted!r} reaches structured_followup AND contains {matched} "
+            "-- so it also sets contribution_metric, and the "
+            "pl_contribution_question handler now sits below a branch that "
+            "would have answered it first."
+        )
+        assert accepted not in phrases, (
+            f"{accepted!r} is accepted by structured_followup and is also an "
+            "exact contribution trigger."
+        )
+        # The two predicates normalise the same `message` differently, one
+        # with casefold().strip() and one with strip().lower(). Every accepted
+        # phrase is a fixed point of both, so the comparison above is between
+        # the string one predicate sees and the string the other sees.
+        assert accepted == accepted.casefold().strip() == accepted.strip().lower(), (
+            f"{accepted!r} is not a fixed point of both normalisations, so the "
+            "comparison above is between two different strings."
+        )
+
+
+def test_no_contribution_trigger_is_a_structured_followup_phrase():
+    """The converse, so a phrase added to EITHER list is caught."""
+    followup = _structured_followup_phrases()
+    needles, phrases = _contribution_triggers()
+
+    collisions = sorted(
+        trigger for trigger in (needles | phrases)
+        if trigger.casefold().strip() in followup
+    )
+    assert not collisions, (
+        "These contribution triggers are also structured-followup phrases: "
+        f"{collisions}."
+    )
+
+
+def test_casefold_and_lower_cannot_disagree_into_a_contribution_trigger():
+    """The one gap the phrase comparison above does not close by itself.
+
+    `_is_generic_structured_followup` normalises with `casefold()` and
+    `_contribution_metric` with `lower()`. A message could in principle
+    casefold into the accepted set while lowering into something else --
+    U+017F LATIN SMALL LETTER LONG S casefolds to "s" but lowers to itself.
+    That matters only if the character `lower()` leaves behind could help
+    build a contribution trigger. Over every code point in Unicode, none can.
+    """
+    needles, phrases = _contribution_triggers()
+    trigger_characters = set("".join(needles | phrases))
+
+    leaks = [
+        (hex(code_point), repr(chr(code_point)))
+        for code_point in range(0x110000)
+        if chr(code_point).casefold() != chr(code_point).lower()
+        and set(chr(code_point).lower()) & trigger_characters
+    ]
+    assert not leaks, (
+        "These code points case-map differently under casefold() and lower() "
+        f"AND supply a character a contribution trigger uses: {leaks[:10]}. "
+        "A message built from one could reach structured_followup and set "
+        "contribution_metric at the same time."
+    )
+
+
+# ── the tool-calling path: AccountingToolRegistry ────────────────────────────
+
+TOOL_REGISTRY = (
+    pathlib.Path(__file__).resolve().parents[1]
+    / "app" / "modules" / "accounting" / "services" / "accounting_tool_registry.py"
+)
+ROUTES = (
+    pathlib.Path(__file__).resolve().parents[1]
+    / "app" / "modules" / "accounting" / "routes"
+)
+COMPANY_USER_MODEL = (
+    pathlib.Path(__file__).resolve().parents[1]
+    / "app" / "modules" / "accounting" / "models" / "company_user.py"
+)
+PERMISSION_SOURCE = "assistant_handler_registry"
+
+# What each tool's data is behind over REST, as (route module, endpoint).
+#
+# Every tool needs an entry: an unlisted tool fails the first test below, which
+# is the point -- adding a tool is choosing who may call it, and that choice is
+# best made against the route that already answers the same question.
+#
+# A tool whose REST endpoint takes no allowed_roles is readable by every member
+# there, so the comparison passes for any set. It is still listed, so the claim
+# is checked rather than assumed.
+TOOL_REST_EQUIVALENT = {
+    "get_profit_loss": ("report_routes.py", "profit_and_loss_endpoint"),
+    "get_balance_sheet": ("report_routes.py", "balance_sheet_endpoint"),
+    "get_trial_balance": ("report_routes.py", "trial_balance_endpoint"),
+    "get_account_ledger": ("report_routes.py", "account_ledger_endpoint"),
+    "get_general_ledger": ("report_routes.py", "general_ledger_endpoint"),
+    "get_accounts": ("account_routes.py", "list_accounts_endpoint"),
+    "get_journal_entries": ("journal_routes.py", "list_journal_entries_endpoint"),
+    "trace_amount": ("journal_routes.py", "list_journal_entries_endpoint"),
+    "get_audit_logs": ("audit_routes.py", "list_audit_logs_endpoint"),
+    "get_company_users": ("company_user_routes.py", "list_company_users_endpoint"),
+    "get_invoices": ("invoice_routes.py", "list_invoices_endpoint"),
+    "get_invoice_details": ("invoice_routes.py", "get_invoice_endpoint"),
+    "get_payments": ("payment_routes.py", "list_payments_endpoint"),
+    "get_ar_aging": ("report_routes.py", "ar_aging_endpoint"),
+    "get_ap_aging": ("report_routes.py", "ap_aging_endpoint"),
+    "get_customer_statement": ("partner_routes.py", "partner_statement_endpoint"),
+    "get_vendor_statement": ("partner_routes.py", "partner_statement_endpoint"),
+    "get_credit_notes": ("credit_note_routes.py", "list_credit_notes_endpoint"),
+    "get_credit_note_details": ("credit_note_routes.py", "get_credit_note_endpoint"),
+    "get_refunds": ("refund_routes.py", "list_refunds_endpoint"),
+    # The proposal tool mutates nothing: it returns a draft the user has to
+    # confirm, and /confirm-action re-validates it. Compared against the create
+    # route anyway, because proposing an entry only an accountant may create is
+    # an invitation to a 403 one step later.
+    "propose_journal_entry": ("journal_routes.py", "create_journal_entry_endpoint"),
+}
+
+
+def _tool_registry_module() -> ast.Module:
+    return ast.parse(TOOL_REGISTRY.read_text(encoding="utf-8"))
+
+
+def _tool_permission_names() -> dict[str, str]:
+    """tool name -> the name of the permission set its _HANDLERS entry carries."""
+    found: dict[str, str] = {}
+    for node in ast.walk(_tool_registry_module()):
+        if not isinstance(node, ast.AnnAssign):
+            continue
+        if not (isinstance(node.target, ast.Name) and node.target.id == "_HANDLERS"):
+            continue
+        if not isinstance(node.value, ast.Dict):
+            continue
+        for key, value in zip(node.value.keys, node.value.values):
+            if not (isinstance(key, ast.Constant) and isinstance(key.value, str)):
+                continue
+            if not (isinstance(value, ast.Tuple) and len(value.elts) >= 2):
+                continue
+            permission = value.elts[1]
+            found[key.value] = (
+                permission.id
+                if isinstance(permission, ast.Name)
+                else ast.dump(permission)
+            )
+    return found
+
+
+def _role_vocabulary() -> frozenset[str]:
+    """Every role a company_users row may hold, from the model's check constraint."""
+    for node in ast.walk(ast.parse(COMPANY_USER_MODEL.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if node.value.startswith("role IN ("):
+                inner = node.value[len("role IN ("):].rstrip(")")
+                return frozenset(part.strip().strip("'\"") for part in inner.split(","))
+    raise AssertionError(f"No role check constraint found in {COMPANY_USER_MODEL.name}")
+
+
+def _rest_roles(module_name: str, function_name: str) -> frozenset[str] | None:
+    """Roles the endpoint admits, or None when it admits every member.
+
+    Roles outside the vocabulary are dropped: the invoice, payment and partner
+    reads list a role named "user", which no row can hold, so it admits nobody.
+    """
+    path = ROUTES / module_name
+    assert path.exists(), f"{module_name} not found in {ROUTES}"
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if not (isinstance(node, ast.FunctionDef) and node.name == function_name):
+            continue
+        for keyword in ast.walk(node):
+            if not isinstance(keyword, ast.keyword) or keyword.arg != "allowed_roles":
+                continue
+            if isinstance(keyword.value, (ast.Set, ast.List, ast.Tuple)):
+                named = frozenset(
+                    element.value
+                    for element in keyword.value.elts
+                    if isinstance(element, ast.Constant)
+                    and isinstance(element.value, str)
+                )
+                return named & _role_vocabulary()
+        return None
+    raise AssertionError(f"{function_name} not found in {module_name}")
+
+
+def test_tool_registry_is_still_detectable():
+    """Same guard-the-guard reasoning as above: a renamed _HANDLERS or a
+    restructured entry must fail loudly, not pass vacuously."""
+    assert _tool_permission_names(), (
+        f"No tool entries were found in {TOOL_REGISTRY.name}. _HANDLERS was "
+        "renamed or changed shape and the parser above needs updating -- do "
+        "not delete this test to make it pass."
+    )
+    assert _role_vocabulary(), "No role vocabulary was parsed from the model."
+
+
+def test_tool_registry_imports_the_permission_vocabulary_and_defines_none():
+    """The bypass this catches is a LOCAL _CAN_* set.
+
+    A local set does not fail the membership test below by itself: someone
+    reintroducing ``_CAN_READ_USERS = frozenset({"admin", "viewer"})`` at the
+    top of the tool registry would shadow the import, and every other assertion
+    here would still pass -- the name still resolves and the tools still carry
+    "a" set. The only thing that separates the two is where the name is bound,
+    so that is what this asserts.
+    """
+    module = _tool_registry_module()
+
+    local = {
+        target.id
+        for node in ast.walk(module)
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name) and target.id.startswith("_CAN_")
+    } | {
+        node.target.id
+        for node in ast.walk(module)
+        if isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+        and node.target.id.startswith("_CAN_")
+    }
+    assert not local, (
+        f"{TOOL_REGISTRY.name} defines its own permission set(s): {sorted(local)}.\n"
+        "It had four once, all wider than the originals, and a viewer read "
+        "every member's email through the assistant while REST refused the "
+        f"same viewer. Import them from {PERMISSION_SOURCE} instead."
+    )
+
+    imported = {
+        alias.name
+        for node in ast.walk(module)
+        if isinstance(node, ast.ImportFrom)
+        and node.module
+        and node.module.endswith(PERMISSION_SOURCE)
+        for alias in node.names
+        if alias.name.startswith("_CAN_")
+    }
+    missing = set(_tool_permission_names().values()) - imported
+    assert not missing, (
+        "These permission names gate tools but are not imported from "
+        f"{PERMISSION_SOURCE}: {sorted(missing)}. Wherever they come from, it "
+        "is not the one definition."
+    )
+
+
+def _declared_tool_names() -> set[str]:
+    """Tool names in TOOL_DECLARATIONS, which is what the model is offered."""
+    found: set[str] = set()
+    for node in ast.walk(_tool_registry_module()):
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(
+            isinstance(target, ast.Name) and target.id == "TOOL_DECLARATIONS"
+            for target in node.targets
+        ):
+            continue
+        for element in getattr(node.value, "elts", []):
+            for keyword in getattr(element, "keywords", []):
+                if keyword.arg == "name" and isinstance(keyword.value, ast.Constant):
+                    found.add(keyword.value.value)
+    return found
+
+
+def test_what_is_offered_and_what_is_handled_are_the_same_set():
+    """A declaration with no handler is a tool the model can call and the
+    registry then refuses as unknown; a handler with no declaration is a gate
+    nothing reaches. Removing a tool means removing both, and the two lists
+    are 300 lines apart."""
+    declared = _declared_tool_names()
+    handled = set(_tool_permission_names())
+    assert declared, "No FunctionDeclaration names were parsed; the shape changed."
+    assert declared == handled, (
+        f"offered but not handled: {sorted(declared - handled)}; "
+        f"handled but not offered: {sorted(handled - declared)}"
+    )
+
+
+def test_every_tool_carries_a_known_permission_set():
+    known = _permission_sets()
+    for tool, permission_name in sorted(_tool_permission_names().items()):
+        assert permission_name in known, (
+            f"Tool {tool!r} is gated by {permission_name!r}, which is not one "
+            f"of the _CAN_* sets in {PERMISSION_SOURCE}: {sorted(known)}."
+        )
+        assert known[permission_name], (
+            f"Tool {tool!r} is gated by {permission_name!r}, which is empty: "
+            "it would authorise nobody and gate nothing."
+        )
+
+
+def test_no_tool_is_withheld_from_a_role_rest_admits():
+    """The other direction, and the one [RAG-9] was.
+
+    The tool registry's own _CAN_READ_REPORTS omitted reviewer and approver,
+    so those two roles were offered ZERO tools while REST answered their
+    report requests with 200. A gate that is too narrow is not a safe
+    mistake -- it is a role that cannot use the product, and it hid behind
+    "the assistant is optional" for as long as nobody measured it.
+
+    Only endpoints that take no allowed_roles are checked: those admit every
+    member, so the tool behind them must too.
+    """
+    permission_sets = _permission_sets()
+    vocabulary = _role_vocabulary()
+
+    for tool, permission_name in sorted(_tool_permission_names().items()):
+        module_name, function_name = TOOL_REST_EQUIVALENT[tool]
+        if _rest_roles(module_name, function_name) is not None:
+            continue
+        missing = vocabulary - permission_sets[permission_name]
+        assert not missing, (
+            f"Tool {tool!r} is withheld from {sorted(missing)}, whom "
+            f"{module_name}:{function_name} admits -- it takes no "
+            "allowed_roles, so every member of the company may read it there."
+        )
+
+
+def test_no_tool_is_reachable_by_a_role_rest_would_refuse():
+    """The assistant is a second door onto the same data, not a wider one."""
+    permission_sets = _permission_sets()
+    tools = _tool_permission_names()
+
+    unlisted = set(tools) - set(TOOL_REST_EQUIVALENT)
+    assert not unlisted, (
+        f"These tools have no REST equivalent recorded: {sorted(unlisted)}.\n"
+        "Add each to TOOL_REST_EQUIVALENT naming the route that answers the "
+        "same question, so its role set is checked against that route's."
+    )
+
+    stale = set(TOOL_REST_EQUIVALENT) - set(tools)
+    assert not stale, (
+        f"TOOL_REST_EQUIVALENT names tools that no longer exist: {sorted(stale)}."
+    )
+
+    for tool, permission_name in sorted(tools.items()):
+        module_name, function_name = TOOL_REST_EQUIVALENT[tool]
+        rest = _rest_roles(module_name, function_name)
+        if rest is None:
+            continue
+        allowed = permission_sets[permission_name]
+        wider = allowed - rest
+        assert not wider, (
+            f"Tool {tool!r} is callable by {sorted(wider)}, whom "
+            f"{module_name}:{function_name} answers with 403.\n"
+            f"Tool gate {permission_name} = {sorted(allowed)}; REST allows "
+            f"{sorted(rest)}. Either narrow the tool's set or change the "
+            "route -- but the assistant must not be the wider door."
+        )

@@ -71,6 +71,22 @@ from app.modules.accounting.services.assistant_intent_orchestrator import (
     SemanticIntentClassifier,
     orchestrate_assistant_intent,
 )
+from app.modules.accounting.services.clarification_interpreter import (
+    InterpretedReply,
+    interpret_clarification_reply,
+)
+from app.modules.accounting.services.clarification_ambiguity import (
+    BANK_TERMS,
+    CASH_TERMS,
+    CUSTOMER_TERMS,
+    EXPENSE_TERMS,
+    INCOME_TERMS,
+    OPTION_FIRST,
+    OPTION_SECOND,
+    SUPPLIER_TERMS,
+    clarification_ambiguity,
+    normalize as normalize_clarification_text,
+)
 from app.modules.accounting.services.gemini_transaction_parser import (
     build_followup_message,
     looks_like_accounting_message_with_amount,
@@ -84,6 +100,14 @@ from app.modules.accounting.services.gemini_agent_contract import (
 )
 from app.modules.accounting.services.ai_providers.gemini_provider import (
     REQUEST_TIMEOUT_SECONDS as GEMINI_REQUEST_TIMEOUT_SECONDS,
+    model_calls_enabled,
+    request_budget,
+)
+from app.modules.accounting.services.report_grounding import (
+    account_ledger_grounding,
+    balance_sheet_grounding,
+    general_ledger_grounding,
+    trial_balance_grounding,
 )
 from app.modules.accounting.services.account_mapper import map_to_accounts
 from app.modules.accounting.services.assistant_handler_registry import (
@@ -978,7 +1002,9 @@ def _call_gemini_for_answer(
     api_key = getattr(settings, "GEMINI_API_KEY", "").strip()
     model = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash").strip()
 
-    if not api_key:
+    # `not model_calls_enabled()` reads the same as `not api_key` on purpose:
+    # the caller's fallback for both is the rules answer.
+    if not api_key or not model_calls_enabled():
         return None
 
     history_data: list[dict[str, str]] = []
@@ -1012,8 +1038,10 @@ def _call_gemini_for_answer(
         user_message=question,
         trusted_backend_data={
             "financial_context": context_summary,
-            "bounded_recent_conversation": history_data,
         },
+        # [B7], same defect as the transaction parser: the conversation is
+        # the user's own text and was being presented as backend data.
+        untrusted_conversation=history_data or None,
     )
 
     try:
@@ -1825,6 +1853,27 @@ def _missing_fields_for(parsed: ParsedTransaction, mapped: MappedTransaction) ->
     return missing or ["account_mapping"]
 
 
+def _clarification_question_for_missing_fields(
+    missing_fields: list[str],
+    language: str,
+) -> str | None:
+    """The question the user is answering, rebuilt from the field it asked about.
+
+    The interpreter needs to know what was asked -- "from bank or cash?" and
+    "supplier or expense?" make the same reply mean different things. The
+    pending envelope stores the missing FIELDS rather than the sentence, so
+    this reconstructs it from the same option labels the sentence was built
+    from, rather than storing a second copy that could drift.
+    """
+    options = _clarification_options_for_missing_fields(missing_fields, language)
+    if not options:
+        return None
+    labels = " / ".join(option.label for option in options)
+    return (
+        f"أيهما: {labels}؟" if language == "ar" else f"Which one: {labels}?"
+    )
+
+
 def _clarification_options_for_missing_fields(
     missing_fields: list[str],
     language: str,
@@ -1835,7 +1884,7 @@ def _clarification_options_for_missing_fields(
             ClarificationOption(label="البنك" if language == "ar" else "Bank", value="bank"),
             ClarificationOption(label="الصندوق" if language == "ar" else "Cash", value="cash"),
         ]
-    if first in {"supplier_or_expense", "transaction_type"}:
+    if first == "transaction_type":
         return [
             ClarificationOption(
                 label="سداد مورد" if language == "ar" else "Supplier payment",
@@ -1846,17 +1895,11 @@ def _clarification_options_for_missing_fields(
                 value="expense_payment",
             ),
         ]
-    if first == "customer_or_income":
-        return [
-            ClarificationOption(
-                label="تحصيل من عميل" if language == "ar" else "Customer collection",
-                value="customer_receipt",
-            ),
-            ClarificationOption(
-                label="إيراد جديد" if language == "ar" else "New revenue",
-                value="income_receipt",
-            ),
-        ]
+    # A "customer_or_income" branch offering "تحصيل من عميل / إيراد جديد" sat
+    # here. Nothing has ever produced that field name, so the branch could not
+    # be reached and those options have never been shown to anyone (RAG-21).
+    # Receipts reach the bank/cash question above through "receiving_account";
+    # a customer-versus-revenue question would be new work, not a restoration.
     return []
 
 
@@ -1880,43 +1923,187 @@ def _build_pending_clarification_result(
     )
 
 
+def _build_free_form_clarification_result(
+    question: str | None,
+    parsed: ParsedTransaction,
+    company_id: int,
+    missing_fields: list[str],
+    language: str,
+) -> ActionRequestResult:
+    """Re-ask in prose, with nothing for the user to match against.
+
+    The sibling above appends a numbered menu built from the missing fields.
+    That menu is exactly what the interpreter exists to stop depending on: a
+    fixed set of follow-ups is the same closed vocabulary one layer up, and
+    the user who typed "من محفظة جيب" was already looking at one.
+
+    So the question is the model's own wording, verbatim and bounded, with no
+    options attached. The pending token is still issued, so the next reply
+    re-enters the same path -- detector first, interpreter behind it.
+    """
+    pending = _pending_from_parsed(parsed, company_id, missing_fields)
+    token = _make_pending_context_token(pending) if pending else None
+    return ActionRequestResult(
+        reply=question or _fallback_clarification_prompt(language),
+        pending_transaction=pending,
+        clarification_options=[],
+        pending_context_token=token,
+    )
+
+
+def _fallback_clarification_prompt(language: str) -> str:
+    return (
+        "أحتاج مزيدًا من التوضيح."
+        if language == "ar"
+        else "I need a little more detail."
+    )
+
+
+def _account_by_code(
+    accounts: list[dict], code: str | None
+) -> dict | None:
+    if not code:
+        return None
+    for account in accounts:
+        if str(account.get("code")) == str(code):
+            return account
+    return None
+
+
+def _apply_interpreted_reply(
+    parsed: ParsedTransaction,
+    interpreted: "InterpretedReply",
+    accounts: list[dict],
+) -> tuple[ParsedTransaction, bool]:
+    """Turn a validated proposal into hints, and nothing more.
+
+    The interpreter names an account by CODE. This looks that code up in the
+    live chart and sets the hint to the account's NAME, because that is what
+    `map_to_accounts` resolves -- so the account is chosen by the same mapper
+    that chooses it for a deterministically parsed message, against the same
+    data, with no special path for model output. The caller then checks that
+    the mapper landed on the code the interpreter named.
+
+    Nothing here writes an account id, a journal line, or an amount the
+    interpreter was not explicitly allowed to replace.
+    """
+    updated = parsed.model_copy(deep=True)
+    changed = False
+
+    account = _account_by_code(accounts, interpreted.account_code)
+    hint = account.get("name") if account else interpreted.value
+
+    if interpreted.field in {"payment_source"} and hint:
+        updated.payment_source_hint = hint
+        changed = True
+    elif interpreted.field in {"receiving_account"} and hint:
+        updated.receiving_account_hint = hint
+        changed = True
+    elif interpreted.field == "transaction_type" and interpreted.value in {
+        "supplier_payment", "expense_payment", "customer_receipt", "income_receipt",
+    }:
+        updated.transaction_type = interpreted.value
+        if interpreted.value == "supplier_payment":
+            updated.debit_account_hint = "accounts payable"
+        elif interpreted.value == "expense_payment":
+            updated.debit_account_hint = updated.debit_account_hint or "expense"
+        elif interpreted.value == "customer_receipt":
+            updated.credit_account_hint = "accounts receivable"
+        elif interpreted.value == "income_receipt":
+            updated.credit_account_hint = updated.credit_account_hint or "sales revenue"
+        changed = True
+
+    if interpreted.variant == "replace" and interpreted.amount is not None:
+        updated.amount = interpreted.amount
+        changed = True
+
+    return updated, changed
+
+
+def _interpretation_landed_on_the_named_account(
+    mapped: "MappedTransaction",
+    interpreted: "InterpretedReply | None",
+) -> bool:
+    """Did the mapper resolve to the account the interpreter actually named?
+
+    This is the check that does not trust anything the model said. The
+    interpreter proposes a code; `map_to_accounts` independently resolves the
+    name; if the two disagree, the draft would be against an account nobody
+    chose -- which is RAG-19's shape with a different cause. Disagreement is
+    treated as unresolved, not as a near-enough answer.
+    """
+    if interpreted is None or not interpreted.account_code:
+        return True
+    landed = {mapped.debit_account_code, mapped.credit_account_code}
+    return str(interpreted.account_code) in {str(code) for code in landed if code}
+
+
 def _normalize_clarification_answer(message: str) -> str:
-    arabic_digits = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
-    return message.translate(arabic_digits).strip().lower()
+    return normalize_clarification_text(message)
 
 
+# Both resolvers read their vocabulary AND their option sets from
+# clarification_ambiguity, so the detector that decides whether a reply may
+# reach them is reading exactly the words they are.
+#
+# The option sets used to be restated here, and the earlier version of this
+# comment called the resulting disagreement deliberate: "واحد" and "اتنين"
+# were ordinals to the bank/cash resolver and not to the transaction-type one.
+# That was harmless while nothing acted on the detector's verdict. It stopped
+# being harmless when the detector began SHORT-CIRCUITING an exact option
+# match as unambiguous -- the detector certified nine replies the
+# transaction-type resolver answers None to, which is the "لم أفهم إجابتك"
+# re-ask reappearing inside the path built to remove it. That is RAG-20, and
+# one definition is what closes it.
+#
+# Note the bank/cash resolver's sets also carried "bank" and "cash". Those are
+# in BANK_TERMS and CASH_TERMS, so the scan below returns the same answer for
+# them and this narrowing changes nothing. The transaction-type resolver is
+# the one that gains: واحد, اتنين and اثنين now resolve there as they always
+# did for bank/cash.
+#
+# What keeps this closed is not the shared import. It is the invariant that
+# lands next: the detector must never certify a reply the resolver behind that
+# field cannot read: tests/test_clarification_resolver_agreement.py. A shared
+# import stops today's drift; the assertion stops the class. See RAG-20 in
+# docs/closed-findings.md.
 def _resolve_bank_cash_answer(message: str) -> str | None:
     text = _normalize_clarification_answer(message)
-    if text in {"1", "اول", "الأول", "الاول", "واحد", "bank"}:
+    if text in OPTION_FIRST:
         return "bank"
-    if text in {"2", "ثاني", "الثاني", "اتنين", "اثنين", "cash"}:
+    if text in OPTION_SECOND:
         return "cash"
-    if any(term in text for term in ["البنك", "بنك", "مصرف", "bank"]):
+    if any(term in text for term in BANK_TERMS):
         return "bank"
-    if any(term in text for term in ["الصندوق", "صندوق", "كاش", "نقد", "نقدية", "cash"]):
+    if any(term in text for term in CASH_TERMS):
         return "cash"
     return None
 
 
 def _resolve_transaction_type_answer(message: str, missing_field: str) -> str | None:
+    """Read a reply to the "supplier payment or new expense?" question.
+
+    `missing_field` had three accepted values. Two of them -- "supplier_or_expense"
+    and "customer_or_income" -- are produced by nothing, so their branches could
+    not run, and the "customer_or_income" pair was the only place a positional
+    ordinal could mean a receipt. Both are gone (RAG-21); the ordinals now mean
+    what the question offers, and only that. The four term scans below are
+    unchanged and stay ungated on the field: a type question can be answered
+    with any of the four concepts, whichever two were shown as options.
+    """
     text = _normalize_clarification_answer(message)
-    if text in {"1", "اول", "الأول", "الاول"}:
-        if missing_field in {"supplier_or_expense", "transaction_type"}:
+    if missing_field == "transaction_type":
+        if text in OPTION_FIRST:
             return "supplier_payment"
-        if missing_field == "customer_or_income":
-            return "customer_receipt"
-    if text in {"2", "ثاني", "الثاني"}:
-        if missing_field in {"supplier_or_expense", "transaction_type"}:
+        if text in OPTION_SECOND:
             return "expense_payment"
-        if missing_field == "customer_or_income":
-            return "income_receipt"
-    if any(term in text for term in ["سداد مورد", "مورد", "supplier", "payable"]):
+    if any(term in text for term in SUPPLIER_TERMS):
         return "supplier_payment"
-    if any(term in text for term in ["مصروف جديد", "مصروف", "expense"]):
+    if any(term in text for term in EXPENSE_TERMS):
         return "expense_payment"
-    if any(term in text for term in ["تحصيل من عميل", "عميل", "زبون", "customer", "receivable"]):
+    if any(term in text for term in CUSTOMER_TERMS):
         return "customer_receipt"
-    if any(term in text for term in ["إيراد جديد", "ايراد جديد", "إيراد", "ايراد", "revenue", "income"]):
+    if any(term in text for term in INCOME_TERMS):
         return "income_receipt"
     return None
 
@@ -1941,21 +2128,23 @@ def _apply_clarification_answer(
             updated.receiving_account_hint = destination
             changed = True
 
-    for field_name in ("transaction_type", "supplier_or_expense", "customer_or_income"):
-        if field_name in missing:
-            tx_type = _resolve_transaction_type_answer(answer, field_name)
-            if tx_type:
-                updated.transaction_type = tx_type
-                if tx_type == "supplier_payment":
-                    updated.debit_account_hint = "accounts payable"
-                elif tx_type == "expense_payment":
-                    updated.debit_account_hint = updated.debit_account_hint or "expense"
-                elif tx_type == "customer_receipt":
-                    updated.credit_account_hint = "accounts receivable"
-                elif tx_type == "income_receipt":
-                    updated.credit_account_hint = updated.credit_account_hint or "sales revenue"
-                changed = True
-            break
+    # This was a loop over three field names with a break after the first one
+    # present. Two of the three are produced by nothing, so it was a loop over
+    # one (RAG-21). All four transaction types stay reachable: which one a reply
+    # means is decided by the reply, not by which two were offered.
+    if "transaction_type" in missing:
+        tx_type = _resolve_transaction_type_answer(answer, "transaction_type")
+        if tx_type:
+            updated.transaction_type = tx_type
+            if tx_type == "supplier_payment":
+                updated.debit_account_hint = "accounts payable"
+            elif tx_type == "expense_payment":
+                updated.debit_account_hint = updated.debit_account_hint or "expense"
+            elif tx_type == "customer_receipt":
+                updated.credit_account_hint = "accounts receivable"
+            elif tx_type == "income_receipt":
+                updated.credit_account_hint = updated.credit_account_hint or "sales revenue"
+            changed = True
 
     return updated, changed
 
@@ -2116,9 +2305,101 @@ def _handle_pending_transaction_answer(
 
     active_accounts = [a for a in accounts_raw if a.get("is_active", True)]
     parsed = _parsed_from_pending(pending)
-    parsed, changed = _apply_clarification_answer(parsed, pending, message)
+
+    # ── Is this reply safe to read by pattern? ───────────────────────────────
+    # The resolvers below scan for terms in a fixed order and cannot see
+    # negation or the chart, so they answer "not the bank, from the cash box"
+    # with bank, and "محفظة ون كاش" with the cash account. Both silently --
+    # a value resolves, so the "لم أفهم" branch never runs and a draft is
+    # offered against an account the user ruled out. That is RAG-19.
+    #
+    # The detector runs FIRST and escalates anything it is unsure of. It reads
+    # this company's live accounts, not a word list, because "كاش" is only
+    # ambiguous once the chart contains an account named after it.
+    #
+    # What it escalates is INTERPRETED. The model reads the reply against this
+    # company's chart and proposes a field value; it proposes nothing else,
+    # and everything it proposes is re-resolved below by map_to_accounts and
+    # re-checked against the code it named. When it is unavailable, over
+    # budget, or answers something this backend does not recognise, the
+    # interpretation is None and the deterministic re-ask runs -- which is
+    # what this path did before the interpreter existed.
+    ambiguity = clarification_ambiguity(
+        message, active_accounts, pending.missing_fields
+    )
+    interpreted = None
+    if ambiguity:
+        parsed, changed = _apply_clarification_answer(parsed, pending, message)
+    else:
+        logger.info(
+            "intent=clarification_answer outcome=escalated reason=%s accounts=%s",
+            ambiguity.reason,
+            ",".join(ambiguity.matched_accounts) or "-",
+        )
+        interpreted = interpret_clarification_reply(
+            reply=message,
+            missing_fields=pending.missing_fields,
+            known_fields={
+                "amount": parsed.amount,
+                "transaction_type": parsed.transaction_type,
+                "description": parsed.description,
+                "counterparty": parsed.counterparty,
+            },
+            # PendingTransaction carries the fields it is missing, not the
+            # sentence they were asked with, so the question is rebuilt from
+            # the same helper that produced it.
+            question_asked=_clarification_question_for_missing_fields(
+                pending.missing_fields, language
+            ),
+            accounts=active_accounts,
+            language=language,
+        )
+        changed = False
+
+        if interpreted is not None and interpreted.variant == "abandon":
+            # The token is a stateless signed envelope, so discarding it is
+            # simply not handing one back: nothing is echoed, the client stops
+            # sending it, and the next message starts clean.
+            return ActionRequestResult(
+                reply=(
+                    "تم إلغاء العملية. لم يتم حفظ أي قيد."
+                    if language == "ar"
+                    else "Cancelled. Nothing was recorded."
+                )
+            )
+
+        if interpreted is not None and interpreted.variant == "unclear":
+            # Free-form, and deliberately not a menu: a fixed set of
+            # follow-ups is the same closed vocabulary one layer up. The
+            # answer re-enters this same path.
+            return _build_free_form_clarification_result(
+                question=interpreted.question,
+                parsed=parsed,
+                company_id=company_id,
+                missing_fields=pending.missing_fields,
+                language=language,
+            )
+
+        if interpreted is not None and interpreted.variant in {"fill", "replace"}:
+            parsed, changed = _apply_interpreted_reply(parsed, interpreted, active_accounts)
 
     mapped = map_to_accounts(parsed, active_accounts, language)
+
+    # The interpreter named a code; the mapper resolved a name. If they
+    # disagree, nobody chose the account that would be drafted, so this is
+    # unresolved rather than near enough. The check runs on the mapper's
+    # output, so it holds whatever the model said.
+    if not _interpretation_landed_on_the_named_account(mapped, interpreted):
+        logger.warning(
+            "intent=clarification_interpreter outcome=code_mismatch "
+            "named=%s landed=%s/%s",
+            interpreted.account_code if interpreted else None,
+            mapped.debit_account_code,
+            mapped.credit_account_code,
+        )
+        changed = False
+        mapped = mapped.model_copy(update={"needs_clarification": True})
+
     if mapped.needs_clarification:
         missing_fields = _missing_fields_for(parsed, mapped)
         question = mapped.clarification_question
@@ -3290,18 +3571,24 @@ def _structured_report_reply(
         if kind == "balance_sheet":
             report = get_balance_sheet(db=db, company_id=company_id, as_of_date=end_date or get_today_date())
             as_of = report.as_of_date
-            metrics = {"total_assets": _report_amount(report.total_assets), "total_liabilities": _report_amount(report.total_liabilities), "total_equity": _report_amount(report.total_equity), "current_year_earnings": _report_amount(report.current_year_earnings), "prior_year_earnings": _report_amount(report.prior_year_earnings), "liabilities_and_equity": _report_amount(report.total_liabilities_and_equity), "difference": _report_amount(report.total_assets - report.total_liabilities_and_equity), "is_balanced": report.total_assets == report.total_liabilities_and_equity}
-            sections = [{"section": name, "total": _report_amount(total), "accounts": [{"account_id": line.account_id, "account_code": line.account_code, "account_name": line.account_name, "balance": _report_amount(line.amount)} for line in lines[:50]]} for name, total, lines in (("assets", report.total_assets, report.asset_lines), ("liabilities", report.total_liabilities, report.liability_lines), ("equity", report.total_equity, report.equity_lines))]
-            grounding = BalanceSheetGrounding(status="grounded", kind="balance_sheet", requested_metric=metric, period=ReportPeriod(as_of_date=as_of.isoformat() if as_of else None, label=f"As of {as_of}"), metrics=metrics, sections=sections, reference=ReportReference(type="report", report="balance_sheet", filters={"as_of_date": as_of.isoformat() if as_of else None}))
-            m=metrics
+            # The card is built in report_grounding now, so the tool path can
+            # build the same one from the same DTO. Byte-identical output is
+            # asserted in tests/test_structured_grounding_parity.py against a
+            # card captured before the move.
+            grounding = balance_sheet_grounding(report, requested_metric=metric)
+            m = grounding.metrics
             reply=(f"Balance Sheet as of {as_of}:\nTotal assets: {m['total_assets']}\nTotal liabilities: {m['total_liabilities']}\nTotal equity: {m['total_equity']}\nLiabilities and equity: {m['liabilities_and_equity']}\nDifference: {m['difference']}\n" + ("The balance sheet is balanced according to the accounting data." if m["is_balanced"] else "The balance sheet is not balanced according to the accounting data.")) if language != "ar" else f"الميزانية العمومية حتى {as_of}:\nإجمالي الأصول: {m['total_assets']}\nإجمالي الالتزامات: {m['total_liabilities']}\nإجمالي حقوق الملكية: {m['total_equity']}\nالالتزامات وحقوق الملكية: {m['liabilities_and_equity']}\nالفرق: {m['difference']}"
             return GeminiAssistantReply(reply=reply, intent="answer_balance_sheet_question", confidence="high", data_sources=["balance_sheet_report"], grounding=grounding)
         if kind == "trial_balance":
             report = get_trial_balance(db=db, company_id=company_id, as_of_date=end_date)
             difference = report.total_debit - report.total_credit
             is_balanced = difference == Decimal("0")
-            lines = [{"account_id": l.account_id, "account_code": l.account_code, "account_name": l.account_name, "account_type": l.account_type, "debit_balance": _report_amount(l.debit_balance), "credit_balance": _report_amount(l.credit_balance), "net_balance": _report_amount(l.debit_balance-l.credit_balance)} for l in report.lines[:50]]
-            grounding=TrialBalanceGrounding(status="grounded", kind="trial_balance", requested_metric=metric, period=ReportPeriod(as_of_date=report.as_of_date.isoformat() if report.as_of_date else None, label=label or (f"As of {report.as_of_date}" if report.as_of_date else "All available data")), metrics={"total_debit":_report_amount(report.total_debit),"total_credit":_report_amount(report.total_credit),"difference":_report_amount(difference),"is_balanced":is_balanced}, accounts=lines, summary=ReportSummary(total_accounts=len(report.lines),returned_accounts=len(lines),has_more=len(report.lines)>len(lines)), reference=ReportReference(type="report",report="trial_balance",filters={"end_date":report.as_of_date.isoformat() if report.as_of_date else None}))
+            # Built in report_grounding now; byte-identical output asserted in
+            # tests/test_structured_grounding_parity.py against a card
+            # captured before the move.
+            grounding = trial_balance_grounding(
+                report, requested_metric=metric, label=label
+            )
             english_totals = f"Total debit: {_report_amount(report.total_debit)}\nTotal credit: {_report_amount(report.total_credit)}\nDifference: {_report_amount(difference)}"
             arabic_totals = f"إجمالي المدين: {_report_amount(report.total_debit)}\nإجمالي الدائن: {_report_amount(report.total_credit)}\nالفرق: {_report_amount(difference)}"
             if metric == "balanced":
@@ -3315,9 +3602,17 @@ def _structured_report_reply(
                 reply = f"ميزان المراجعة:\n{arabic_totals}" if language == "ar" else f"Trial Balance:\n{english_totals}\n" + ("The trial balance is balanced." if is_balanced else "The trial balance is not balanced.")
             return GeminiAssistantReply(reply=reply,intent="answer_trial_balance_question",confidence="high",data_sources=["trial_balance_report"],grounding=grounding)
         if kind == "general_ledger":
-            report=get_general_ledger(db=db,company_id=company_id,start_date=start_date,end_date=end_date); accounts=report.accounts[:20]
-            rows=[{"account_id":a.account_id,"account_code":a.account_code,"account_name":a.account_name,"account_type":a.account_type,"opening_balance":_report_amount(a.opening_balance),"total_debit":_report_amount(sum((x.debit for x in a.lines),Decimal("0.00"))),"total_credit":_report_amount(sum((x.credit for x in a.lines),Decimal("0.00"))),"closing_balance":_report_amount(a.closing_balance),"entry_count":len(a.lines)} for a in accounts]
-            grounding=GeneralLedgerGrounding(status="grounded",kind="general_ledger",requested_metric=metric,period=_report_period(start_date,end_date,label or "All available data"),accounts=rows,summary=ReportSummary(total_accounts=len(report.accounts),returned_accounts=len(rows),has_more=len(report.accounts)>len(rows)),reference=ReportReference(type="report",report="general_ledger",filters={"start_date":start_date.isoformat() if start_date else None,"end_date":end_date.isoformat() if end_date else None}))
+            report=get_general_ledger(db=db,company_id=company_id,start_date=start_date,end_date=end_date)
+            # Built in report_grounding now; byte-identical output asserted in
+            # tests/test_structured_grounding_parity.py against a card
+            # captured before the move.
+            grounding = general_ledger_grounding(
+                report,
+                start_date=start_date,
+                end_date=end_date,
+                requested_metric=metric,
+                label=label,
+            )
             return GeminiAssistantReply(reply=("General Ledger account summary." if language != "ar" else "ملخص حسابات دفتر الأستاذ العام."),intent="answer_general_ledger_question",confidence="high",data_sources=["general_ledger_report"],grounding=grounding)
         # The NLU entity is a routing hint. The established extractor remains
         # authoritative for exact user-provided names and codes.
@@ -3326,9 +3621,18 @@ def _structured_report_reply(
         candidates = _resolve_account_candidates(accounts, normalized)
         if len(candidates)!=1:
             return _account_resolution_clarification(candidates, language)
-        account=candidates[0]; report=get_account_ledger(db=db,company_id=company_id,account_id=account.id,start_date=start_date,end_date=end_date); lines=report.lines[:20]
-        entries=[{"journal_entry_id":x.journal_entry_id,"entry_number":x.entry_no,"entry_date":x.entry_date.isoformat(),"description":x.description or "","status":"posted","source":"accounting_report","debit":_report_amount(x.debit),"credit":_report_amount(x.credit),"running_balance":_report_amount(x.running_balance)} for x in lines]
-        grounding=AccountLedgerGrounding(status="grounded",kind="account_ledger",requested_metric=metric,period=_report_period(start_date,end_date,label or "All available data"),account={"account_id":account.id,"account_code":account.code,"account_name":account.name,"account_type":account.account_type},metrics={"opening_balance":_report_amount(report.opening_balance),"total_debit":_report_amount(sum((x.debit for x in report.lines),Decimal("0.00")),),"total_credit":_report_amount(sum((x.credit for x in report.lines),Decimal("0.00"))),"closing_balance":_report_amount(report.closing_balance)},entries=entries,summary=ReportSummary(total_entries=len(report.lines),returned_entries=len(entries),has_more=len(report.lines)>len(entries)),reference=ReportReference(type="report",report="account_ledger",filters={"account_id":account.id,"start_date":start_date.isoformat() if start_date else None,"end_date":end_date.isoformat() if end_date else None}))
+        account=candidates[0]; report=get_account_ledger(db=db,company_id=company_id,account_id=account.id,start_date=start_date,end_date=end_date)
+        # Built in report_grounding now; byte-identical output asserted in
+        # tests/test_structured_grounding_parity.py against a card captured
+        # before the move.
+        grounding = account_ledger_grounding(
+            report,
+            account,
+            start_date=start_date,
+            end_date=end_date,
+            requested_metric=metric,
+            label=label,
+        )
         return GeminiAssistantReply(reply=(f"Account ledger {account.code} {account.name}:\nOpening balance: {grounding.metrics['opening_balance']}\nTotal debit: {grounding.metrics['total_debit']}\nTotal credit: {grounding.metrics['total_credit']}\nClosing balance: {grounding.metrics['closing_balance']}" if language != "ar" else f"دفتر أستاذ الحساب {account.code} {account.name}:\nالرصيد الافتتاحي: {grounding.metrics['opening_balance']}\nإجمالي المدين: {grounding.metrics['total_debit']}\nإجمالي الدائن: {grounding.metrics['total_credit']}\nالرصيد الختامي: {grounding.metrics['closing_balance']}"),intent="answer_account_ledger_question",confidence="high",data_sources=["account_ledger_report"],grounding=grounding)
     except Exception:
         logger.warning("structured report grounding failed", exc_info=True)
@@ -3791,7 +4095,272 @@ def _handle_structured_report_question(
     )
 
 
+def _handle_pl_contribution_question(
+    request: AssistantRequest,
+) -> GeminiAssistantReply:
+    """Answer "which entries make up revenue / expenses / this profit".
+
+    The last handler to leave the dispatcher's if-chain, and the only one that
+    had to move DOWN past a branch rather than only out of one. Its branch sat
+    above `if structured_followup:` and `if generic_without_context:`, neither
+    of which tests `intent`, so registering it meant proving that neither can
+    fire for the messages it answers:
+
+      * `generic_without_context` is `_is_generic_entries_request(message) and
+        contribution_metric is None`, and `intent == "pl_contribution_question"`
+        holds exactly when `contribution_metric` is set -- so it is False by
+        construction wherever this handler runs. That is the same kind of
+        guarantee the registry module already recorded for it.
+      * `structured_followup` is `_is_generic_structured_followup(message)`,
+        which accepts eleven literal phrases and nothing else;
+        `_contribution_metric` fires on six literal substrings plus two literal
+        phrases and nothing else. None of the eleven contains any of the six or
+        equals either of the two. That is exhaustive, because both sets are
+        closed -- see the registry module for the enumeration and for the one
+        way the two could have diverged without it.
+
+    The role check that used to be the branch directly above this one is now
+    this handler's registry `permission` and `denial`. What remains below is
+    the branch, dedented and unchanged.
+    """
+    db = request.db
+    company_id = request.company_id
+    language = request.language
+    prior_grounding = request.prior_grounding
+    contribution_metric = request.contribution_metric
+
+    grounded_period = (prior_grounding or {}).get("period") or {}
+    try:
+        start_date = date.fromisoformat(grounded_period["start_date"]) if grounded_period.get("start_date") else None
+        end_date = date.fromisoformat(grounded_period["end_date"]) if grounded_period.get("end_date") else None
+    except (TypeError, ValueError):
+        start_date, end_date = None, None
+    period_label = grounded_period.get("label") or "all available data"
+    metrics = ["revenue", "expenses"] if contribution_metric == "net_profit" else [contribution_metric]
+    all_matches = []
+    for metric in metrics:
+        matches = _tool_get_pl_contributors(db, company_id, start_date, end_date, metric, limit=10)
+        if matches is None:
+            return GeminiAssistantReply(reply=_unavailable_journal_reply(language), intent="answer_journal_question", confidence="low", data_sources=[], grounding=_unavailable_journal_grounding())
+        all_matches.extend(matches)
+    unique = {}
+    for match in all_matches:
+        unique.setdefault(match["id"], match)
+    matches = list(unique.values())[:20]
+    for match in matches:
+        match["total_matches"] = len(unique)
+    grounding = _build_contribution_evidence(matches, contribution_metric, start_date, end_date, period_label)
+    return GeminiAssistantReply(reply=_contribution_reply(matches, contribution_metric, period_label, language), intent="answer_journal_question", confidence="high", data_sources=["profit_loss_report", "journal_entries"], grounding=grounding)
+
+
+def _capability_menu_reply(language: str) -> GeminiAssistantReply:
+    """What the assistant says when it has nothing better to say."""
+    if language == "ar":
+        reply = (
+            "🤔 لم أفهم سؤالك. يمكنني مساعدتك في:\n"
+            "• **التقارير**: 'كم الربح هذا الشهر؟'\n"
+            "• **شرح الأرقام**: 'كيف صارت الإيرادات 2000؟'\n"
+            "• **تتبع مبلغ**: 'من أدخل 1000؟'\n"
+            "• **القيود**: 'آخر قيد محاسبي'\n"
+            "• **التدقيق**: 'من رحّل القيد؟'\n"
+            "• **إنشاء قيد**: 'تم دفع 500 إيجار'\n"
+            "• **المستخدمون**: 'من المستخدمون النشطون؟'"
+        )
+    else:
+        reply = (
+            "🤔 I didn't understand your question. I can help with:\n"
+            "• **Reports**: 'What are expenses this month?'\n"
+            "• **Explain Figures**: 'How did revenue become 2000?'\n"
+            "• **Trace Amounts**: 'Who entered 1000?'\n"
+            "• **Journal Entries**: 'Show me the last journal entry'\n"
+            "• **Audit**: 'Who posted the last entry?'\n"
+            "• **Create Entry**: 'Paid 500 rent'\n"
+            "• **Users**: 'Who are the active users?'"
+        )
+    return GeminiAssistantReply(
+        reply=reply, intent="clarification", confidence="low", data_sources=[]
+    )
+
+
+def _unknown_handler_entry():
+    """The registered ('unknown',) entry, so its gate has one reader."""
+    for entry in ASSISTANT_HANDLERS:
+        if "unknown" in entry.intents:
+            return entry
+    raise AssertionError(
+        "No ('unknown',) entry in ASSISTANT_HANDLERS. Every message that no "
+        "handler claims is dispatched through it; without it they fall to the "
+        "capability menu with no gate and no tool stage."
+    )
+
+
+def _dispatch_unknown(
+    request: AssistantRequest,
+    fallback_reply: GeminiAssistantReply | None = None,
+    run_pre_stages: bool = True,
+) -> GeminiAssistantReply:
+    """Dispatch an unclassified message the way the registry loop would."""
+    entry = _unknown_handler_entry()
+    if request.user_role not in entry.permission:
+        return GeminiAssistantReply(
+            reply=entry.denial.reply_for(request.language),
+            intent="access_denied",
+            confidence="high",
+            data_sources=[],
+        )
+    return _handle_unknown_question(
+        request, fallback_reply=fallback_reply, run_pre_stages=run_pre_stages
+    )
+
+
+def _handle_unknown_question(
+    request: AssistantRequest,
+    fallback_reply: GeminiAssistantReply | None = None,
+    run_pre_stages: bool = True,
+) -> GeminiAssistantReply:
+    """What answers a message no deterministic handler claimed.
+
+    ``fallback_reply`` is what to say when the model declines. The registry
+    passes none and gets the capability menu; the orchestrator's
+    safe_clarification branch passes the reply it used to return outright, so
+    a declined model leaves that path exactly as it was.
+
+    ``run_pre_stages`` is False for that same branch, and the reason is
+    measured rather than tidy. Stages 1 and 2 below were only ever reachable
+    after classification, for intent ``unknown``. The safe_clarification branch
+    returns BEFORE classification, so messages arriving that way have never
+    been through them -- and they are not inert: "How are our receivables
+    ageing?" comes out of stage 1 as "Which transaction do you mean? Include
+    the transaction and amount", which is not what that path answered
+    yesterday. Running them here would have been a silent rewrite of an answer
+    under cover of a refactor.
+
+    The stages that used to sit at the end of the dispatcher, in the order
+    they sat in, plus the tool-calling model between the last of them and the
+    capability menu:
+
+      1. the conversation-aware retry -- a follow-up like "it was 300 from
+         the bank" classifies as unknown alone and is a transaction when
+         merged with the turn before it;
+      2. the standalone clarification answer;
+      3. the model with the accounting tools, which returns None whenever it
+         cannot answer;
+      4. the capability menu.
+
+    Only step 3 is new. Steps 1, 2 and 4 are moved verbatim, so a message
+    gets what it got before -- unless the model answers where the menu used
+    to, which is the whole point of the move.
+    """
+    # ── 1. Conversation-aware retry ──────────────────────────────────────────
+    if run_pre_stages:
+        # A follow-up like "it was 300 from the bank" classifies as unknown on its
+        # own.  Merged with the preceding turn it becomes a real transaction, so it
+        # is worth one action-handler attempt before falling back to a clarification
+        # question — asking "which transaction?" when the user just said so is the
+        # exact behaviour that makes the assistant feel forgetful.
+        if _is_memory_actionable_followup(request.message, request.history):
+            followup_result = _handle_action_request(
+                request.db,
+                request.company_id,
+                request.message,
+                request.language,
+                request.runtime_context,
+                history=request.history,
+            )
+            if followup_result.suggested_action or followup_result.pending_transaction:
+                return GeminiAssistantReply(
+                    reply=followup_result.reply,
+                    intent=(
+                        "create_journal_draft"
+                        if followup_result.suggested_action
+                        else "clarification"
+                    ),
+                    confidence="high" if followup_result.suggested_action else "medium",
+                    data_sources=["accounts", "semantic_parser"],
+                    suggested_action=followup_result.suggested_action,
+                    pending_transaction=followup_result.pending_transaction,
+                    clarification_options=followup_result.clarification_options,
+                    pending_context_token=followup_result.pending_context_token,
+                )
+
+        # ── 2. Standalone clarification answer ───────────────────────────────────
+        standalone_reply = _standalone_clarification_answer_reply(
+            request.message, request.language
+        )
+        if standalone_reply:
+            return GeminiAssistantReply(
+                reply=standalone_reply,
+                intent="clarification",
+                confidence="low",
+                data_sources=[],
+            )
+
+    # ── 3. The model, with the tools this role may call ──────────────────────
+    # Imported inside the function: the agent module imports this one for
+    # detect_message_language, so a module-scope import here is a cycle.
+    from app.modules.accounting.services.unified_gemini_agent import (
+        answer_with_tools,
+    )
+
+    tool_reply = answer_with_tools(
+        db=request.db,
+        company_id=request.company_id,
+        user_role=request.user_role,
+        message=request.message,
+        page_context=request.page_context,
+        language=request.language,
+        history=request.history,
+    )
+    if tool_reply is not None:
+        return tool_reply
+
+    # ── 4. What the caller would have said on its own ────────────────────────
+    return fallback_reply or _capability_menu_reply(request.language)
+
+
 def dispatch_gemini_assistant(
+    db: Session,
+    company_id: int,
+    user_role: str,
+    message: str,
+    page_context: PageContext,
+    language: str,
+    pending_transaction: PendingTransaction | None = None,
+    pending_context_token: str | None = None,
+    history: list[ConversationTurn] | None = None,
+    prior_grounding: dict | None = None,
+    semantic_intent_classifier: SemanticIntentClassifier | None = None,
+) -> GeminiAssistantReply:
+    """One request, one deadline, then the dispatcher below.
+
+    The stages inside can each make a bounded provider call -- the semantic
+    classifier, the transaction parser, the answer phrasing, and now the tool
+    stage at the end. Each was bounded on its own by [D2]; none of them knew
+    what the others had already spent, and 20s each adds up past the 60s
+    proxy_read_timeout.
+
+    The budget is started here because this is where a request begins. Stages
+    ask remaining_budget_seconds() for what is left; the one that finds nothing
+    left answers deterministically rather than calling.
+    """
+    with request_budget():
+        return _dispatch_within_request_budget(
+            db=db,
+            company_id=company_id,
+            user_role=user_role,
+            message=message,
+            page_context=page_context,
+            language=language,
+            pending_transaction=pending_transaction,
+            pending_context_token=pending_context_token,
+            history=history,
+            prior_grounding=prior_grounding,
+            semantic_intent_classifier=semantic_intent_classifier,
+        )
+
+
+def _dispatch_within_request_budget(
+    *,
     db: Session,
     company_id: int,
     user_role: str,
@@ -3984,7 +4553,35 @@ def dispatch_gemini_assistant(
         or legacy_structured_kind
         or _is_memory_actionable_followup(message, history)
     ):
-        return _intent_clarification_reply(intent_decision)
+        # This is where an unclassified message actually ended, and it ended
+        # before `intent` was ever computed -- so registering ("unknown",) in
+        # the handler registry reached nothing until this branch fed it.
+        # Measured: eight questions about invoices, partners and credit notes,
+        # none of which any handler claims, all returned "Which accounting
+        # question would you like help with?" from here.
+        #
+        # That text is now the fallback rather than the answer: the tool stage
+        # gets the question first, and when it declines this returns exactly
+        # what it returned before.
+        return _dispatch_unknown(
+            AssistantRequest(
+                db=db,
+                company_id=company_id,
+                user_role=user_role,
+                message=message,
+                language=language,
+                intent="unknown",
+                page_context=page_context,
+                history=history,
+                runtime_context=runtime_context,
+                prior_grounding=prior_grounding,
+                structured_kind=None,
+                contribution_metric=None,
+                orchestrated_account_target=None,
+            ),
+            fallback_reply=_intent_clarification_reply(intent_decision),
+            run_pre_stages=False,
+        )
 
     intent = "trace_question" if _is_exact_amount_trace_request(message) else _classify_intent(message)
     contribution_metric = _contribution_metric(message, prior_grounding)
@@ -4028,44 +4625,6 @@ def dispatch_gemini_assistant(
     if intent == "unknown" and looks_like_accounting_message_with_amount(message):
         intent = "action_request"
 
-    # ── Access-denied checks ─────────────────────────────────────────────────
-    # pl_contribution_question belongs here because its handler answers with
-    # profit_loss_report + journal_entries -- the same data this gate protects.
-    # It was dispatched at line 3641 with no gate at all, so a role outside
-    # _CAN_READ_REPORTS received real journal entries: number, date, description
-    # and amount.
-    if intent == "pl_contribution_question" and user_role not in _CAN_READ_REPORTS:
-        return GeminiAssistantReply(
-            reply=(
-                "🔒 ليس لديك صلاحية الوصول إلى هذه البيانات."
-                if language == "ar"
-                else "🔒 You don't have permission to access this data."
-            ),
-            intent="access_denied", confidence="high", data_sources=[],
-        )
-    if intent == "pl_contribution_question":
-        grounded_period = (prior_grounding or {}).get("period") or {}
-        try:
-            start_date = date.fromisoformat(grounded_period["start_date"]) if grounded_period.get("start_date") else None
-            end_date = date.fromisoformat(grounded_period["end_date"]) if grounded_period.get("end_date") else None
-        except (TypeError, ValueError):
-            start_date, end_date = None, None
-        period_label = grounded_period.get("label") or "all available data"
-        metrics = ["revenue", "expenses"] if contribution_metric == "net_profit" else [contribution_metric]
-        all_matches = []
-        for metric in metrics:
-            matches = _tool_get_pl_contributors(db, company_id, start_date, end_date, metric, limit=10)
-            if matches is None:
-                return GeminiAssistantReply(reply=_unavailable_journal_reply(language), intent="answer_journal_question", confidence="low", data_sources=[], grounding=_unavailable_journal_grounding())
-            all_matches.extend(matches)
-        unique = {}
-        for match in all_matches:
-            unique.setdefault(match["id"], match)
-        matches = list(unique.values())[:20]
-        for match in matches:
-            match["total_matches"] = len(unique)
-        grounding = _build_contribution_evidence(matches, contribution_metric, start_date, end_date, period_label)
-        return GeminiAssistantReply(reply=_contribution_reply(matches, contribution_metric, period_label, language), intent="answer_journal_question", confidence="high", data_sources=["profit_loss_report", "journal_entries"], grounding=grounding)
     if structured_followup:
         structured_reply = _structured_followup_reply(prior_grounding, structured_followup, language)
         if structured_reply is not None:
@@ -4081,19 +4640,19 @@ def dispatch_gemini_assistant(
             data_sources=[],
         )
     # ── Registered handlers ─────────────────────────────────────
-    # Empty at this commit: ASSISTANT_HANDLERS is (), so this loop does nothing
-    # and the if-chain below still answers everything. Handlers move into it one
-    # at a time.
+    # Every dispatched intent is answered from here. The `if intent == ...`
+    # chain this replaced is gone, and with it the 300-line gap between a
+    # handler and the gate that authorises it: an entry cannot be added without
+    # naming a permission set, because the field has no default.
     #
-    # It sits HERE, and not above the chain, because two branches that do not
-    # test `intent` -- `if structured_followup:` and `if generic_without_context:`
-    # -- sit inside the chain and measurably preempt journal_question,
-    # report_question and structured_report_question today. Running a registered
-    # handler ahead of them would change which reply those messages get.
-    #
-    # `pl_contribution_question` is the one dispatched intent whose branch is
-    # above those two, so it cannot be registered here without moving past them.
-    # See assistant_handler_registry for the measurement.
+    # The loop still sits HERE rather than above, and that is load-bearing.
+    # `if structured_followup:` and `if generic_without_context:` do not test
+    # `intent`, and they measurably preempt journal_question, report_question
+    # and structured_report_question today -- running a registered handler
+    # ahead of them would change which reply those messages get.
+    # pl_contribution_question, whose branch used to sit ABOVE both, moved down
+    # past them on a proof that neither can fire for the messages it answers;
+    # see _handle_pl_contribution_question and assistant_handler_registry.
     if ASSISTANT_HANDLERS:
         assistant_request = AssistantRequest(
             db=db,
@@ -4120,67 +4679,9 @@ def dispatch_gemini_assistant(
                 )
             return entry.handler(assistant_request)
 
-    # ── Conversation-aware retry ─────────────────────────────────────────────
-    # A follow-up like "it was 300 from the bank" classifies as unknown on its
-    # own.  Merged with the preceding turn it becomes a real transaction, so it
-    # is worth one action-handler attempt before falling back to a clarification
-    # question — asking "which transaction?" when the user just said so is the
-    # exact behaviour that makes the assistant feel forgetful.
-    if _is_memory_actionable_followup(message, history):
-        followup_result = _handle_action_request(
-            db,
-            company_id,
-            message,
-            language,
-            runtime_context,
-            history=history,
-        )
-        if followup_result.suggested_action or followup_result.pending_transaction:
-            return GeminiAssistantReply(
-                reply=followup_result.reply,
-                intent=(
-                    "create_journal_draft"
-                    if followup_result.suggested_action
-                    else "clarification"
-                ),
-                confidence="high" if followup_result.suggested_action else "medium",
-                data_sources=["accounts", "semantic_parser"],
-                suggested_action=followup_result.suggested_action,
-                pending_transaction=followup_result.pending_transaction,
-                clarification_options=followup_result.clarification_options,
-                pending_context_token=followup_result.pending_context_token,
-            )
-
-    standalone_reply = _standalone_clarification_answer_reply(message, language)
-    if standalone_reply:
-        return GeminiAssistantReply(
-            reply=standalone_reply,
-            intent="clarification",
-            confidence="low",
-            data_sources=[],
-        )
-
-    # ── Unknown / clarification ──────────────────────────────────────────────
-    if language == "ar":
-        reply = (
-            "🤔 لم أفهم سؤالك. يمكنني مساعدتك في:\n"
-            "• **التقارير**: 'كم الربح هذا الشهر؟'\n"
-            "• **شرح الأرقام**: 'كيف صارت الإيرادات 2000؟'\n"
-            "• **تتبع مبلغ**: 'من أدخل 1000؟'\n"
-            "• **القيود**: 'آخر قيد محاسبي'\n"
-            "• **التدقيق**: 'من رحّل القيد؟'\n"
-            "• **إنشاء قيد**: 'تم دفع 500 إيجار'\n"
-            "• **المستخدمون**: 'من المستخدمون النشطون؟'"
-        )
-    else:
-        reply = (
-            "🤔 I didn't understand your question. I can help with:\n"
-            "• **Reports**: 'What are expenses this month?'\n"
-            "• **Explain Figures**: 'How did revenue become 2000?'\n"
-            "• **Trace Amounts**: 'Who entered 1000?'\n"
-            "• **Journal Entries**: 'Show me the last journal entry'\n"
-            "• **Audit**: 'Who posted the last entry?'\n"
-            "• **Create Entry**: 'Paid 500 rent'\n"
-            "• **Users**: 'Who are the active users?'"
-        )
-    return GeminiAssistantReply(reply=reply, intent="clarification", confidence="low", data_sources=[])
+    # Nothing reaches here: `unknown` is a registered intent, and the loop
+    # above returns for it. The capability menu it used to end with now lives
+    # in _capability_menu_reply, called from _handle_unknown_question -- one
+    # definition, and this call is the net under a future intent that is
+    # somehow neither registered nor inline.
+    return _capability_menu_reply(language)

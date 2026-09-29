@@ -13,12 +13,18 @@ const ChangeTemporaryPasswordPage = lazy(
 );
 const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage'));
 const AccountsPage = lazy(() => import('../features/accounts/AccountsPage'));
+const PartnersPage = lazy(() => import('../features/partners/PartnersPage'));
+const InvoicesPage = lazy(() => import('../features/invoices/InvoicesPage'));
+const PaymentsPage = lazy(() => import('../features/payments/PaymentsPage'));
+const CreditNotesPage = lazy(() => import('../features/credit-notes/CreditNotesPage'));
+const RefundsPage = lazy(() => import('../features/refunds/RefundsPage'));
 const JournalEntriesPage = lazy(() => import('../features/journals/JournalEntriesPage'));
 const TrialBalancePage = lazy(() => import('../features/reports/trial-balance/TrialBalancePage'));
 const ProfitAndLossPage = lazy(() => import('../features/reports/profit-and-loss/ProfitAndLossPage'));
 const BalanceSheetPage = lazy(() => import('../features/reports/balance-sheet/BalanceSheetPage'));
 const AccountLedgerPage = lazy(() => import('../features/reports/account-ledger/AccountLedgerPage'));
 const GeneralLedgerPage = lazy(() => import('../features/reports/general-ledger/GeneralLedgerPage'));
+const AgingReportsPage = lazy(() => import('../features/reports/aging/AgingReportsPage'));
 const AuditLogsPage = lazy(() => import('../features/audit/AuditLogsPage'));
 const CompanyUsersPage = lazy(() => import('../features/company-users/CompanyUsersPage'));
 const AcceptInvitePage = lazy(() => import('../features/company-users/AcceptInvitePage'));
@@ -134,6 +140,54 @@ export default function AppRoutes() {
               }
             />
             <Route
+              path="/partners"
+              element={
+                <ProtectedRoute>
+                  <PartnersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/invoices"
+              element={
+                <ProtectedRoute>
+                  <InvoicesPage invoiceType="out_invoice" />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/bills"
+              element={
+                <ProtectedRoute>
+                  <InvoicesPage invoiceType="in_invoice" />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/payments"
+              element={
+                <ProtectedRoute>
+                  <PaymentsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/credit-notes"
+              element={
+                <ProtectedRoute>
+                  <CreditNotesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/refunds"
+              element={
+                <ProtectedRoute>
+                  <RefundsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/journal-entries"
               element={
                 <ProtectedRoute>
@@ -178,6 +232,14 @@ export default function AppRoutes() {
               element={
                 <ProtectedRoute>
                   <GeneralLedgerPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports/aging"
+              element={
+                <ProtectedRoute>
+                  <AgingReportsPage />
                 </ProtectedRoute>
               }
             />

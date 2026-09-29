@@ -74,6 +74,12 @@ const PAGE_ROLES: Record<string, readonly CompanyUserRole[]> = {
   '/dashboard':               ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'],
   '/journal-entries':         ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'],
   '/accounts':                ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'],
+  '/partners':                ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'],
+  '/invoices':                ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'],
+  '/bills':                   ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'],
+  '/payments':                ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'],
+  '/credit-notes':            ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'],
+  '/refunds':                 ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'],
   '/audit-logs':              ['admin', 'auditor'],
   '/company-users':           ['admin', 'auditor'],
   '/reports/trial-balance':   ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'],
@@ -81,6 +87,7 @@ const PAGE_ROLES: Record<string, readonly CompanyUserRole[]> = {
   '/reports/balance-sheet':   ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'],
   '/reports/account-ledger':  ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'],
   '/reports/general-ledger':  ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'],
+  '/reports/aging':           ['admin', 'accountant', 'reviewer', 'approver', 'auditor', 'viewer'],
   '/settings':                ['admin'],
 };
 

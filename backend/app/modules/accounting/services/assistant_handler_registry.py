@@ -1,14 +1,15 @@
-"""Scaffolding for moving assistant handlers out of the dispatcher's if-chain.
+"""Where the assistant's handlers live, each bound to the gate that allows it.
 
-``dispatch_gemini_assistant`` resolves an intent through a five-step override
-chain and then runs a ~290-line chain of ``if intent == ...`` branches. The
-gates that authorise those branches sit up to 300 lines above them, and a
-handler appended below the gates receives no authorization check. That is not
+``dispatch_gemini_assistant`` used to resolve an intent through a five-step
+override chain and then run a ~290-line chain of ``if intent == ...`` branches.
+The gates that authorised those branches sat up to 300 lines above them, and a
+handler appended below the gates received no authorization check. That was not
 hypothetical -- ``pl_contribution_question`` shipped that way.
 
-This module holds the data the migration moves handlers INTO. It is deliberately
-empty at this commit: ``ASSISTANT_HANDLERS`` is ``()``, the dispatcher still runs
-its if-chain, and the loop that consults this registry is a no-op.
+The chain is gone. Intent RESOLUTION still happens in the dispatcher; what
+follows it is one loop over ``ASSISTANT_HANDLERS``, where a handler and its
+permission set are fields of the same record and cannot drift apart. Adding a
+handler is choosing who may reach it, because ``permission`` has no default.
 
 WHAT THE REGISTRY KEYS ON
 -------------------------
@@ -44,13 +45,54 @@ those flags set and a dispatched intent:
 So those two branches really do preempt those handlers today, and the loop must
 sit AFTER line 3741. It does.
 
-The consequence is that ``pl_contribution_question`` -- the only dispatched
-intent whose branch is ABOVE 3734 -- cannot be registered through this loop
-without moving it past two branches that currently precede it. It was never
-measured co-occurring with either flag, and ``generic_without_context`` is
-False whenever ``contribution_metric`` is set by construction (3610), but
-``structured_followup`` carries no such guarantee. It stays inline until that is
-proven or a second loop is added at its position.
+MOVING pl_contribution_question DOWN PAST BOTH
+----------------------------------------------
+``pl_contribution_question`` was the one dispatched intent whose branch sat
+ABOVE those two, so it was the one that could not be registered by relocating
+its body alone -- it had to move DOWN past two branches that preceded it. It
+went last, and only once both were proven unable to fire for the messages it
+answers. A second loop at its old position was the alternative, and is not what
+happened: there is one dispatch site.
+
+``generic_without_context`` is
+``_is_generic_entries_request(message) and contribution_metric is None``, and
+``intent == "pl_contribution_question"`` holds exactly when
+``contribution_metric`` is set -- step 4 assigns it and only step 5 could
+override, which requires ``intent == "unknown"``. So it is False by
+construction wherever the handler runs. That was already true when this
+paragraph first said so.
+
+``structured_followup`` carried no such guarantee, and now has one by
+exhaustion. Both predicates are closed over literal phrase sets:
+
+  ``_is_generic_structured_followup`` accepts, and only accepts, a message
+  whose ``casefold().strip()`` is one of ELEVEN phrases -- seven "accounts"
+  phrases and four "transactions" phrases.
+
+  ``_contribution_metric`` returns non-None only if the message's
+  ``strip().lower()`` CONTAINS one of SIX substrings ("show revenue entries",
+  "which entries make up revenue", "show expense entries", "which entries make
+  up expenses", and the two Arabic ones) or EQUALS one of TWO phrases
+  ("show the entries", the Arabic equivalent).
+
+None of the eleven contains any of the six, and none equals either of the two.
+Checked in both directions, over the whole of both sets, reading the literals
+out of the source rather than transcribing them. The near miss is
+"show the entries for this account", which has "show the entries" as a prefix
+-- and that trigger is an equality test, not a substring one.
+
+The one way two closed sets could still overlap is that they normalise
+differently: ``casefold().strip()`` against ``strip().lower()``. Every one of
+the eleven is a fixed point of both, and over all 1,114,112 Unicode code
+points there is none whose ``casefold()`` and ``lower()`` disagree AND whose
+``lower()`` supplies a character any of the eight triggers uses -- so no
+message can casefold into the eleven and lower into the eight.
+
+Measured alongside the proof, at the dispatcher's own locals, over 1,468
+messages x 2 languages x 4 grounding states: 11,744 dispatches, 18 distinct
+``(intent, contribution_metric, structured_followup, generic_without_context)``
+states, 3 of them with ``contribution_metric`` set -- revenue, expenses,
+net_profit -- and in all 3 both flags are False.
 """
 from __future__ import annotations
 
@@ -86,6 +128,18 @@ _CAN_READ_REPORTS = frozenset(
 _CAN_READ_AUDIT_LOGS = frozenset({"admin", "auditor"})
 _CAN_READ_USERS = frozenset({"admin", "auditor"})
 _CAN_CREATE_DRAFT = frozenset({"admin", "accountant"})
+# Subledger reads. Both are narrower than _CAN_READ_REPORTS because their REST
+# routes are, and there are two of them because the routes disagree with each
+# other: the invoice, payment and partner reads admit {admin, accountant,
+# auditor}, while the credit note and refund reads admit that plus viewer.
+#
+# Mirroring each route rather than taking the intersection is deliberate. The
+# intersection would silently take credit notes away from a viewer who can open
+# them in the UI today, which is a product change wearing a security fix's
+# clothes. Whether the two route shapes SHOULD differ is a real question, but
+# it is a question about the routes, and it gets answered there.
+_CAN_READ_SUBLEDGER = frozenset({"admin", "accountant", "auditor"})
+_CAN_READ_CREDIT_NOTES = frozenset({"admin", "accountant", "viewer", "auditor"})
 
 @dataclass(frozen=True, slots=True)
 class AssistantRequest:
@@ -286,5 +340,39 @@ ASSISTANT_HANDLERS: tuple[HandlerEntry, ...] = (
         precondition=lambda request: request.structured_kind in {
             "balance_sheet", "trial_balance", "account_ledger", "general_ledger",
         },
+    ),
+    HandlerEntry(
+        intents=("pl_contribution_question",),
+        permission=_CAN_READ_REPORTS,
+        denial=Denial(
+            arabic='🔒 ليس لديك صلاحية الوصول إلى هذه البيانات.',
+            english="🔒 You don't have permission to access this data.",
+        ),
+        handler=ServiceHandler("_handle_pl_contribution_question"),
+    ),
+    # Last, and last on purpose.
+    #
+    # `unknown` is what the resolution chain leaves when no handler claimed the
+    # message, so registering it here does not take a question away from a
+    # deterministic handler -- every entry above is consulted first, and a
+    # figure still comes from the report services. What it takes over is the
+    # capability menu: the answer that used to be "I didn't understand".
+    #
+    # The handler runs the two stages that used to follow this loop before it
+    # reaches the model, in the order they ran in, and falls back to the menu
+    # when the model declines.
+    #
+    # _CAN_READ_REPORTS, because this is the stage every member could already
+    # reach -- the menu was never gated. It is not the gate that matters for
+    # the tools: each tool carries its own permission and the registry hands a
+    # role only the declarations it may call.
+    HandlerEntry(
+        intents=("unknown",),
+        permission=_CAN_READ_REPORTS,
+        denial=Denial(
+            arabic='🔒 ليس لديك صلاحية الوصول إلى هذه البيانات.',
+            english="🔒 You don't have permission to access this data.",
+        ),
+        handler=ServiceHandler("_handle_unknown_question"),
     ),
 )

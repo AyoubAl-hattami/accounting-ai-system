@@ -22,6 +22,7 @@ from app.modules.accounting.schemas.gemini_assistant_schemas import (
 from app.modules.accounting.services.account_mapper import ACCOUNT_ALIASES
 from app.modules.accounting.services.ai_providers.gemini_provider import (
     REQUEST_TIMEOUT_SECONDS as GEMINI_REQUEST_TIMEOUT_SECONDS,
+    model_calls_enabled,
 )
 from app.modules.accounting.services.gemini_agent_contract import (
     AGENT_CONTRACT_VERSION,
@@ -336,8 +337,12 @@ def _build_parser_prompt(
         user_message=message,
         trusted_backend_data={
             "current_company_chart_of_accounts": account_data,
-            "bounded_recent_conversation": history_data,
         },
+        # [B7]: these turns are the user's own words read back out of our
+        # storage. Storage is not provenance, and they were inside the
+        # TRUSTED block until now -- which told the model that text the user
+        # wrote had come from the backend.
+        untrusted_conversation=history_data or None,
     )
 
 # ── Parser function ───────────────────────────────────────────────────────────
@@ -362,7 +367,9 @@ def parse_transaction_message(
     api_key = getattr(settings, "GEMINI_API_KEY", "").strip()
     model = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash").strip()
 
-    if not api_key:
+    # Same reading as `not api_key`: the local parse is the deterministic
+    # answer both cases fall back to.
+    if not api_key or not model_calls_enabled():
         return local_parse
 
     prompt = _build_parser_prompt(

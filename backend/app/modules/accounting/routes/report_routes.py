@@ -3,6 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.application.reports.aging_dto import AgingQuery
 from app.application.reports.dto import (
     AccountLedgerQuery,
     BalanceSheetQuery,
@@ -13,6 +14,7 @@ from app.application.reports.dto import (
 from app.application.reports.errors import MissingFiscalYearForReportError
 from app.application.reports.use_cases import (
     GetAccountLedger,
+    GetAgingReport,
     GetBalanceSheet,
     GetGeneralLedger,
     GetProfitAndLoss,
@@ -27,6 +29,7 @@ from app.infrastructure.database.sqlalchemy.repositories.report_repository impor
 from app.modules.accounting.models.user import User
 from app.modules.accounting.schemas.report import (
     AccountLedgerRead,
+    AgingReportRead,
     BalanceSheetRead,
     GeneralLedgerRead,
     ProfitAndLossRead,
@@ -223,5 +226,67 @@ def general_ledger_endpoint(
             account_skip=account_skip,
             account_limit=account_limit,
             currency=currency,
+        )
+    )
+
+
+@router.get(
+    "/ar-aging",
+    response_model=AgingReportRead,
+)
+def ar_aging_endpoint(
+    company_id: int = Query(..., ge=1),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
+    as_of_date: date | None = Query(default=None),
+    partner_id: int | None = Query(default=None, ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_id,
+    )
+
+    effective_as_of = as_of_date or date.today()
+    repository = SqlAlchemyReportRepository(db)
+    return GetAgingReport(repository).execute(
+        AgingQuery(
+            company_id=company_id,
+            report_type="ar",
+            as_of_date=effective_as_of,
+            currency=currency or "",
+            partner_id=partner_id,
+        )
+    )
+
+
+@router.get(
+    "/ap-aging",
+    response_model=AgingReportRead,
+)
+def ap_aging_endpoint(
+    company_id: int = Query(..., ge=1),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
+    as_of_date: date | None = Query(default=None),
+    partner_id: int | None = Query(default=None, ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ensure_company_access(
+        db=db,
+        current_user=current_user,
+        company_id=company_id,
+    )
+
+    effective_as_of = as_of_date or date.today()
+    repository = SqlAlchemyReportRepository(db)
+    return GetAgingReport(repository).execute(
+        AgingQuery(
+            company_id=company_id,
+            report_type="ap",
+            as_of_date=effective_as_of,
+            currency=currency or "",
+            partner_id=partner_id,
         )
     )

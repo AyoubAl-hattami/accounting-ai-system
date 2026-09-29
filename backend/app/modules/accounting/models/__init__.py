@@ -14,6 +14,15 @@ from app.modules.accounting.models.assistant_conversation import (
     AssistantMessage,
 )
 from app.modules.accounting.models.rate_limit_attempt import RateLimitAttempt
+from app.modules.accounting.models.partner import Partner
+from app.modules.accounting.models.invoice import Invoice, InvoiceLine
+from app.modules.accounting.models.payment import Payment, PaymentAllocation
+from app.modules.accounting.models.credit_note import (
+    CreditNote,
+    CreditNoteLine,
+    CreditNoteAllocation,
+)
+from app.modules.accounting.models.refund import Refund
 
 __all__ = [
     "Company",
@@ -30,4 +39,13 @@ __all__ = [
     "AssistantConversation",
     "AssistantMessage",
     "RateLimitAttempt",
+    "Partner",
+    "Invoice",
+    "InvoiceLine",
+    "Payment",
+    "PaymentAllocation",
+    "CreditNote",
+    "CreditNoteLine",
+    "CreditNoteAllocation",
+    "Refund",
 ]

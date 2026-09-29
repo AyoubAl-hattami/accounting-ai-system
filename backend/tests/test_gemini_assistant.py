@@ -1174,3 +1174,127 @@ def test_gemini_refuses_yesterday_english(
         or "didn't understand" in reply_lower
         or "clarif" in reply_lower
     ), f"Expected today-only refusal or clarification, got: {data['reply'][:200]}"
+
+
+# ── The second turn of a clarification ───────────────────────────────────────
+#
+# Both assistant routes dispatch through one function, and this route forwards
+# every argument the request carries. It did not always: pending_transaction
+# and pending_context_token were accepted by the schema and dropped at the
+# route, so the second turn arrived with no memory of the first. Measured then,
+# over HTTP: "دفعت 300 كهربا" asked bank or cash, "الصندوق" answered "what
+# would you like to record?".
+#
+# The test drives the two turns the way the frontend does -- it reads
+# pending_transaction and pending_context_token off turn one and sends them
+# back with turn two -- so a route that stops forwarding them fails here
+# rather than in a user's conversation.
+
+
+def _pending_request(
+    base_url: str,
+    headers: dict,
+    company_id: int,
+    message: str,
+    pending_transaction=None,
+    pending_context_token=None,
+) -> requests.Response:
+    body = {
+        "company_id": company_id,
+        "message": message,
+        "language": "ar",
+        "page_context": {"route": "/dashboard", "page": "dashboard", "filters": {}},
+        "history": [],
+    }
+    if pending_transaction is not None:
+        body["pending_transaction"] = pending_transaction
+    if pending_context_token is not None:
+        body["pending_context_token"] = pending_context_token
+    return requests.post(f"{base_url}/ai/gemini-assistant", headers=headers, json=body)
+
+
+def test_clarification_first_turn_offers_a_pending_context(
+    base_url, deterministic_accounting_bootstrap,
+):
+    bs = deterministic_accounting_bootstrap
+    response = _pending_request(base_url, bs.auth_headers, bs.company_id, "دفعت 300 كهربا")
+    assert response.status_code == 200, response.text
+    data = response.json()
+
+    assert data["intent"] == "clarification"
+    assert data["suggested_action"] is None
+    assert data["pending_transaction"] is not None, (
+        "The first turn produced no pending transaction, so there is nothing "
+        "for the second turn to continue from."
+    )
+    assert data["pending_context_token"], "No signed token was issued."
+    assert [option["value"] for option in data["clarification_options"]] == ["bank", "cash"]
+
+
+def test_second_turn_continues_the_pending_transaction(
+    base_url, deterministic_accounting_bootstrap,
+):
+    bs = deterministic_accounting_bootstrap
+    first = _pending_request(
+        base_url, bs.auth_headers, bs.company_id, "دفعت 300 كهربا"
+    ).json()
+    assert first["pending_context_token"], "Precondition failed: no token on turn one."
+
+    # "البنك" (bank) rather than "الصندوق" (cash): the default chart has
+    # Main Bank and no cash account, and answering cash gets the honest "the
+    # accounts cannot be matched" -- which also proves continuity, but proves
+    # it less plainly than a balanced draft does.
+    second = _pending_request(
+        base_url,
+        bs.auth_headers,
+        bs.company_id,
+        "البنك",
+        pending_transaction=first["pending_transaction"],
+        pending_context_token=first["pending_context_token"],
+    )
+    assert second.status_code == 200, second.text
+    data = second.json()
+
+    assert data["suggested_action"] is not None, (
+        "The second turn lost the pending transaction and started over. The "
+        f"route dropped what the request carried. Reply was: {data['reply'][:160]}"
+    )
+    assert data["suggested_action"]["type"] == "create_journal_entry_draft"
+    lines = data["suggested_action"]["payload"]["lines"]
+    assert len(lines) == 2
+    # The word "البنك" carries no amount. A 300 draft can only have come from
+    # the pending transaction the first turn created.
+    assert float(lines[0]["debit"]) == 300.0
+    assert float(lines[1]["credit"]) == 300.0
+    assert lines[1]["account_code"] == "1110"
+    assert data["pending_transaction"] is None
+
+
+def test_second_turn_with_a_forged_token_is_refused(
+    base_url, deterministic_accounting_bootstrap,
+):
+    """Forwarding the token must not mean trusting it."""
+    bs = deterministic_accounting_bootstrap
+    first = _pending_request(
+        base_url, bs.auth_headers, bs.company_id, "دفعت 300 كهربا"
+    ).json()
+
+    payload, _, signature = first["pending_context_token"].partition(".")
+    forged = f"{payload}.{'a' * len(signature)}"
+
+    second = _pending_request(
+        base_url,
+        bs.auth_headers,
+        bs.company_id,
+        "البنك",
+        pending_transaction=first["pending_transaction"],
+        pending_context_token=forged,
+    )
+    assert second.status_code == 200, second.text
+    data = second.json()
+
+    assert data["suggested_action"] is None, (
+        "A token with a broken signature was honoured; the route forwards the "
+        "token but the signature check is what decides."
+    )
+    assert data["intent"] == "clarification"

@@ -26,6 +26,11 @@ from app.modules.accounting.routes.platform_subscription_routes import (
 from app.modules.accounting.routes.platform_dashboard_routes import (
     router as platform_dashboard_router,
 )
+from app.modules.accounting.routes.partner_routes import router as partner_router
+from app.modules.accounting.routes.invoice_routes import router as invoice_router
+from app.modules.accounting.routes.payment_routes import router as payment_router
+from app.modules.accounting.routes.credit_note_routes import router as credit_note_router
+from app.modules.accounting.routes.refund_routes import router as refund_router
 
 
 app = FastAPI(
@@ -48,6 +53,11 @@ app.include_router(auth_router)
 app.include_router(company_router)
 app.include_router(company_user_router)
 app.include_router(account_router)
+app.include_router(partner_router)
+app.include_router(invoice_router)
+app.include_router(payment_router)
+app.include_router(credit_note_router)
+app.include_router(refund_router)
 app.include_router(fiscal_router)
 app.include_router(journal_router)
 app.include_router(report_router)
@@ -59,6 +69,7 @@ app.include_router(assistant_conversation_router)
 app.include_router(platform_subscription_router)
 app.include_router(platform_dashboard_router)
 app.include_router(platform_onboarding_router)
+
 
 
 @app.get("/")

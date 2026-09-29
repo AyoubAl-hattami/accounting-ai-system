@@ -99,9 +99,22 @@ def test_parser_prompt_carries_bounded_conversation_and_subtypes():
     )
 
     rendered = str(prompt)
-    assert "bounded_recent_conversation" in rendered
     assert "I paid the office rent" in rendered
     assert "e_wallet" in rendered
+
+    # [B7]: the turn is still carried, but no longer as backend data.
+    #
+    # This used to assert the key "bounded_recent_conversation", which lived
+    # inside <TRUSTED_ACCOUNTING_DATA> -- so the assertion was pinning the
+    # defect. The turn is the user's own words read back out of our storage,
+    # and storage is not provenance. It now travels in its own untrusted
+    # block, and this asserts the placement rather than the key, which is the
+    # property that actually matters.
+    body = prompt.user_message
+    trusted = body[body.index("<TRUSTED_ACCOUNTING_DATA>"):
+                   body.index("</TRUSTED_ACCOUNTING_DATA>")]
+    assert "I paid the office rent" not in trusted
+    assert "<UNTRUSTED_CONVERSATION_CONTEXT>" in body
 
 
 # ── Persisted memory over HTTP ────────────────────────────────────────────────

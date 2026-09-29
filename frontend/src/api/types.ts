@@ -465,3 +465,362 @@ export interface OnboardingDefaults {
   public_login_url: string;
   generated_password_length: number;
 }
+
+// ── Partner (Customer / Vendor) ──
+export interface Partner {
+  id: number;
+  company_id: number;
+  name: string;
+  code: string;
+  is_customer: boolean;
+  is_vendor: boolean;
+  currency: string;
+  email: string | null;
+  phone: string | null;
+  tax_id: string | null;
+  address: string | null;
+  receivable_account_id: number | null;
+  payable_account_id: number | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PartnerCreatePayload {
+  company_id: number;
+  name: string;
+  code: string;
+  is_customer: boolean;
+  is_vendor: boolean;
+  currency?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  tax_id?: string | null;
+  address?: string | null;
+  receivable_account_id?: number | null;
+  payable_account_id?: number | null;
+  is_active?: boolean;
+}
+
+// ── Invoice / Bill ──
+export type InvoiceType = 'out_invoice' | 'in_invoice';
+export type InvoiceStatus = 'draft' | 'posted' | 'paid' | 'void' | 'cancelled';
+
+export interface InvoiceLine {
+  id?: number;
+  invoice_id?: number;
+  line_no: number;
+  description: string;
+  quantity: string | number;
+  unit_price: string | number;
+  subtotal: string | number;
+  account_id: number;
+}
+
+export interface Invoice {
+  id: number;
+  company_id: number;
+  partner_id: number;
+  partner_name?: string | null;
+  invoice_type: InvoiceType;
+  invoice_no: string;
+  reference: string | null;
+  issue_date: string;
+  due_date: string;
+  currency: string;
+  status: InvoiceStatus;
+  subtotal: string;
+  tax_amount: string;
+  total_amount: string;
+  paid_amount?: string;
+  credited_amount?: string;
+  residual_amount?: string;
+  payment_status?: 'unpaid' | 'partially_paid' | 'paid';
+  journal_entry_id: number | null;
+  notes: string | null;
+  created_at?: string;
+  updated_at?: string;
+  lines: InvoiceLine[];
+}
+
+export interface InvoiceLineCreatePayload {
+  description: string;
+  quantity: number | string;
+  unit_price: number | string;
+  account_id: number;
+}
+
+export interface InvoiceCreatePayload {
+  company_id: number;
+  partner_id: number;
+  invoice_type: InvoiceType;
+  invoice_no: string;
+  issue_date: string;
+  due_date: string;
+  currency?: string | null;
+  reference?: string | null;
+  tax_amount?: number | string;
+  notes?: string | null;
+  lines: InvoiceLineCreatePayload[];
+}
+
+// ── Payments & Receipts ──
+export type PaymentType = 'customer_receipt' | 'vendor_payment';
+export type PaymentStatus = 'draft' | 'posted' | 'void';
+
+export interface PaymentAllocation {
+  id: number;
+  company_id: number;
+  payment_id: number;
+  invoice_id: number;
+  amount: string;
+  created_at?: string;
+  invoice_no?: string | null;
+}
+
+export interface PaymentAllocationPayload {
+  invoice_id: number;
+  amount: number;
+}
+
+export interface Payment {
+  id: number;
+  company_id: number;
+  partner_id: number;
+  payment_type: PaymentType;
+  currency_code: string;
+  amount: string;
+  payment_date: string;
+  bank_or_cash_account_id: number;
+  receivable_or_payable_account_id: number;
+  status: PaymentStatus;
+  reference?: string | null;
+  memo?: string | null;
+  journal_entry_id?: number | null;
+  created_by_user_id?: number | null;
+  created_at?: string;
+  updated_at?: string;
+  partner_name?: string | null;
+  bank_account_name?: string | null;
+  receivable_or_payable_account_name?: string | null;
+  allocations: PaymentAllocation[];
+  allocated_amount: string;
+  unallocated_amount: string;
+}
+
+export interface PaymentCreatePayload {
+  company_id: number;
+  partner_id: number;
+  payment_type: PaymentType;
+  currency_code: string;
+  amount: number;
+  payment_date: string;
+  bank_or_cash_account_id: number;
+  receivable_or_payable_account_id: number;
+  allocations?: PaymentAllocationPayload[];
+  reference?: string | null;
+  memo?: string | null;
+}
+
+export interface PaymentPageResponse {
+  items: Payment[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+// ── Aging & Statement Reports ──
+export interface AgingItem {
+  partner_id: number;
+  partner_code: string;
+  partner_name: string;
+  invoice_id: number;
+  invoice_no: string;
+  invoice_date: string;
+  due_date: string;
+  original_amount: string | number;
+  paid_amount: string | number;
+  credited_amount?: string | number;
+  outstanding_amount: string | number;
+  days_overdue: number;
+  bucket: string;
+  currency: string;
+}
+
+export interface AgingTotals {
+  total_current: string | number;
+  total_1_30: string | number;
+  total_31_60: string | number;
+  total_61_90: string | number;
+  total_91_120: string | number;
+  total_120_plus: string | number;
+  total_outstanding: string | number;
+}
+
+export interface AgingReportResponse {
+  company_id: number;
+  report_type: 'ar' | 'ap';
+  as_of_date: string;
+  currency: string;
+  items: AgingItem[];
+  totals: AgingTotals;
+}
+
+export interface StatementTransactionItem {
+  date: string;
+  type: 'invoice' | 'payment' | 'credit_note' | 'refund';
+  document_no: string;
+  reference?: string | null;
+  description?: string | null;
+  debit: string | number;
+  credit: string | number;
+  running_balance: string | number;
+}
+
+export interface PartnerStatementResponse {
+  company_id: number;
+  partner_id: number;
+  partner_name: string;
+  partner_code: string;
+  partner_type: 'customer' | 'vendor' | 'both';
+  currency: string;
+  date_from: string;
+  date_to: string;
+  opening_balance: string | number;
+  transactions: StatementTransactionItem[];
+  closing_balance: string | number;
+  total_debit: string | number;
+  total_credit: string | number;
+}
+
+// ── Credit & Debit Notes ──
+export type CreditNoteType = 'customer_credit_note' | 'vendor_debit_note';
+export type CreditNoteStatus = 'draft' | 'posted' | 'void';
+
+export interface CreditNoteLine {
+  id: number;
+  credit_note_id: number;
+  line_no: number;
+  description: string;
+  quantity: string | number;
+  unit_price: string | number;
+  subtotal: string | number;
+  account_id: number;
+}
+
+export interface CreditNoteLinePayload {
+  description: string;
+  quantity: number;
+  unit_price: number;
+  account_id: number;
+}
+
+export interface CreditNoteAllocation {
+  id: number;
+  company_id: number;
+  credit_note_id: number;
+  invoice_id: number;
+  amount: string;
+  created_at?: string;
+  invoice_no?: string | null;
+}
+
+export interface CreditNoteAllocationPayload {
+  invoice_id: number;
+  amount: number;
+}
+
+export interface CreditNote {
+  id: number;
+  company_id: number;
+  partner_id: number;
+  note_type: CreditNoteType;
+  credit_note_no: string;
+  issue_date: string;
+  currency: string;
+  status: CreditNoteStatus;
+  subtotal: string;
+  tax_amount: string;
+  total_amount: string;
+  allocated_amount: string;
+  unallocated_amount: string;
+  reference?: string | null;
+  partner_name?: string | null;
+  journal_entry_id?: number | null;
+  reason?: string | null;
+  created_by_user_id?: number | null;
+  created_at?: string;
+  updated_at?: string;
+  lines: CreditNoteLine[];
+  allocations: CreditNoteAllocation[];
+}
+
+export interface CreditNoteCreatePayload {
+  company_id: number;
+  partner_id: number;
+  note_type: CreditNoteType;
+  credit_note_no: string;
+  issue_date: string;
+  currency: string;
+  lines: CreditNoteLinePayload[];
+  reference?: string | null;
+  tax_amount?: number;
+  reason?: string | null;
+  allocations?: CreditNoteAllocationPayload[];
+}
+
+export interface CreditNotePageResponse {
+  items: CreditNote[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+// ── Refunds ──
+export type RefundType = 'customer_refund' | 'vendor_refund';
+export type RefundStatus = 'draft' | 'posted' | 'void';
+
+export interface Refund {
+  id: number;
+  company_id: number;
+  partner_id: number;
+  refund_type: RefundType;
+  currency_code: string;
+  amount: string;
+  refund_date: string;
+  bank_or_cash_account_id: number;
+  receivable_or_payable_account_id: number;
+  status: RefundStatus;
+  credit_note_id?: number | null;
+  reference?: string | null;
+  memo?: string | null;
+  journal_entry_id?: number | null;
+  created_by_user_id?: number | null;
+  created_at?: string;
+  updated_at?: string;
+  partner_name?: string | null;
+  bank_account_name?: string | null;
+  receivable_or_payable_account_name?: string | null;
+}
+
+export interface RefundCreatePayload {
+  company_id: number;
+  partner_id: number;
+  refund_type: RefundType;
+  currency_code: string;
+  amount: number;
+  refund_date: string;
+  bank_or_cash_account_id: number;
+  receivable_or_payable_account_id: number;
+  credit_note_id?: number | null;
+  reference?: string | null;
+  memo?: string | null;
+}
+
+export interface RefundPageResponse {
+  items: Refund[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+

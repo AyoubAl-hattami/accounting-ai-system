@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -6,9 +8,24 @@ from sqlalchemy.orm import Session
 
 from app.modules.accounting.models.account import Account
 from app.modules.accounting.models.company import Company
+from app.modules.accounting.models.credit_note import CreditNote, CreditNoteAllocation
+from app.modules.accounting.models.invoice import Invoice
 from app.modules.accounting.models.journal_entry import JournalEntry
 from app.modules.accounting.models.journal_line import JournalLine
 from app.modules.accounting.models.fiscal_year import FiscalYear
+from app.modules.accounting.models.partner import Partner
+from app.modules.accounting.models.payment import Payment, PaymentAllocation
+from app.modules.accounting.models.refund import Refund
+from app.application.reports.aging_dto import (
+    AgingItem,
+    AgingQuery,
+    AgingReportRead,
+    AgingTotals,
+)
+from app.application.reports.aging_engine import (
+    calculate_aging_totals,
+    classify_bucket,
+)
 from app.application.reports.dto import (
     AccountLedgerLine,
     AccountLedgerQuery,
@@ -31,6 +48,11 @@ from app.application.reports.errors import (
 )
 from app.application.reports.policies import REPORTABLE_ENTRY_STATUSES
 from app.application.reports.ports import ReportRepository
+from app.application.reports.statement_dto import (
+    PartnerStatementQuery,
+    PartnerStatementRead,
+    StatementTransactionItem,
+)
 def _official_entry_filter(
     start_date: date | None = None,
     end_date: date | None = None,
@@ -540,6 +562,7 @@ def get_account_ledger(
             JournalEntry.id.label("journal_entry_id"),
             JournalEntry.entry_no.label("entry_no"),
             JournalEntry.entry_date.label("entry_date"),
+            JournalEntry.status.label("status"),
             JournalLine.line_no.label("line_no"),
             JournalLine.description.label("description"),
             JournalLine.debit.label("debit"),
@@ -630,6 +653,10 @@ def _ledger_from_rows(
                 debit=debit,
                 credit=credit,
                 running_balance=running_balance,
+                # Both ledger queries admit the reportable statuses, which is
+                # posted AND reversed, so the row's own status is the only
+                # honest answer here.
+                status=row.status,
             )
         )
 
@@ -755,6 +782,7 @@ def get_general_ledger(
             JournalEntry.id.label("journal_entry_id"),
             JournalEntry.entry_no.label("entry_no"),
             JournalEntry.entry_date.label("entry_date"),
+            JournalEntry.status.label("status"),
             JournalLine.line_no.label("line_no"),
             JournalLine.description.label("description"),
             JournalLine.debit.label("debit"),
@@ -818,6 +846,600 @@ def get_general_ledger(
         account_skip=account_skip,
         account_limit=account_limit,
     )
+
+
+def get_aging_report(
+    db: Session,
+    query: AgingQuery,
+) -> AgingReportRead:
+    invoice_type = "out_invoice" if query.report_type.lower() == "ar" else "in_invoice"
+
+    allocations_subquery = (
+        select(
+            PaymentAllocation.invoice_id,
+            func.coalesce(func.sum(PaymentAllocation.amount), Decimal("0.00")).label("paid_as_of"),
+        )
+        .join(Payment, PaymentAllocation.payment_id == Payment.id)
+        .where(
+            Payment.company_id == query.company_id,
+            Payment.status == "posted",
+            Payment.payment_date <= query.as_of_date,
+        )
+        .group_by(PaymentAllocation.invoice_id)
+        .subquery()
+    )
+
+    credit_allocations_subquery = (
+        select(
+            CreditNoteAllocation.invoice_id,
+            func.coalesce(func.sum(CreditNoteAllocation.amount), Decimal("0.00")).label("credited_as_of"),
+        )
+        .join(CreditNote, CreditNoteAllocation.credit_note_id == CreditNote.id)
+        .where(
+            CreditNote.company_id == query.company_id,
+            CreditNote.status == "posted",
+            CreditNote.issue_date <= query.as_of_date,
+        )
+        .group_by(CreditNoteAllocation.invoice_id)
+        .subquery()
+    )
+
+    stmt = (
+        select(
+            Invoice,
+            Partner.name.label("partner_name"),
+            Partner.code.label("partner_code"),
+            func.coalesce(allocations_subquery.c.paid_as_of, Decimal("0.00")).label("paid_as_of"),
+            func.coalesce(credit_allocations_subquery.c.credited_as_of, Decimal("0.00")).label("credited_as_of"),
+        )
+        .join(Partner, Invoice.partner_id == Partner.id)
+        .outerjoin(allocations_subquery, Invoice.id == allocations_subquery.c.invoice_id)
+        .outerjoin(credit_allocations_subquery, Invoice.id == credit_allocations_subquery.c.invoice_id)
+        .where(
+            Invoice.company_id == query.company_id,
+            Invoice.invoice_type == invoice_type,
+            Invoice.status.in_(["posted", "paid"]),
+            Invoice.issue_date <= query.as_of_date,
+            Invoice.currency == query.currency,
+        )
+    )
+
+    if query.partner_id is not None:
+        stmt = stmt.where(Invoice.partner_id == query.partner_id)
+
+    stmt = stmt.order_by(Invoice.due_date.asc(), Invoice.id.asc())
+
+    rows = db.execute(stmt).all()
+
+    items: list[AgingItem] = []
+    for inv, partner_name, partner_code, paid_as_of, credited_as_of in rows:
+        paid_amount = Decimal(str(paid_as_of))
+        credited_amount = Decimal(str(credited_as_of))
+        outstanding = inv.total_amount - paid_amount - credited_amount
+        if outstanding <= Decimal("0.00"):
+            continue
+
+        days_overdue = (query.as_of_date - inv.due_date).days
+        bucket = classify_bucket(days_overdue)
+        items.append(
+            AgingItem(
+                partner_id=inv.partner_id,
+                partner_code=partner_code,
+                partner_name=partner_name,
+                invoice_id=inv.id,
+                invoice_no=inv.invoice_no,
+                invoice_date=inv.issue_date,
+                due_date=inv.due_date,
+                original_amount=inv.total_amount,
+                paid_amount=paid_amount,
+                credited_amount=credited_amount,
+                outstanding_amount=outstanding,
+                days_overdue=days_overdue,
+                bucket=bucket,
+                currency=inv.currency,
+            )
+        )
+
+    totals = calculate_aging_totals(items)
+    return AgingReportRead(
+        company_id=query.company_id,
+        report_type=query.report_type,
+        as_of_date=query.as_of_date,
+        currency=query.currency,
+        items=items,
+        totals=totals,
+    )
+
+
+def get_partner_statement(
+    db: Session,
+    query: PartnerStatementQuery,
+) -> PartnerStatementRead:
+    partner = db.scalar(
+        select(Partner).where(
+            Partner.id == query.partner_id,
+            Partner.company_id == query.company_id,
+        )
+    )
+    if partner is None:
+        raise ValueError(f"Partner {query.partner_id} not found for company {query.company_id}")
+
+    is_pure_vendor = partner.is_vendor and not partner.is_customer
+    partner_type = "both" if (partner.is_customer and partner.is_vendor) else ("vendor" if is_pure_vendor else "customer")
+
+    if is_pure_vendor:
+        # Vendor convention: Credit increases payable, Debit decreases payable
+        prior_bills = db.scalar(
+            select(func.coalesce(func.sum(Invoice.total_amount), Decimal("0.00"))).where(
+                Invoice.company_id == query.company_id,
+                Invoice.partner_id == query.partner_id,
+                Invoice.invoice_type == "in_invoice",
+                Invoice.status.in_(["posted", "paid"]),
+                Invoice.issue_date < query.date_from,
+                Invoice.currency == query.currency,
+            )
+        ) or Decimal("0.00")
+
+        prior_payments = db.scalar(
+            select(func.coalesce(func.sum(Payment.amount), Decimal("0.00"))).where(
+                Payment.company_id == query.company_id,
+                Payment.partner_id == query.partner_id,
+                Payment.payment_type == "vendor_payment",
+                Payment.status == "posted",
+                Payment.payment_date < query.date_from,
+                Payment.currency_code == query.currency,
+            )
+        ) or Decimal("0.00")
+
+        prior_debit_notes = db.scalar(
+            select(func.coalesce(func.sum(CreditNote.total_amount), Decimal("0.00"))).where(
+                CreditNote.company_id == query.company_id,
+                CreditNote.partner_id == query.partner_id,
+                CreditNote.note_type == "vendor_debit_note",
+                CreditNote.status == "posted",
+                CreditNote.issue_date < query.date_from,
+                CreditNote.currency == query.currency,
+            )
+        ) or Decimal("0.00")
+
+        prior_vendor_refunds = db.scalar(
+            select(func.coalesce(func.sum(Refund.amount), Decimal("0.00"))).where(
+                Refund.company_id == query.company_id,
+                Refund.partner_id == query.partner_id,
+                Refund.refund_type == "vendor_refund",
+                Refund.status == "posted",
+                Refund.refund_date < query.date_from,
+                Refund.currency_code == query.currency,
+            )
+        ) or Decimal("0.00")
+
+        opening_balance = (
+            Decimal(str(prior_bills))
+            - Decimal(str(prior_payments))
+            - Decimal(str(prior_debit_notes))
+            + Decimal(str(prior_vendor_refunds))
+        )
+
+        invoices = db.scalars(
+            select(Invoice).where(
+                Invoice.company_id == query.company_id,
+                Invoice.partner_id == query.partner_id,
+                Invoice.invoice_type == "in_invoice",
+                Invoice.status.in_(["posted", "paid"]),
+                Invoice.issue_date >= query.date_from,
+                Invoice.issue_date <= query.date_to,
+                Invoice.currency == query.currency,
+            )
+        ).all()
+
+        payments = db.scalars(
+            select(Payment).where(
+                Payment.company_id == query.company_id,
+                Payment.partner_id == query.partner_id,
+                Payment.payment_type == "vendor_payment",
+                Payment.status == "posted",
+                Payment.payment_date >= query.date_from,
+                Payment.payment_date <= query.date_to,
+                Payment.currency_code == query.currency,
+            )
+        ).all()
+
+        debit_notes = db.scalars(
+            select(CreditNote).where(
+                CreditNote.company_id == query.company_id,
+                CreditNote.partner_id == query.partner_id,
+                CreditNote.note_type == "vendor_debit_note",
+                CreditNote.status == "posted",
+                CreditNote.issue_date >= query.date_from,
+                CreditNote.issue_date <= query.date_to,
+                CreditNote.currency == query.currency,
+            )
+        ).all()
+
+        refunds = db.scalars(
+            select(Refund).where(
+                Refund.company_id == query.company_id,
+                Refund.partner_id == query.partner_id,
+                Refund.refund_type == "vendor_refund",
+                Refund.status == "posted",
+                Refund.refund_date >= query.date_from,
+                Refund.refund_date <= query.date_to,
+                Refund.currency_code == query.currency,
+            )
+        ).all()
+
+        tx_events: list[tuple[date, int, int, str, str | None, str | None, Decimal, Decimal, str]] = []
+        for inv in invoices:
+            tx_events.append((
+                inv.issue_date,
+                0,
+                inv.id,
+                inv.invoice_no,
+                inv.reference,
+                f"Purchase Bill {inv.invoice_no}",
+                Decimal("0.00"),
+                inv.total_amount,
+                "invoice",
+            ))
+        for dn in debit_notes:
+            tx_events.append((
+                dn.issue_date,
+                1,
+                dn.id,
+                dn.credit_note_no,
+                dn.reference,
+                f"Debit Note {dn.credit_note_no}: {dn.reason or ''}".strip(),
+                dn.total_amount,
+                Decimal("0.00"),
+                "credit_note",
+            ))
+        for p in payments:
+            tx_events.append((
+                p.payment_date,
+                2,
+                p.id,
+                p.reference or f"PAY-{p.id}",
+                p.reference,
+                p.memo or "Vendor Payment",
+                p.amount,
+                Decimal("0.00"),
+                "payment",
+            ))
+        for r in refunds:
+            tx_events.append((
+                r.refund_date,
+                3,
+                r.id,
+                r.reference or f"VRF-{r.id}",
+                r.reference,
+                r.memo or "Vendor Refund",
+                Decimal("0.00"),
+                r.amount,
+                "refund",
+            ))
+
+        tx_events.sort(key=lambda x: (x[0], x[1], x[2]))
+
+        transactions: list[StatementTransactionItem] = []
+        current_running = opening_balance
+        total_debit = Decimal("0.00")
+        total_credit = Decimal("0.00")
+
+        for tx_date, priority, tx_id, doc_no, ref, desc, debit, credit, tx_type in tx_events:
+            total_debit += debit
+            total_credit += credit
+            current_running = current_running + credit - debit
+            transactions.append(
+                StatementTransactionItem(
+                    date=tx_date,
+                    type=tx_type,
+                    document_no=doc_no,
+                    reference=ref,
+                    description=desc,
+                    debit=debit,
+                    credit=credit,
+                    running_balance=current_running,
+                )
+            )
+
+        closing_balance = current_running
+
+    else:
+        # Customer convention (or Both): Debit increases receivable, Credit decreases receivable
+        prior_invoices = db.scalar(
+            select(func.coalesce(func.sum(Invoice.total_amount), Decimal("0.00"))).where(
+                Invoice.company_id == query.company_id,
+                Invoice.partner_id == query.partner_id,
+                Invoice.invoice_type == "out_invoice",
+                Invoice.status.in_(["posted", "paid"]),
+                Invoice.issue_date < query.date_from,
+                Invoice.currency == query.currency,
+            )
+        ) or Decimal("0.00")
+
+        prior_receipts = db.scalar(
+            select(func.coalesce(func.sum(Payment.amount), Decimal("0.00"))).where(
+                Payment.company_id == query.company_id,
+                Payment.partner_id == query.partner_id,
+                Payment.payment_type == "customer_receipt",
+                Payment.status == "posted",
+                Payment.payment_date < query.date_from,
+                Payment.currency_code == query.currency,
+            )
+        ) or Decimal("0.00")
+
+        prior_credit_notes = db.scalar(
+            select(func.coalesce(func.sum(CreditNote.total_amount), Decimal("0.00"))).where(
+                CreditNote.company_id == query.company_id,
+                CreditNote.partner_id == query.partner_id,
+                CreditNote.note_type == "customer_credit_note",
+                CreditNote.status == "posted",
+                CreditNote.issue_date < query.date_from,
+                CreditNote.currency == query.currency,
+            )
+        ) or Decimal("0.00")
+
+        prior_customer_refunds = db.scalar(
+            select(func.coalesce(func.sum(Refund.amount), Decimal("0.00"))).where(
+                Refund.company_id == query.company_id,
+                Refund.partner_id == query.partner_id,
+                Refund.refund_type == "customer_refund",
+                Refund.status == "posted",
+                Refund.refund_date < query.date_from,
+                Refund.currency_code == query.currency,
+            )
+        ) or Decimal("0.00")
+
+        prior_bills = Decimal("0.00")
+        prior_vendor_payments = Decimal("0.00")
+        prior_debit_notes = Decimal("0.00")
+        prior_vendor_refunds = Decimal("0.00")
+        if partner.is_vendor:
+            prior_bills = db.scalar(
+                select(func.coalesce(func.sum(Invoice.total_amount), Decimal("0.00"))).where(
+                    Invoice.company_id == query.company_id,
+                    Invoice.partner_id == query.partner_id,
+                    Invoice.invoice_type == "in_invoice",
+                    Invoice.status.in_(["posted", "paid"]),
+                    Invoice.issue_date < query.date_from,
+                    Invoice.currency == query.currency,
+                )
+            ) or Decimal("0.00")
+            prior_vendor_payments = db.scalar(
+                select(func.coalesce(func.sum(Payment.amount), Decimal("0.00"))).where(
+                    Payment.company_id == query.company_id,
+                    Payment.partner_id == query.partner_id,
+                    Payment.payment_type == "vendor_payment",
+                    Payment.status == "posted",
+                    Payment.payment_date < query.date_from,
+                    Payment.currency_code == query.currency,
+                )
+            ) or Decimal("0.00")
+            prior_debit_notes = db.scalar(
+                select(func.coalesce(func.sum(CreditNote.total_amount), Decimal("0.00"))).where(
+                    CreditNote.company_id == query.company_id,
+                    CreditNote.partner_id == query.partner_id,
+                    CreditNote.note_type == "vendor_debit_note",
+                    CreditNote.status == "posted",
+                    CreditNote.issue_date < query.date_from,
+                    CreditNote.currency == query.currency,
+                )
+            ) or Decimal("0.00")
+            prior_vendor_refunds = db.scalar(
+                select(func.coalesce(func.sum(Refund.amount), Decimal("0.00"))).where(
+                    Refund.company_id == query.company_id,
+                    Refund.partner_id == query.partner_id,
+                    Refund.refund_type == "vendor_refund",
+                    Refund.status == "posted",
+                    Refund.refund_date < query.date_from,
+                    Refund.currency_code == query.currency,
+                )
+            ) or Decimal("0.00")
+
+        opening_balance = (
+            Decimal(str(prior_invoices))
+            - Decimal(str(prior_receipts))
+            - Decimal(str(prior_credit_notes))
+            + Decimal(str(prior_customer_refunds))
+            - (
+                Decimal(str(prior_bills))
+                - Decimal(str(prior_vendor_payments))
+                - Decimal(str(prior_debit_notes))
+                + Decimal(str(prior_vendor_refunds))
+            )
+        )
+
+        invoices_types = ["out_invoice"]
+        if partner.is_vendor:
+            invoices_types.append("in_invoice")
+
+        invoices = db.scalars(
+            select(Invoice).where(
+                Invoice.company_id == query.company_id,
+                Invoice.partner_id == query.partner_id,
+                Invoice.invoice_type.in_(invoices_types),
+                Invoice.status.in_(["posted", "paid"]),
+                Invoice.issue_date >= query.date_from,
+                Invoice.issue_date <= query.date_to,
+                Invoice.currency == query.currency,
+            )
+        ).all()
+
+        payment_types = ["customer_receipt"]
+        if partner.is_vendor:
+            payment_types.append("vendor_payment")
+
+        payments = db.scalars(
+            select(Payment).where(
+                Payment.company_id == query.company_id,
+                Payment.partner_id == query.partner_id,
+                Payment.payment_type.in_(payment_types),
+                Payment.status == "posted",
+                Payment.payment_date >= query.date_from,
+                Payment.payment_date <= query.date_to,
+                Payment.currency_code == query.currency,
+            )
+        ).all()
+
+        note_types = ["customer_credit_note"]
+        if partner.is_vendor:
+            note_types.append("vendor_debit_note")
+
+        credit_notes = db.scalars(
+            select(CreditNote).where(
+                CreditNote.company_id == query.company_id,
+                CreditNote.partner_id == query.partner_id,
+                CreditNote.note_type.in_(note_types),
+                CreditNote.status == "posted",
+                CreditNote.issue_date >= query.date_from,
+                CreditNote.issue_date <= query.date_to,
+                CreditNote.currency == query.currency,
+            )
+        ).all()
+
+        refund_types = ["customer_refund"]
+        if partner.is_vendor:
+            refund_types.append("vendor_refund")
+
+        refunds = db.scalars(
+            select(Refund).where(
+                Refund.company_id == query.company_id,
+                Refund.partner_id == query.partner_id,
+                Refund.refund_type.in_(refund_types),
+                Refund.status == "posted",
+                Refund.refund_date >= query.date_from,
+                Refund.refund_date <= query.date_to,
+                Refund.currency_code == query.currency,
+            )
+        ).all()
+
+        tx_events = []
+        for inv in invoices:
+            if inv.invoice_type == "out_invoice":
+                debit = inv.total_amount
+                credit = Decimal("0.00")
+                desc = f"Sales Invoice {inv.invoice_no}"
+            else:
+                debit = Decimal("0.00")
+                credit = inv.total_amount
+                desc = f"Purchase Bill {inv.invoice_no}"
+            tx_events.append((
+                inv.issue_date,
+                0,
+                inv.id,
+                inv.invoice_no,
+                inv.reference,
+                desc,
+                debit,
+                credit,
+                "invoice",
+            ))
+
+        for cn in credit_notes:
+            if cn.note_type == "customer_credit_note":
+                debit = Decimal("0.00")
+                credit = cn.total_amount
+                desc = f"Credit Note {cn.credit_note_no}: {cn.reason or ''}".strip()
+            else:
+                debit = cn.total_amount
+                credit = Decimal("0.00")
+                desc = f"Debit Note {cn.credit_note_no}: {cn.reason or ''}".strip()
+            tx_events.append((
+                cn.issue_date,
+                1,
+                cn.id,
+                cn.credit_note_no,
+                cn.reference,
+                desc,
+                debit,
+                credit,
+                "credit_note",
+            ))
+
+        for p in payments:
+            if p.payment_type == "customer_receipt":
+                debit = Decimal("0.00")
+                credit = p.amount
+                desc = p.memo or "Customer Receipt"
+            else:
+                debit = p.amount
+                credit = Decimal("0.00")
+                desc = p.memo or "Vendor Payment"
+            tx_events.append((
+                p.payment_date,
+                2,
+                p.id,
+                p.reference or f"PAY-{p.id}",
+                p.reference,
+                desc,
+                debit,
+                credit,
+                "payment",
+            ))
+
+        for r in refunds:
+            if r.refund_type == "customer_refund":
+                debit = r.amount
+                credit = Decimal("0.00")
+                desc = r.memo or "Customer Refund"
+            else:
+                debit = Decimal("0.00")
+                credit = r.amount
+                desc = r.memo or "Vendor Refund"
+            tx_events.append((
+                r.refund_date,
+                3,
+                r.id,
+                r.reference or f"REF-{r.id}",
+                r.reference,
+                desc,
+                debit,
+                credit,
+                "refund",
+            ))
+
+        tx_events.sort(key=lambda x: (x[0], x[1], x[2]))
+
+        transactions = []
+        current_running = opening_balance
+        total_debit = Decimal("0.00")
+        total_credit = Decimal("0.00")
+
+        for tx_date, priority, tx_id, doc_no, ref, desc, debit, credit, tx_type in tx_events:
+            total_debit += debit
+            total_credit += credit
+            current_running = current_running + debit - credit
+            transactions.append(
+                StatementTransactionItem(
+                    date=tx_date,
+                    type=tx_type,
+                    document_no=doc_no,
+                    reference=ref,
+                    description=desc,
+                    debit=debit,
+                    credit=credit,
+                    running_balance=current_running,
+                )
+            )
+
+        closing_balance = current_running
+
+    return PartnerStatementRead(
+        company_id=query.company_id,
+        partner_id=partner.id,
+        partner_name=partner.name,
+        partner_code=partner.code,
+        partner_type=partner_type,
+        currency=query.currency,
+        date_from=query.date_from,
+        date_to=query.date_to,
+        opening_balance=opening_balance,
+        transactions=transactions,
+        closing_balance=closing_balance,
+        total_debit=total_debit,
+        total_credit=total_credit,
+    )
+
 
 class SqlAlchemyReportRepository(ReportRepository):
     def __init__(self, db: Session) -> None:
@@ -896,3 +1518,27 @@ class SqlAlchemyReportRepository(ReportRepository):
             account_skip=query.account_skip,
             account_limit=query.account_limit,
         )
+
+    def get_aging_report(self, query: AgingQuery) -> AgingReportRead:
+        resolved_currency = self._currency(query.company_id, query.currency)
+        resolved_query = AgingQuery(
+            company_id=query.company_id,
+            report_type=query.report_type,
+            as_of_date=query.as_of_date,
+            currency=resolved_currency,
+            partner_id=query.partner_id,
+        )
+        return get_aging_report(db=self._db, query=resolved_query)
+
+    def get_partner_statement(
+        self, query: PartnerStatementQuery
+    ) -> PartnerStatementRead:
+        resolved_currency = self._currency(query.company_id, query.currency)
+        resolved_query = PartnerStatementQuery(
+            company_id=query.company_id,
+            partner_id=query.partner_id,
+            currency=resolved_currency,
+            date_from=query.date_from,
+            date_to=query.date_to,
+        )
+        return get_partner_statement(db=self._db, query=resolved_query)

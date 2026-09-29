@@ -17,7 +17,9 @@ def _account(account_id=11, code="1100", name="Cash"):
 
 
 def _ledger():
-    line = SimpleNamespace(journal_entry_id=91, entry_no="JE-91", entry_date=date(2026, 7, 10), description="Receipt", debit=Decimal("500.00"), credit=Decimal("0.00"), running_balance=Decimal("2500.00"))
+    # status is real now: the ledger query admits posted AND reversed, and the
+    # card used to call every line posted without reading one.
+    line = SimpleNamespace(journal_entry_id=91, entry_no="JE-91", entry_date=date(2026, 7, 10), description="Receipt", debit=Decimal("500.00"), credit=Decimal("0.00"), running_balance=Decimal("2500.00"), status="posted")
     return SimpleNamespace(account_id=11, account_code="1100", account_name="Cash", account_type="asset", start_date=None, end_date=None, opening_balance=Decimal("2000.00"), closing_balance=Decimal("2500.00"), lines=[line])
 
 

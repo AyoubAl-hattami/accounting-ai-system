@@ -140,3 +140,66 @@ class GeneralLedgerRead(BaseModel):
     total_accounts: int = 0
     account_skip: int | None = None
     account_limit: int | None = None
+
+
+class AgingItem(BaseModel):
+    partner_id: int
+    partner_code: str
+    partner_name: str
+    invoice_id: int
+    invoice_no: str
+    invoice_date: date
+    due_date: date
+    original_amount: Decimal
+    paid_amount: Decimal
+    credited_amount: Decimal = Decimal("0.00")
+    outstanding_amount: Decimal
+    days_overdue: int
+    bucket: str
+    currency: str
+
+
+class AgingTotals(BaseModel):
+    total_current: Decimal
+    total_1_30: Decimal
+    total_31_60: Decimal
+    total_61_90: Decimal
+    total_91_120: Decimal
+    total_120_plus: Decimal
+    total_outstanding: Decimal
+
+
+class AgingReportRead(BaseModel):
+    company_id: int
+    report_type: str  # "ar" or "ap"
+    as_of_date: date
+    currency: str
+    items: list[AgingItem]
+    totals: AgingTotals
+
+
+class StatementTransactionItem(BaseModel):
+    date: date
+    type: str  # "invoice" or "payment"
+    document_no: str
+    reference: str | None = None
+    description: str | None = None
+    debit: Decimal
+    credit: Decimal
+    running_balance: Decimal
+
+
+class PartnerStatementRead(BaseModel):
+    company_id: int
+    partner_id: int
+    partner_name: str
+    partner_code: str
+    partner_type: str  # "customer", "vendor", or "both"
+    currency: str
+    date_from: date
+    date_to: date
+    opening_balance: Decimal
+    transactions: list[StatementTransactionItem]
+    closing_balance: Decimal
+    total_debit: Decimal
+    total_credit: Decimal

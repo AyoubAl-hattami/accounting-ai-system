@@ -127,6 +127,11 @@ class SuggestedJournalPayload(BaseModel):
 
 
 class SuggestedAction(BaseModel):
+    # Widened to `SuggestedJournalPayload | dict` for a credit-note proposal
+    # that had no confirm branch; the tool is gone and so is the union. The
+    # union also meant a journal payload that failed validation fell through
+    # to `dict` and was carried anyway, which is not a thing this type should
+    # let happen.
     type: str  # "create_journal_entry_draft"
     requires_confirmation: bool = True
     payload: SuggestedJournalPayload
@@ -260,6 +265,8 @@ class GeneralLedgerGrounding(BaseModel):
     accounts: list[dict[str, object]] = Field(default_factory=list)
     summary: ReportSummary | None = None
     reference: ReportReference | None = None
+
+
 class GeminiAssistantReply(BaseModel):
     reply: str
     intent: str  # e.g. "answer_report_question", "create_journal_draft", "access_denied", "clarification"
@@ -270,6 +277,21 @@ class GeminiAssistantReply(BaseModel):
     clarification_options: list[ClarificationOption] = Field(default_factory=list)
     pending_context_token: str | None = None
     evidence: list[EvidenceEntry] = Field(default_factory=list)
+    # A grounding is a claim, and the claim is "these figures came from the
+    # report services". The panel renders it with a "Verified from accounting
+    # data" badge, so the field carries one rule:
+    #
+    #     grounding is set ONLY when something vouched for the figures in the
+    #     reply text. No grounding means no badge, and no badge is the
+    #     default, not the failure case.
+    #
+    # On the deterministic path the handler formats one set of Decimals into
+    # both the sentence and the card, so it vouches for itself. On the model
+    # path the sentence is the model's, and services/grounding_gate.py decides
+    # -- refusing whenever a number in the prose is one the report cannot
+    # account for, or when the turn produced more than one kind of report. An
+    # answer with no card is an ordinary answer; a card over an unchecked
+    # figure is a claim this product cannot support.
     grounding: ProfitAndLossGrounding | JournalEvidenceGrounding | BalanceSheetGrounding | TrialBalanceGrounding | AccountLedgerGrounding | GeneralLedgerGrounding | None = None
 
 
